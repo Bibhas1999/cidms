@@ -1,0 +1,20 @@
+{
+  "name": "supreme-dms-web",
+  "private": true,
+  "type": "module",
+  "description": "Supreme DMS browser app: Svelte 5 single-page app, built into web/dist and served by FastAPI.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tsconfig/svelte": "^5.0.8",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4"
+  }
+}

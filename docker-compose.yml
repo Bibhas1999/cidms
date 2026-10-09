@@ -1,0 +1,26 @@
+# Local development: the Supreme DMS database.
+#
+#   docker compose up -d
+#   python -m alembic upgrade head
+#   python -m app.seed
+#
+# Passwords below are for these throwaway local containers only.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: supreme
+      POSTGRES_USER: supreme_owner        # owns the tables and runs migrations
+      POSTGRES_PASSWORD: local-owner-only
+      APP_DB_PASSWORD: local-app-only     # for supreme_app, the role the app connects as (see docker/postgres)
+    ports: ["5433:5432"]
+    volumes:
+      - supreme-pg:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supreme_owner -d supreme"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  supreme-pg:

@@ -1,0 +1,28 @@
+[project]
+name = "supreme-dms"
+version = "0.1.0"
+description = "Supreme DMS: billing, reports and imaging for diagnostic centres, OPDs and clinics (multi-client)."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+extend-exclude = ["migrations/versions", "web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "S", "N", "C4", "RUF"]
+ignore = [
+  "S101",   # assert is how pytest tests are written
+  "B008",   # FastAPI's Depends(...) in defaults is the framework's pattern
+  "N818",   # domain errors are named for what happened (NotFound, Forbidden)
+  "RUF001", "RUF002", "RUF003",  # ₹ and curly quotes in user-facing text are intentional
+  "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]
+"app/seed.py" = ["S105"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
