@@ -3,13 +3,14 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import Paging, client_user, paging, require_any
 from app.core.db import DB
 from app.core.security import CurrentUser, require
+from app.core.storage import MAX_LOGO_BYTES
 from app.models import ActivityLog
 from app.schemas import ActivityOut, Page, SettingsIn, SettingsOut
 from app.services.settings import SettingsService
@@ -25,6 +26,12 @@ def get_settings(db: Session = DB, current: CurrentUser = Depends(client_user)):
 @router.put("/settings", response_model=SettingsOut)
 def update_settings(data: SettingsIn, db: Session = DB, current: CurrentUser = Depends(require("settings.manage"))):
     return SettingsService(db, client_user(current)).update(data)
+
+
+@router.post("/settings/logo", response_model=SettingsOut)
+async def upload_logo(logo: UploadFile, db: Session = DB, current: CurrentUser = Depends(require("settings.manage"))):
+    data = await logo.read(MAX_LOGO_BYTES + 1)
+    return SettingsService(db, client_user(current)).set_logo(data)
 
 
 @router.get("/activity", response_model=Page[ActivityOut])

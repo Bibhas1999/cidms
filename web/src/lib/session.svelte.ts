@@ -31,8 +31,8 @@ class Session {
     this.ready = true;
   }
 
-  async login(email: string, password: string): Promise<Me> {
-    this.me = await post<Me>("/api/auth/login", { email, password });
+  async login(email: string, password: string, remember = false): Promise<Me> {
+    this.me = await post<Me>("/api/auth/login", { email, password, remember });
     return this.me;
   }
 

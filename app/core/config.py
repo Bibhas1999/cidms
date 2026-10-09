@@ -25,7 +25,17 @@ class Settings(BaseSettings):
     # Sessions
     session_secret: str = Field(default="dev-only-change-me-0123456789", min_length=16)
     session_idle_minutes: int = 8 * 60
-    session_absolute_days: int = 7
+    session_absolute_days: int = 30       # "Remember me": signed in on that computer for up to this long
+    session_browser_hours: int = 12       # without it: until the browser closes, and at most this long
+    password_reset_minutes: int = 30
+
+    # Email (password reset links). Any SMTP service works, e.g. Gmail with an app password.
+    # Not set in development: the reset link is written to the app's log instead.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    mail_from: str = "Supreme DMS <no-reply@localhost>"
 
     # Sign-in protection: lock an account for a while after repeated wrong passwords.
     max_failed_logins: int = 5
@@ -37,6 +47,9 @@ class Settings(BaseSettings):
     seed_platform_owner_password: str = "Change-me-now-1"  # noqa: S105 (local default; app.seed refuses it in production)
     seed_supreme_owner_email: str = "owner@supreme.local"
     seed_supreme_owner_password: str = "Change-me-now-1"  # noqa: S105 (local default; app.seed refuses it in production)
+
+    # Files the app keeps (logos now; signatures, reports and uploads later), outside the web folder.
+    storage_dir: str = "storage"
 
     log_level: str = "INFO"
     display_timezone: str = "Asia/Kolkata"  # dates are stored in UTC and shown in this time zone

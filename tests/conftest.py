@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.core.db import engine, scoped_session
-from app.core.limits import client_error_limiter, login_limiter
+from app.core.limits import client_error_limiter, login_limiter, reset_limiter
 from app.core.passwords import hash_password
 from app.core.tenancy import forget_tenant
 from app.main import app
@@ -22,7 +22,7 @@ from app.models import Role, Tenant, TenantSettings, User, UserRole
 from app.seed import seed_reference
 
 PASSWORD = "Test-password-1"
-TABLES = "activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
+TABLES = "password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -50,6 +50,7 @@ def clean(database):
         seed_reference(db)
     login_limiter.reset()
     client_error_limiter.reset()
+    reset_limiter.reset()
     forget_tenant()
     yield
 

@@ -1,13 +1,15 @@
 """Sign-in, sign-out and password changes."""
 
+import secrets
 from datetime import timedelta
 
 from fastapi import Request, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import Forbidden, Invalid, Locked, NotFound, Unauthorized
-from app.core.limits import login_limiter
+from app.core.limits import login_limiter, reset_limiter
 from app.core.logging import client_ip
 from app.core.passwords import check_strength, hash_password, verify_password
 from app.core.security import (
@@ -18,9 +20,10 @@ from app.core.security import (
     load_permissions,
     load_session,
     revoke_user_sessions,
+    token_hash,
 )
 from app.core.tenancy import TenantRef
-from app.models import User, UserSession, utcnow
+from app.models import PasswordReset, User, UserSession, utcnow
 from app.repositories.users import UserRepository
 from app.schemas import MeOut, WorkspaceOut
 from app.services.audit import AuditService
@@ -33,8 +36,21 @@ def workspace_of(request: Request) -> WorkspaceOut:
         return WorkspaceOut(kind="platform", name="Supreme DMS platform")
     tenant: TenantRef | None = request.state.tenant
     if tenant:
-        return WorkspaceOut(kind="client", name=tenant.name, slug=tenant.slug, active=tenant.is_active)
+        brand = branding(tenant)
+        return WorkspaceOut(kind="client", name=tenant.name, slug=tenant.slug, active=tenant.is_active, **brand)
     return WorkspaceOut(kind="none")
+
+
+def branding(tenant: TenantRef) -> dict:
+    """Colour, tagline and logo address for a centre's sign-in page (public: it's what the centre shows anyway)."""
+    from app.core.db import scoped_session
+    from app.models import TenantSettings
+    with scoped_session(tenant.id) as db:
+        row = db.get(TenantSettings, tenant.id)
+        if row is None:
+            return {}
+        logo = f"/api/workspace/logo?v={row.logo_file.removesuffix('.png')}" if row.logo_file else ""
+        return {"brand_color": row.brand_color, "tagline": row.tagline, "logo_url": logo}
 
 
 def me_out(request: Request, user: User, sess: UserSession, permissions: set[str], roles: list[str]) -> MeOut:
@@ -52,7 +68,7 @@ class AuthService:
         self.users = UserRepository(db)
         self.audit = AuditService(db)
 
-    def login(self, request: Request, response: Response, email: str, password: str) -> MeOut:
+    def login(self, request: Request, response: Response, email: str, password: str, remember: bool = False) -> MeOut:
         tenant: TenantRef | None = request.state.tenant
         if not request.state.is_platform and tenant is None:
             raise NotFound("There's no workspace at this address. Check the link you were given.")
@@ -83,8 +99,8 @@ class AuthService:
         user.last_login_at = now
         if needs_rehash:
             user.password_hash = hash_password(password)
-        sess = create_session(self.db, user, request, response)
-        self.audit.record(tenant_id, user.id, "user.sign_in", "user", user.id)
+        sess = create_session(self.db, user, request, response, remember)
+        self.audit.record(tenant_id, user.id, "user.sign_in", "user", user.id, {"remember": remember})
         self.db.flush()
         permissions, roles = load_permissions(self.db, user.id)
         request.state.user_id = str(user.id)
@@ -109,3 +125,55 @@ class AuthService:
         user.must_change_password = False
         revoke_user_sessions(self.db, user.id, keep=current.session.id_hash)  # sign out other browsers
         self.audit.record(user.tenant_id, user.id, "user.password_changed", "user", user.id)
+
+    # ---------- forgot password ----------
+    def forgot_password(self, request: Request, email: str) -> tuple[str, str, str] | None:
+        """Makes a single-use reset link if the email belongs to an active account here, and returns
+        (to, subject, body) for the caller to send after responding. The answer to the browser is the same
+        either way, so this can't be used to find out who has an account."""
+        tenant: TenantRef | None = request.state.tenant
+        if not request.state.is_platform and tenant is None:
+            raise NotFound("There's no workspace at this address. Check the link you were given.")
+        ip = client_ip(request)
+        login_limiter.hit(f"ip:{ip}")
+        reset_limiter.hit(f"forgot:{email.strip().lower()}", "A reset link was sent recently. Check your email, or try again later.")
+        user = self.users.by_email(tenant.id if tenant else None, email)
+        if user is None or not user.is_active or (tenant and not tenant.is_active):
+            return None
+        s = get_settings()
+        token = secrets.token_urlsafe(32)
+        now = utcnow()
+        self.db.add(PasswordReset(token_hash=token_hash(token), tenant_id=user.tenant_id, user_id=user.id, created_at=now,
+                                  expires_at=now + timedelta(minutes=s.password_reset_minutes), ip_address=ip or None))
+        self.audit.record(user.tenant_id, user.id, "user.password_reset_requested", "user", user.id)
+        link = f"{request.base_url.scheme}://{request.headers.get('host', '')}/reset-password?token={token}"
+        where = tenant.name if tenant else "the Supreme DMS platform"
+        body = "\n\n".join([
+            f"Hello {user.full_name},",
+            f"Someone asked to reset your password for {where}. If it was you, open this link within "
+            f"{s.password_reset_minutes} minutes and choose a new password:",
+            link,
+            "If it wasn't you, ignore this email: your password stays the same.",
+            "Supreme DMS",
+        ])
+        return user.email, f"Reset your password for {where}", body
+
+    def reset_password(self, request: Request, token: str, new_password: str) -> None:
+        row = self.db.scalar(select(PasswordReset).where(PasswordReset.token_hash == token_hash(token)).with_for_update())
+        tenant: TenantRef | None = request.state.tenant
+        now = utcnow()
+        if (row is None or row.used_at is not None or row.expires_at <= now
+                or row.tenant_id != (tenant.id if tenant else None) or not row.user.is_active):
+            raise Invalid("This reset link has expired or was already used. Ask for a new one.", "token")
+        check_strength(new_password)
+        user = row.user
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False
+        user.failed_logins = 0
+        user.locked_until = None
+        row.used_at = now
+        # Any other links for this person stop working, and every browser is signed out.
+        for other in self.db.scalars(select(PasswordReset).where(PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None))):
+            other.used_at = now
+        revoke_user_sessions(self.db, user.id)
+        self.audit.record(user.tenant_id, user.id, "user.password_reset", "user", user.id)

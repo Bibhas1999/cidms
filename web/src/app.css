@@ -92,3 +92,11 @@ table.data tr:last-child td { border-bottom: 0; }
 .stack { display: grid; gap: 14px; }
 .row-2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
 @media (max-width: 640px) { .row-2 { grid-template-columns: 1fr; } }
+
+/* Top-of-page loader (lib/loader.ts) */
+.top-loader { position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.top-loader.is-active { opacity: 1; }
+.top-loader-bar { height: 100%; background: var(--brand); transform-origin: left; transform: scaleX(0); transition: transform .2s ease-out;
+  box-shadow: 0 0 8px var(--brand); }
+.btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.danger-solid:hover { filter: brightness(1.08); background: var(--danger); }

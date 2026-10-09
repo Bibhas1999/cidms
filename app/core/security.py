@@ -32,24 +32,28 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 TOUCH_EVERY = timedelta(minutes=5)  # "last seen" is written at most this often, to keep writes low
 
 
-def _hash(token: str) -> str:
+def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
 # ---------- sessions --------------------------------------------------------
 
-def create_session(db: Session, user: User, request: Request, response: Response) -> UserSession:
+def create_session(db: Session, user: User, request: Request, response: Response, remember: bool = False) -> UserSession:
+    """remember=True ("Remember me"): signed in on this computer for up to SESSION_ABSOLUTE_DAYS.
+    Otherwise the cookie lasts until the browser closes, and the session at most SESSION_BROWSER_HOURS.
+    Either way, SESSION_IDLE_MINUTES without using the app signs the person out."""
     s = get_settings()
     token = secrets.token_urlsafe(32)
     now = utcnow()
+    lifetime = timedelta(days=s.session_absolute_days) if remember else timedelta(hours=s.session_browser_hours)
     sess = UserSession(
-        id_hash=_hash(token), user_id=user.id, tenant_id=user.tenant_id, csrf_token=secrets.token_urlsafe(32),
-        created_at=now, last_seen_at=now, expires_at=now + timedelta(days=s.session_absolute_days),
+        id_hash=token_hash(token), user_id=user.id, tenant_id=user.tenant_id, csrf_token=secrets.token_urlsafe(32),
+        created_at=now, last_seen_at=now, expires_at=now + lifetime,
         ip_address=client_ip(request) or None, user_agent=request.headers.get("user-agent", "")[:300],
     )
     db.add(sess)
     response.set_cookie(
-        s.cookie_name, token, max_age=s.session_absolute_days * 86400,
+        s.cookie_name, token, max_age=int(lifetime.total_seconds()) if remember else None,
         httponly=True, secure=s.is_production, samesite="lax", path="/",
     )
     return sess
@@ -64,7 +68,7 @@ def load_session(db: Session, request: Request) -> UserSession | None:
     token = request.cookies.get(get_settings().cookie_name)
     if not token or len(token) > 100:
         return None
-    sess = db.get(UserSession, _hash(token))  # row-level security: only this client's sessions are visible
+    sess = db.get(UserSession, token_hash(token))  # row-level security: only this client's sessions are visible
     if sess is None or sess.revoked_at is not None:
         return None
     tenant: TenantRef | None = request.state.tenant

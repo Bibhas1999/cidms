@@ -12,7 +12,7 @@ from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import auth, centre, platform, staff, system
+from app.api import auth, billing, centre, platform, staff, system
 from app.core.config import get_settings
 from app.core.db import is_transient
 from app.core.errors import DomainError
@@ -139,7 +139,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLogMiddleware)
     install_error_handlers(app)
 
-    for module in (system, auth, staff, centre, platform):
+    for module in (system, auth, staff, centre, billing, platform):
         app.include_router(module.router)
     mount_web(app)
     return app

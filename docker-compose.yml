@@ -22,5 +22,17 @@ services:
       interval: 5s
       retries: 10
 
+  # The old Laravel app's database, loaded from pos.sql exactly as exported, only for moving the data across.
+  # Started only when asked:  docker compose --profile legacy up -d legacy
+  legacy:
+    image: mariadb:10.4
+    profiles: ["legacy"]
+    environment:
+      MYSQL_DATABASE: pos
+      MYSQL_ROOT_PASSWORD: local-legacy-only
+    ports: ["3307:3306"]
+    volumes: ["supreme-legacy:/var/lib/mysql"]
+
 volumes:
   supreme-pg:
+  supreme-legacy:

@@ -5,6 +5,11 @@ export interface Workspace {
   name: string;
   slug: string;
   active: boolean;
+  brand_color?: string;
+  tagline?: string;
+  logo_url?: string;
+  /** Development only: the workspaces to open when this address has none. */
+  links?: { name: string; url: string }[];
 }
 
 export interface Me {

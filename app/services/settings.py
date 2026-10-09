@@ -32,3 +32,14 @@ class SettingsService:
             self.db.flush()
             self.db.refresh(row)
         return row
+
+    def set_logo(self, data: bytes) -> TenantSettings:
+        from app.core.storage import save_logo
+        row = self.get()
+        old = row.logo_file
+        row.logo_file = save_logo(row.tenant_id, data)
+        AuditService(self.db).record(row.tenant_id, self.current.id, "settings.logo_changed", "tenant", row.tenant_id,
+                                     {"logo_file": [old, row.logo_file]})
+        self.db.flush()
+        self.db.refresh(row)
+        return row

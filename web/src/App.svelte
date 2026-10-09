@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
   import AppShell from "./components/AppShell.svelte";
+  import ConfirmHost from "./components/ConfirmHost.svelte";
   import ErrorFallback from "./components/ErrorFallback.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { reportError } from "./lib/errors";
@@ -9,7 +10,9 @@
   import Activity from "./pages/Activity.svelte";
   import ChangePassword from "./pages/ChangePassword.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
+  import ForgotPassword from "./pages/ForgotPassword.svelte";
   import Login from "./pages/Login.svelte";
+  import ResetPassword from "./pages/ResetPassword.svelte";
   import Message from "./pages/Message.svelte";
   import Clients from "./pages/platform/Clients.svelte";
   import Settings from "./pages/Settings.svelte";
@@ -32,6 +35,9 @@
     "/change-password": { component: ChangePassword, title: "Change password" },
   };
 
+  // Pages for people who aren't signed in.
+  const PUBLIC = ["/login", "/forgot-password", "/reset-password"];
+
   let startError = $state("");
 
   $effect(() => {
@@ -53,17 +59,18 @@
     if (!session.ready || session.workspace?.kind === "none") return;
     const path = router.path;
     if (!session.me) {
-      if (path !== "/login") navigate(`/login${path === "/" ? "" : `?next=${encodeURIComponent(path + router.search)}`}`, { replace: true });
+      if (!PUBLIC.includes(path)) navigate(`/login${path === "/" ? "" : `?next=${encodeURIComponent(path + router.search)}`}`, { replace: true });
     } else if (session.me.must_change_password && path !== "/change-password") {
       navigate("/change-password", { replace: true });
-    } else if (path === "/login") {
+    } else if (PUBLIC.includes(path)) {
       navigate("/", { replace: true });
     }
   });
 
   $effect(() => {
     const where = session.workspace?.name ? ` · ${session.workspace.name}` : "";
-    document.title = `${router.path === "/login" ? "Sign in" : route?.title ?? "Not found"}${where} · Supreme DMS`;
+    const titles: Record<string, string> = { "/login": "Sign in", "/forgot-password": "Forgot password", "/reset-password": "Choose a new password" };
+    document.title = `${titles[router.path] ?? route?.title ?? "Not found"}${where} · Supreme DMS`;
   });
 </script>
 
@@ -82,10 +89,22 @@
 {:else if !session.ready}
   <div class="splash" aria-busy="true"><span class="muted">Loading…</span></div>
 {:else if session.workspace?.kind === "none"}
-  <Message title="There's no workspace at this address"
-           text="Check the address your centre gave you. It looks like yourcentre.supremedms.in." action={false} />
+  <div class="nows">
+    <div class="card card-body stack">
+      <h1>There's no workspace at this address</h1>
+      <p class="muted">Each centre has its own address, with the centre's name at the front. Use the address your centre gave you.</p>
+      {#if session.workspace.links?.length}
+        <p>On this computer, open one of these:</p>
+        <ul>
+          {#each session.workspace.links as link (link.url)}<li><a href={link.url}>{link.name}</a> <span class="muted mono">{link.url}</span></li>{/each}
+        </ul>
+      {/if}
+    </div>
+  </div>
 {:else if !session.me}
-  {#if router.path === "/login"}{@render guarded(Login)}{/if}
+  {#if router.path === "/login"}{@render guarded(Login)}
+  {:else if router.path === "/forgot-password"}{@render guarded(ForgotPassword)}
+  {:else if router.path === "/reset-password"}{@render guarded(ResetPassword)}{/if}
 {:else if session.me.must_change_password}
   {#if router.path === "/change-password"}{@render guarded(ChangePassword)}{/if}
 {:else}
@@ -101,7 +120,12 @@
 {/if}
 
 <Toasts />
+<ConfirmHost />
 
 <style>
   .splash { min-height: 100vh; display: grid; place-items: center; }
+  .nows { display: grid; place-items: center; min-height: 80vh; padding: 16px; }
+  .nows .card { max-width: 560px; }
+  .nows ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .nows p { margin: 0; }
 </style>

@@ -1,3 +1,5 @@
+import * as loader from "./loader";
+
 // The one way the app talks to the server. The session lives in an HttpOnly cookie that JavaScript never
 // sees; every change carries the session's CSRF token. Errors come back as ApiError with a readable message,
 // the field it's about, and the request ID to quote to support.
@@ -53,6 +55,16 @@ export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = hooks.csrf();
 
+  loader.start();
+  try {
+    return await send<T>(method, path, options, headers);
+  } finally {
+    loader.done();
+  }
+}
+
+async function send<T>(method: string, path: string, options: { body?: unknown; query?: Query; signal?: AbortSignal },
+                       headers: Record<string, string>): Promise<T> {
   let response: Response | null = null;
   // A read is retried once when the server says it's busy for a moment (503); changes never are.
   for (let attempt = 0; attempt < (method === "GET" ? 2 : 1); attempt++) {

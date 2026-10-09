@@ -25,17 +25,38 @@ class Page(BaseModel, Generic[T]):
 
 # ---------- workspace and sign-in ----------
 
+class WorkspaceLink(BaseModel):
+    name: str
+    url: str
+
+
 class WorkspaceOut(BaseModel):
     kind: Literal["client", "platform", "none"]
     name: str = ""
     slug: str = ""
     active: bool = True
+    # A centre's own look on its sign-in page and menu.
+    brand_color: str = ""
+    tagline: str = ""
+    logo_url: str = ""
+    # Development only, at an address with no workspace: where the workspaces are.
+    links: list[WorkspaceLink] = []
 
 
 class LoginIn(BaseModel):
     # Looked up, not validated: any string that matches an account is fine.
     email: str = Field(min_length=3, max_length=200)
     password: str = Field(min_length=1, max_length=200)
+    remember: bool = False
+
+
+class ForgotPasswordIn(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=20, max_length=100)
+    new_password: str = Field(min_length=1, max_length=200)
 
 
 class PasswordChangeIn(BaseModel):
@@ -109,6 +130,8 @@ class PasswordResetIn(BaseModel):
 
 class SettingsIn(BaseModel):
     legal_name: str = Field(min_length=2, max_length=200)
+    tagline: str = Field(default="", max_length=120)
+    brand_color: str = Field(default="#0f6e6e", pattern=r"^#[0-9a-fA-F]{6}$")
     address: str = Field(default="", max_length=1000)
     phones: str = Field(default="", max_length=200)
     email: EmailStr | Literal[""] = ""
@@ -120,6 +143,7 @@ class SettingsIn(BaseModel):
 
 class SettingsOut(Out, SettingsIn):
     email: str = ""
+    logo_file: str = ""
     updated_at: datetime
 
 

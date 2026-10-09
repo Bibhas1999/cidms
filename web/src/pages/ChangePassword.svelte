@@ -3,7 +3,7 @@
   import { ApiError, post } from "../lib/api";
   import { navigate } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
-  import { toasts } from "../lib/toast.svelte";
+  import { notify, notifyError } from "../lib/toast.svelte";
   import type { Me } from "../lib/types";
 
   let current = $state("");
@@ -26,11 +26,11 @@
     busy = true;
     try {
       session.setMe(await post<Me>("/api/auth/password", { current_password: current, new_password: next }));
-      toasts.show("Password changed. You've been signed out on your other devices.");
+      notify("Password changed. You've been signed out on your other devices.");
       navigate("/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fieldErrors).length) errors = err.fieldErrors;
-      else formError = (err as Error).message;
+      else notifyError(err, { title: "Couldn't change the password" });
     } finally {
       busy = false;
     }

@@ -6,7 +6,7 @@
   import { dateTime } from "../lib/format";
   import { router, setQuery } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
-  import { toastError, toasts } from "../lib/toast.svelte";
+  import { notify, toastError } from "../lib/toast.svelte";
   import type { Page, Role, Staff } from "../lib/types";
 
   const SIZE = 25;
@@ -85,11 +85,11 @@
     try {
       if (editing) {
         await patch(`/api/staff/${editing.id}`, { full_name: form.full_name, mobile: form.mobile, role_ids: form.role_ids, is_active: form.is_active });
-        toasts.show(`${form.full_name} updated.`);
+        notify(`${form.full_name} updated.`);
       } else {
         await post("/api/staff", { full_name: form.full_name, email: form.email, mobile: form.mobile, role_ids: form.role_ids,
                                    temporary_password: form.temporary_password });
-        toasts.show(`${form.full_name} added. Give them their temporary password: ${form.temporary_password}`, "success");
+        notify(`Give them this temporary password: ${form.temporary_password}. They choose their own when they first sign in.`, { kind: "info", title: `${form.full_name} added`, duration: 0 });
       }
       dialogOpen = false;
       reload++;
@@ -106,7 +106,7 @@
     const pw = resetPassword || generatePassword();
     try {
       await post(`/api/staff/${editing.id}/reset-password`, { temporary_password: pw });
-      toasts.show(`Password reset. ${editing.full_name}'s temporary password is ${pw}. They've been signed out everywhere.`, "info");
+      notify(`Their temporary password is ${pw}. They've been signed out everywhere.`, { kind: "info", title: `Password reset for ${editing.full_name}`, duration: 0 });
       resetPassword = "";
       dialogOpen = false;
       reload++;

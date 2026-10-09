@@ -6,7 +6,8 @@
   import { date, rupees } from "../../lib/format";
   import { router, setQuery } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
-  import { toastError, toasts } from "../../lib/toast.svelte";
+  import { notify, toastError } from "../../lib/toast.svelte";
+  import { confirmDialog } from "../../lib/confirm.svelte";
   import type { Client, Page, Plan } from "../../lib/types";
 
   const SIZE = 25;
@@ -63,7 +64,7 @@
     errors = {};
     try {
       const c = await post<Client>("/api/platform/clients", { ...form, plan_id: form.plan_id || null });
-      toasts.show(`${c.name} added. The owner signs in at ${c.slug}.${host} with the temporary password ${form.owner_temporary_password}.`, "info");
+      notify(`The owner signs in at ${c.slug}.${host} with the temporary password ${form.owner_temporary_password}.`, { kind: "info", title: `${c.name} added`, duration: 0 });
       addOpen = false;
       reload++;
     } catch (e) {
@@ -75,10 +76,11 @@
   }
 
   async function setStatus(c: Client, next: "active" | "suspended") {
-    if (next === "suspended" && !confirm(`Suspend ${c.name}? Everyone there is signed out and can't sign in until you reactivate it.`)) return;
+    if (next === "suspended" && !(await confirmDialog({ title: `Suspend ${c.name}?`, tone: "danger", confirmLabel: "Suspend",
+        message: "Everyone there is signed out at once and can't sign in until you reactivate it." }))) return;
     try {
       await patch(`/api/platform/clients/${c.id}`, { status: next });
-      toasts.show(`${c.name} ${next === "active" ? "reactivated" : "suspended"}.`);
+      notify(`${c.name} ${next === "active" ? "reactivated" : "suspended"}.`);
       reload++;
     } catch (e) {
       toastError(e);

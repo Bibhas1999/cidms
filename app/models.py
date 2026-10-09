@@ -1,16 +1,18 @@
-"""Database tables (phase 1: platform, clients, people, permissions, sessions and the activity log).
+"""Database tables: platform, clients, people, permissions, sessions, the activity log (phase 1) and
+billing: catalogue, patients, bills and payments (phase 2).
 
 Tables with a tenant_id are protected by row-level security (see migrations). A NULL tenant_id on users,
 roles and sessions means platform staff or a built-in role shared by every client.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -78,6 +80,11 @@ class TenantSettings(Base):
     invoice_prefix: Mapped[str] = mapped_column(String(10), default="INV")
     bill_footer: Mapped[str] = mapped_column(Text, default="")
     report_footer: Mapped[str] = mapped_column(Text, default="")
+    max_discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20"))
+    bill_paper: Mapped[str] = mapped_column(String(4), default="A5")  # A4 | A5
+    brand_color: Mapped[str] = mapped_column(String(7), default="#0f6e6e")
+    tagline: Mapped[str] = mapped_column(String(120), default="")
+    logo_file: Mapped[str] = mapped_column(String(100), default="")  # under storage/tenants/<tenant id>/
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
 
 
@@ -149,6 +156,20 @@ class UserSession(Base):
     user: Mapped[User] = relationship(lazy="joined")
 
 
+class PasswordReset(Base):
+    """A "forgot password" link. The email carries a random token; only its SHA-256 hash is stored."""
+    __tablename__ = "password_resets"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(Timestamp)
+    used_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    ip_address: Mapped[str | None] = mapped_column(INET)
+
+    user: Mapped[User] = relationship(lazy="joined")
+
+
 class ActivityLog(Base):
     """Who did what and when: sign-ins, sign-outs and every change. Never edited or removed by the app."""
     __tablename__ = "activity_log"
@@ -165,3 +186,177 @@ class ActivityLog(Base):
     created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, index=True)
 
     user: Mapped[User | None] = relationship(lazy="joined")
+
+
+# ---------- phase 2: billing ----------------------------------------------------------------------------
+
+class Counter(Base):
+    """Running numbers per client: patient numbers, and bill numbers per financial year ("invoice:2026-27").
+    Taken under a row lock, so two people saving at once never get the same number."""
+    __tablename__ = "counters"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True)
+    name: Mapped[str] = mapped_column(String(40), primary_key=True)
+    value: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class Operation(Base):
+    """A change sent with an Idempotency-Key: its answer is kept, so a retry (double click, flaky network)
+    gets the same answer instead of creating a second bill or taking a second payment."""
+    __tablename__ = "operations"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(40))
+    status_code: Mapped[int] = mapped_column(Integer)
+    response: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+
+
+class Department(Base):
+    __tablename__ = "departments"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+
+
+class TestType(Base):
+    """Kind of test, e.g. X-ray, CT scan, ECG, pathology. Imaging types get images and an accession number."""
+    __tablename__ = "test_types"
+    __test__ = False  # not a pytest test class
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    is_imaging: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+
+
+class LabTest(Base):
+    """A test the centre offers, with its current price. Bills keep their own copy of name and price."""
+    __tablename__ = "tests"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(20), default="")
+    name: Mapped[str] = mapped_column(String(200))
+    department_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("departments.id"))
+    test_type_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("test_types.id"))
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+    department: Mapped[Department] = relationship(lazy="joined")
+    test_type: Mapped[TestType | None] = relationship(lazy="joined")
+
+
+class ReferringDoctor(Base):
+    __tablename__ = "referring_doctors"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    qualification: Mapped[str] = mapped_column(String(200), default="")
+    phone: Mapped[str] = mapped_column(String(20), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+
+
+class Patient(Base):
+    __tablename__ = "patients"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    patient_no: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(200))
+    guardian_name: Mapped[str] = mapped_column(String(200), default="")  # C/O on the old bills
+    age_years: Mapped[int | None] = mapped_column(Integer)
+    date_of_birth: Mapped[date | None] = mapped_column(Date)
+    gender: Mapped[str] = mapped_column(String(10))  # male | female | other
+    mobile: Mapped[str] = mapped_column(String(20), default="")
+    email: Mapped[str] = mapped_column(String(200), default="")
+    address: Mapped[str] = mapped_column(Text, default="")
+    legacy_customer_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+
+class Invoice(Base):
+    """A bill. Keeps a copy of the patient's details as billed. Paid and due are worked out from its payments."""
+    __tablename__ = "invoices"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    invoice_no: Mapped[str] = mapped_column(String(40))
+    legacy_no: Mapped[int | None] = mapped_column(Integer)
+    bill_date: Mapped[date] = mapped_column(Date)
+    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patients.id"))
+    patient_name: Mapped[str] = mapped_column(String(200))
+    patient_age: Mapped[str] = mapped_column(String(20), default="")
+    patient_gender: Mapped[str] = mapped_column(String(10), default="")
+    patient_mobile: Mapped[str] = mapped_column(String(20), default="")
+    patient_address: Mapped[str] = mapped_column(Text, default="")
+    guardian_name: Mapped[str] = mapped_column(String(200), default="")
+    referring_doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("referring_doctors.id"))
+    referring_doctor_name: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(12), default="confirmed")  # confirmed | on_hold | cancelled
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    discount_type: Mapped[str] = mapped_column(String(8), default="none")  # none | percent | amount
+    discount_value: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    total: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    paid: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    due: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    cancel_reason: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_by_name: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+    items: Mapped[list["InvoiceItem"]] = relationship(back_populates="invoice", order_by="InvoiceItem.position", lazy="selectin")
+    payments: Mapped[list["Payment"]] = relationship(back_populates="invoice", order_by="Payment.received_at", lazy="selectin")
+
+
+class InvoiceItem(Base):
+    """One test on a bill, with its own progress: billed, scanned, reported, delivered (or cancelled)."""
+    __tablename__ = "invoice_items"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    invoice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    test_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tests.id"))
+    test_name: Mapped[str] = mapped_column(String(200))
+    department_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("departments.id"))
+    department_name: Mapped[str] = mapped_column(String(100), default="")
+    is_imaging: Mapped[bool] = mapped_column(Boolean, default=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    status: Mapped[str] = mapped_column(String(12), default="billed")
+    accession_no: Mapped[str] = mapped_column(String(32), default="")
+    status_changed_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+    legacy_report: Mapped[dict | None] = mapped_column(JSONB)  # the old app's typed report, until phase 4
+
+    invoice: Mapped[Invoice] = relationship(back_populates="items")
+
+
+class Payment(Base):
+    """Money received for a bill (kind=payment) or given back (kind=refund). Never edited or deleted."""
+    __tablename__ = "payments"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    invoice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(8), default="payment")  # payment | refund
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    mode: Mapped[str] = mapped_column(String(10))  # cash | upi | card | bank | other
+    reference: Mapped[str] = mapped_column(String(100), default="")
+    note: Mapped[str] = mapped_column(String(300), default="")
+    received_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    received_on: Mapped[date] = mapped_column(Date)  # the centre's local date, for daily collection
+    received_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    received_by_name: Mapped[str] = mapped_column(String(200), default="")
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+
+    invoice: Mapped[Invoice] = relationship(back_populates="payments")

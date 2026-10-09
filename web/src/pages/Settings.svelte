@@ -3,7 +3,7 @@
   import { ApiError, get, put } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { setBeforeLeave } from "../lib/router.svelte";
-  import { toastError, toasts } from "../lib/toast.svelte";
+  import { notify, toastError } from "../lib/toast.svelte";
   import type { CentreSettings } from "../lib/types";
 
   type Form = Omit<CentreSettings, "updated_at">;
@@ -42,7 +42,7 @@
     try {
       take(await put<CentreSettings>("/api/settings", { ...form, gst_number: form.gst_number.trim().toUpperCase(),
                                                          invoice_prefix: form.invoice_prefix.trim().toUpperCase() }));
-      toasts.show("Centre settings saved.");
+      notify("Centre settings saved.");
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fieldErrors).length) errors = err.fieldErrors;
       else toastError(err);
