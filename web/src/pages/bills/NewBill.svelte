@@ -49,23 +49,46 @@
   let doctor = $state<Doctor | null>(null);
   const searchDoctors = (q: string, page: number, size: number, signal: AbortSignal) => get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal);
 
+  // A doctor not in the list yet: add them here (saved to the list at once) and they're chosen for this bill.
+  let addingDoctor = $state(false);
+  let nd = $state({ name: "", qualification: "", phone: "" });
+  let ndErrors = $state<Record<string, string>>({});
+  let ndSaving = $state(false);
+
+  function startNewDoctor() {
+    nd = { name: doctorText.trim(), qualification: "", phone: "" };
+    ndErrors = {};
+    addingDoctor = true;
+  }
+
+  async function saveDoctor() {
+    ndSaving = true;
+    ndErrors = {};
+    try {
+      const d = await post<Doctor>("/api/doctors", { name: nd.name.trim(), qualification: nd.qualification.trim(), phone: nd.phone.trim() });
+      doctor = d;
+      doctorText = d.name;
+      addingDoctor = false;
+      notify(`${d.name} is added to your doctors and chosen for this bill.`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        ndErrors = { name: "This doctor is already in your list: search for them above." };
+      } else if (e instanceof ApiError && Object.keys(e.fieldErrors).length) ndErrors = e.fieldErrors;
+      else notifyError(e, { title: "Couldn't add the doctor" });
+    } finally {
+      ndSaving = false;
+    }
+  }
+
   // ---------- tests ----------
   interface Line { test: LabTest; quantity: number }
   let lines = $state<Line[]>([]);
   const onBill = $derived(new Set(lines.map((l) => l.test.id)));
 
-  // As on the old Supreme Invoice page: select the test (or tick several), see the rate, press Add.
-  let picked = $state<LabTest[]>([]);
-  const pickedPrice = $derived(picked.reduce((sum, t) => sum + Number(t.price), 0));
-
-  function addPicked() {
-    if (!picked.length) { errors = { ...errors, lines: "Select a test first." }; return; }
-    for (const t of picked) {
-      const line = lines.find((l) => l.test.id === t.id);
-      if (line) line.quantity += 1;
-      else lines.push({ test: t, quantity: 1 });
-    }
-    picked = [];
+  // Ticking a test in the drop-down puts it on the bill straight away; unticking (or ×) takes it off.
+  function toggleTest(t: LabTest, on: boolean) {
+    if (on && !onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
+    if (!on) lines = lines.filter((l) => l.test.id !== t.id);
     errors = { ...errors, lines: "" };
   }
 
@@ -209,33 +232,61 @@
 
     <section class="card" aria-labelledby="d-title">
       <div class="card-header"><div><h2 class="card-title" id="d-title"><span class="step">2</span> Referred by</h2>
-        <p class="card-description">Pick a doctor, type a new name (it's added to your list), or leave it as self.</p></div></div>
-      <div class="card-content row" style="align-items: flex-end">
-        <div class="grow">
-          <Combobox id="doctor" label="Referring doctor" placeholder="Self" icon="stethoscope" searchPage={searchDoctors} bind:value={doctorText}
-                    onpick={(d) => { doctor = d; doctorText = d.name; }} emptyText="Not in your list yet: it'll be added when you save.">
+        <p class="card-description">Choose a doctor from your list, add a new one, or leave it as self.</p></div></div>
+      <div class="card-content stack">
+        {#if doctor && doctor.name === doctorText}
+          <div class="picked">
+            <span class="avatar" aria-hidden="true"><Icon name="stethoscope" size="sm" /></span>
+            <div class="grow">
+              <div class="font-semibold">{doctor.name}</div>
+              <div class="text-sm text-muted">{[doctor.qualification, doctor.phone].filter(Boolean).join(" · ") || "Referring doctor"}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctor = null; doctorText = ""; }}>Change</button>
+          </div>
+        {:else if !addingDoctor}
+          <Combobox id="doctor" label="Find a doctor" placeholder="Search by name… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
+                    bind:value={doctorText} onpick={(d) => { doctor = d; doctorText = d.name; }}
+                    emptyText="Not in your list yet. Press New doctor to add them.">
             {#snippet option(d)}<span class="font-semibold">{d.name}</span>{#if d.qualification} <span class="text-xs text-muted">{d.qualification}</span>{/if}{/snippet}
           </Combobox>
-        </div>
-        {#if doctorText}<button class="btn btn-ghost" type="button" onclick={() => { doctorText = ""; doctor = null; }}>Self</button>{/if}
+          <div class="row-wrap">
+            <button class="btn btn-outline btn-sm" type="button" onclick={startNewDoctor}><Icon name="plus" size="sm" /> New doctor</button>
+            {#if doctorText}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctorText = ""; doctor = null; }}>Self</button>{/if}
+          </div>
+        {:else}
+          <div class="grid-3">
+            <Field id="nd-name" label="Doctor's name" required error={ndErrors.name}>
+              {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" placeholder="e.g. Dr. Kakali Sarkar" bind:value={nd.name} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+            </Field>
+            <Field id="nd-qual" label="Qualification" error={ndErrors.qualification}>
+              {#snippet children({ invalid, describedby })}<input id="nd-qual" class="input" placeholder="e.g. MBBS, MD" bind:value={nd.qualification} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+            </Field>
+            <Field id="nd-phone" label="Phone" error={ndErrors.phone}>
+              {#snippet children({ invalid, describedby })}<input id="nd-phone" class="input tabular" type="tel" bind:value={nd.phone} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+            </Field>
+          </div>
+          <div class="row-wrap">
+            <button class="btn btn-primary btn-sm" type="button" disabled={ndSaving || nd.name.trim().length < 2} onclick={saveDoctor}><Icon name="check" size="sm" /> {ndSaving ? "Adding…" : "Add doctor"}</button>
+            <button class="btn btn-ghost btn-sm" type="button" onclick={() => (addingDoctor = false)}>Search the list instead</button>
+          </div>
+        {/if}
       </div>
     </section>
 
     <section class="card" aria-labelledby="t-title">
       <div class="card-header"><div><h2 class="card-title" id="t-title"><span class="step">3</span> Tests</h2>
-        <p class="card-description">Select a test (or tick several), check the rate, and press Add.</p></div>
+        <p class="card-description">Tick the tests in the list: each one goes straight onto the bill.</p></div>
         {#if lines.length}<span class="badge badge-info badge-plain">{lines.length} on the bill</span>{/if}</div>
       <div class="card-content stack">
         <div class="test-row">
           <div class="field">
             <label class="label" for="nb-test">Test name</label>
-            <TestSelect id="nb-test" bind:picked exclude={onBill} />
+            <TestSelect id="nb-test" selected={onBill} ontoggle={toggleTest} />
           </div>
           <div class="field">
-            <label class="label" for="nb-rate">Rate/Price (₹)</label>
-            <input id="nb-rate" class="input money" value={picked.length ? pickedPrice.toFixed(2) : ""} readonly />
+            <label class="label" for="nb-rate">Total price (₹)</label>
+            <input id="nb-rate" class="input money" value={subtotal.toFixed(2)} readonly />
           </div>
-          <button class="btn btn-primary" type="button" onclick={addPicked}><Icon name="plus" /> Add{picked.length > 1 ? ` ${picked.length}` : ""}</button>
         </div>
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
       </div>
@@ -316,8 +367,7 @@
   .line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
   .line.grand { font-size: 20px; font-weight: 700; font-family: var(--font-heading); }
   .line.is-due { color: var(--destructive); font-weight: 600; }
-  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px auto; gap: 12px; align-items: start; }
-  .test-row > .btn { margin-top: 25px; }
+  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: start; }
   .old-table thead th { background: var(--brand-navy); color: #fff; }
   @media (max-width: 900px) { .summary { position: static; } }
   @media (max-width: 560px) { .test-row { grid-template-columns: 1fr; } }

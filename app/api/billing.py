@@ -100,7 +100,11 @@ def doctors(search: str = Query("", max_length=100), active: bool | None = None,
 
 
 @router.post("/doctors", response_model=DoctorOut, status_code=status.HTTP_201_CREATED)
-def add_doctor(data: DoctorIn, db: Session = DB, current: CurrentUser = Depends(manage_catalogue)):
+def add_doctor(data: DoctorIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """Adding a referring doctor is front-desk work too: anyone who bills (or manages the catalogue) may."""
+    if not (current.can("catalogue.manage") or current.can("billing.create")):
+        from app.core.errors import Forbidden
+        raise Forbidden("You don't have permission to add doctors.")
     return CatalogueService(db, current).save_doctor(data)
 
 

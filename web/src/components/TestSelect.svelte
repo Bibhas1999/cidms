@@ -7,10 +7,12 @@
   import Icon from "./Icon.svelte";
 
   // "Test name" on the bill: click the box and a short list drops down (typing narrows it), with a tick-box
-  // on each test, so several can be picked before pressing Add. Picked tests show as chips under the box.
-  let { picked = $bindable([]), exclude = new Set<string>(), id = "test-select" }: {
-    picked?: LabTest[]; exclude?: Set<string>; id?: string;
+  // on each test. Ticking puts the test on the bill at once and unticking takes it off; the list stays open
+  // and the box keeps focus, so several tests go in quickly. `selected` = ids already on the bill.
+  let { selected, ontoggle, id = "test-select" }: {
+    selected: Set<string>; ontoggle: (test: LabTest, on: boolean) => void; id?: string;
   } = $props();
+  let inputEl = $state<HTMLInputElement>();
 
   let query = $state("");
   let open = $state(false);
@@ -42,9 +44,10 @@
     return () => document.removeEventListener("mousedown", away);
   });
 
-  const isPicked = (t: LabTest) => picked.some((p) => p.id === t.id);
+  const isPicked = (t: LabTest) => selected.has(t.id);
   function toggle(t: LabTest) {
-    picked = isPicked(t) ? picked.filter((p) => p.id !== t.id) : [...picked, t];
+    ontoggle(t, !isPicked(t));
+    queueMicrotask(() => inputEl?.focus());
   }
 
   function onkey(e: KeyboardEvent) {
@@ -60,8 +63,8 @@
   <div class="input-group">
     <Icon name="search" />
     <input {id} class="input" type="text" role="combobox" autocomplete="off" aria-expanded={open} aria-controls="{id}-list"
-           placeholder={picked.length ? "Add more tests…" : "Select or search tests…"}
-           bind:value={query} onkeydown={onkey} onfocus={() => (open = true)} onclick={() => (open = true)} oninput={() => (open = true)} />
+           placeholder={selected.size ? "Add more tests…" : "Select or search tests…"}
+           bind:value={query} bind:this={inputEl} onkeydown={onkey} onfocus={() => (open = true)} onclick={() => (open = true)} oninput={() => (open = true)} />
   </div>
 
   {#if open}
@@ -73,7 +76,7 @@
             <label class="ts-row" class:is-on={on} class:is-active={i === active} onmouseenter={() => (active = i)}>
               <input class="checkbox" type="checkbox" checked={on} onchange={() => toggle(t)} />
               <span class="ts-name">{t.name}</span>
-              <span class="ts-dept">{t.department.name}{#if exclude.has(t.id)} · on bill{/if}</span>
+              <span class="ts-dept">{t.department.name}</span>
               <span class="ts-price money">{rupees(t.price)}</span>
             </label>
           </li>
@@ -83,19 +86,12 @@
         {#if tests.length && loading}<li class="ts-empty">Loading more…</li>{/if}
       </ul>
       <div class="ts-foot">
-        <span>{picked.length} selected · {tests.length} of {list.total} tests</span>
+        <span>{selected.size} on the bill · Enter ticks the highlighted test</span>
         <button type="button" class="link-button" onclick={() => { open = false; query = ""; }}>Done</button>
       </div>
     </div>
   {/if}
 
-  {#if picked.length}
-    <div class="ts-chips">
-      {#each picked as t (t.id)}
-        <span class="ts-chip">{t.name}<button type="button" aria-label="Remove {t.name}" onclick={() => toggle(t)}><Icon name="x" size="sm" /></button></span>
-      {/each}
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -112,9 +108,4 @@
   .ts-empty { padding: 10px; font-size: 13px; color: var(--muted-foreground); }
   .ts-foot { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; border-top: 1px solid var(--border);
     font-size: 12px; color: var(--muted-foreground); }
-  .ts-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .ts-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 10px; border-radius: 999px;
-    background: var(--accent); color: var(--accent-foreground); font-size: 12px; font-weight: 600; }
-  .ts-chip button { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
-  .ts-chip button:hover { background: color-mix(in srgb, var(--primary-text) 15%, transparent); }
 </style>

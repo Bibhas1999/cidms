@@ -1,10 +1,12 @@
 <script lang="ts">
   import DateRange from "../../components/DateRange.svelte";
   import Icon from "../../components/Icon.svelte";
+  import RowMenu, { type RowAction } from "../../components/RowMenu.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
   import Pagination from "../../components/Pagination.svelte";
   import { get } from "../../lib/api";
   import { BILL_STATUS, paymentState, type BillPage } from "../../lib/bill-types";
+  import type { BillSummary } from "../../lib/types";
   import { count, date, dateTime, rupees } from "../../lib/format";
   import { navigate, router, setQuery } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
@@ -39,6 +41,19 @@
 
   let timer: ReturnType<typeof setTimeout>;
   const onSearch = () => { clearTimeout(timer); timer = setTimeout(() => setQuery({ search: searchText.trim(), page: null }), 300); };
+
+  // Names as people write them: "PIU KOLEY" -> "Piu Koley".
+  const nice = (n: string) => n.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+  function actionsFor(b: BillSummary): RowAction[] {
+    const live = b.status !== "cancelled";
+    return [
+      { label: "View bill", icon: "eye", href: `/bills/${b.id}` },
+      { label: "Print", icon: "printer", href: `/bills/${b.id}/print`, newTab: true },
+      ...(live && Number(b.due) > 0 && session.can("payments.collect") ? [{ label: "Collect due", icon: "wallet", href: `/bills/${b.id}?collect=1` }] : []),
+      ...(live && session.can("billing.edit") ? [{ label: "Change tests", icon: "edit", href: `/bills/${b.id}?edit=1` }] : []),
+    ];
+  }
 
   const filtered = $derived(!!(search || from || to || status || (!dues && dueOnly)));
 </script>
@@ -82,30 +97,21 @@
     <div class="table-wrap" aria-busy={loading}>
       <table class="table">
         <thead>
-          <tr><th>Bill</th><th>Patient</th><th>Referred by</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Due</th><th>Payment</th>{#if !dues}<th>Status</th>{/if}<th class="num">Actions</th></tr>
+          <tr><th>Bill</th><th>Patient</th><th>Referred by</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Due</th><th>Payment</th>{#if !dues}<th>Billed by</th>{/if}<th class="num"><span class="sr-only">Actions</span></th></tr>
         </thead>
         <tbody>
           {#each data.items as b (b.id)}
             {@const pay = paymentState(b)}
             <tr class="is-clickable" onclick={(e) => { if (!(e.target as Element).closest("a")) navigate(`/bills/${b.id}`); }}>
-              <td><a class="cell-title mono nowrap" href="/bills/{b.id}">{b.invoice_no}</a><div class="cell-sub">{date(b.bill_date)}{#if b.legacy_no} · old #{b.legacy_no}{/if}</div></td>
+              <td><a class="cell-title mono nowrap" href="/bills/{b.id}">{b.invoice_no}</a><div class="cell-sub nowrap">{date(b.bill_date)}</div></td>
               <td><div class="cell-title">{b.patient_name}</div><div class="cell-sub tabular">{b.patient_mobile || "—"}</div></td>
-              <td class="text-sm">{b.referring_doctor_name || "Self"}</td>
+              <td class="text-sm">{b.referring_doctor_name ? nice(b.referring_doctor_name) : "Self"}</td>
               <td class="num money">{rupees(b.total)}</td>
               <td class="num money">{rupees(b.paid)}</td>
               <td class="num money {Number(b.due) > 0 ? 'money-due' : ''}">{rupees(b.due)}</td>
-              <td><span class="badge {pay[0]}">{pay[1]}</span></td>
-              {#if !dues}<td>{#if b.status !== "confirmed"}<span class="badge {BILL_STATUS[b.status][0]}">{BILL_STATUS[b.status][1]}</span>{:else}<span class="text-xs text-muted" title={dateTime(b.created_at)}>by {b.created_by_name || "—"}</span>{/if}</td>{/if}
-              <td class="num nowrap">
-                <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}" aria-label="View {b.invoice_no}" title="View"><Icon name="eye" size="sm" /></a>
-                <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}/print" target="_blank" rel="noopener" aria-label="Print {b.invoice_no}" title="Print"><Icon name="printer" size="sm" /></a>
-                {#if Number(b.due) > 0 && b.status !== "cancelled" && session.can("payments.collect")}
-                  <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}?collect=1" aria-label="Collect due on {b.invoice_no}" title="Collect due"><Icon name="wallet" size="sm" /></a>
-                {/if}
-                {#if b.status !== "cancelled" && session.can("billing.edit")}
-                  <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}?edit=1" aria-label="Change tests on {b.invoice_no}" title="Change tests"><Icon name="edit" size="sm" /></a>
-                {/if}
-              </td>
+              <td>{#if b.status !== "confirmed"}<span class="badge {BILL_STATUS[b.status][0]}">{BILL_STATUS[b.status][1]}</span>{:else}<span class="badge {pay[0]}">{pay[1]}</span>{/if}</td>
+              {#if !dues}<td class="nowrap text-sm" title={dateTime(b.created_at)}>{b.created_by_name ? nice(b.created_by_name) : "—"}</td>{/if}
+              <td class="num"><RowMenu label="Actions for {b.invoice_no}" actions={actionsFor(b)} /></td>
             </tr>
           {:else}
             <tr><td colspan="9"><div class="empty"><Icon name={dues ? "wallet" : "receipt"} />
