@@ -158,6 +158,11 @@ def create_bill(data: BillIn, request: Request, db: Session = DB, current: Curre
     return run_once(request, db, current, "bill.create", lambda: BillOut.model_validate(svc.create(data)), status.HTTP_201_CREATED)
 
 
+@router.get("/bills/next-number")
+def next_number(db: Session = DB, current: CurrentUser = Depends(client_user)):
+    return {"invoice_no": BillingService(db, current).next_invoice_no(), "date": local_today()}
+
+
 @router.get("/bills/{invoice_id}", response_model=BillOut)
 def bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
     return BillingService(db, current).get(invoice_id)

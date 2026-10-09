@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound
 from app.core.money import ZERO, financial_year, local_today, q2, rupees
 from app.core.security import CurrentUser
-from app.models import Invoice, InvoiceItem, LabTest, Patient, Payment, ReferringDoctor, Tenant, TenantSettings, utcnow
+from app.models import Counter, Invoice, InvoiceItem, LabTest, Patient, Payment, ReferringDoctor, Tenant, TenantSettings, utcnow
 from app.repositories.common import contains
 from app.repositories.counters import next_number
 from app.schemas_billing import BillIn, BillLineIn, BillUpdateIn, PaymentIn, RefundIn
@@ -180,6 +180,13 @@ class BillingService:
     def _not_cancelled(self, invoice: Invoice) -> None:
         if invoice.status == "cancelled":
             raise Conflict("This bill is cancelled and can't be changed.")
+
+    def next_invoice_no(self) -> str:
+        """The number the next bill will most likely get, for the New bill page. Only a preview: the real
+        number is taken when the bill is saved, so two desks billing at once each get their own."""
+        fy = financial_year(local_today())
+        current = self.db.scalar(select(Counter.value).where(Counter.tenant_id == self.tenant_id, Counter.name == f"invoice:{fy}")) or 0
+        return f"{self._settings().invoice_prefix}/{fy}/{current + 1:06d}"
 
     # ---------- creating and changing bills ----------
     def create(self, data: BillIn) -> Invoice:

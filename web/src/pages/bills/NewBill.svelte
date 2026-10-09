@@ -3,7 +3,7 @@
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
-  import TestPicker from "../../components/TestPicker.svelte";
+  import TestSelect from "../../components/TestSelect.svelte";
   import { ApiError, get, newRequestKey, post } from "../../lib/api";
   import { PAYMENT_MODES, type Bill, type Doctor, type LabTest, type Patient, type PaymentMode } from "../../lib/bill-types";
   import { rupees } from "../../lib/format";
@@ -54,14 +54,19 @@
   let lines = $state<Line[]>([]);
   const onBill = $derived(new Set(lines.map((l) => l.test.id)));
 
-  // Ticking a test in the picker puts it on the bill; unticking takes it off.
-  function toggleTest(t: LabTest, on: boolean) {
-    if (on && !onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
-    if (!on) lines = lines.filter((l) => l.test.id !== t.id);
-  }
+  // As on the old Supreme Invoice page: select the test (or tick several), see the rate, press Add.
+  let picked = $state<LabTest[]>([]);
+  const pickedPrice = $derived(picked.reduce((sum, t) => sum + Number(t.price), 0));
 
-  function addMany(tests: LabTest[]) {
-    for (const t of tests) if (!onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
+  function addPicked() {
+    if (!picked.length) { errors = { ...errors, lines: "Select a test first." }; return; }
+    for (const t of picked) {
+      const line = lines.find((l) => l.test.id === t.id);
+      if (line) line.quantity += 1;
+      else lines.push({ test: t, quantity: 1 });
+    }
+    picked = [];
+    errors = { ...errors, lines: "" };
   }
 
   // ---------- money ----------
@@ -218,30 +223,40 @@
 
     <section class="card" aria-labelledby="t-title">
       <div class="card-header"><div><h2 class="card-title" id="t-title"><span class="step">3</span> Tests</h2>
-        <p class="card-description">Tick every test the patient needs: search, or pick a department and tick from the list.</p></div>
+        <p class="card-description">Select a test (or tick several), check the rate, and press Add.</p></div>
         {#if lines.length}<span class="badge badge-info badge-plain">{lines.length} on the bill</span>{/if}</div>
       <div class="card-content stack">
-        <TestPicker selected={onBill} ontoggle={toggleTest} onaddmany={addMany} />
+        <div class="test-row">
+          <div class="field">
+            <label class="label" for="nb-test">Test name</label>
+            <TestSelect id="nb-test" bind:picked exclude={onBill} />
+          </div>
+          <div class="field">
+            <label class="label" for="nb-rate">Rate/Price (₹)</label>
+            <input id="nb-rate" class="input money" value={picked.length ? pickedPrice.toFixed(2) : ""} readonly />
+          </div>
+          <button class="btn btn-primary" type="button" onclick={addPicked}><Icon name="plus" /> Add{picked.length > 1 ? ` ${picked.length}` : ""}</button>
+        </div>
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
       </div>
-      {#if lines.length}
-        <div class="card-flush"><div class="table-wrap"><table class="table" style="min-width: 0">
-          <caption class="sr-only">Tests on this bill</caption>
-          <thead><tr><th>On this bill</th><th class="num">Price</th><th class="num" style="width: 110px">Qty</th><th class="num">Amount</th><th><span class="sr-only">Remove</span></th></tr></thead>
-          <tbody>
-            {#each lines as l, i (l.test.id)}
-              <tr>
-                <td><div class="cell-title">{l.test.name}</div><div class="cell-sub">{l.test.department.name}{#if l.test.test_type?.is_imaging} · <span class="badge badge-info badge-plain" style="height: 18px">Scan</span>{/if}</div></td>
-                <td class="num money">{rupees(l.test.price)}</td>
-                <td class="num"><input class="input input-sm tabular" style="width: 72px; text-align: right" type="number" min="1" max="20" aria-label="Quantity of {l.test.name}" bind:value={l.quantity} /></td>
-                <td class="num money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</td>
-                <td class="num"><button class="btn btn-ghost-destructive btn-icon btn-sm" aria-label="Remove {l.test.name}" onclick={() => lines.splice(i, 1)}><Icon name="x" size="sm" /></button></td>
-              </tr>
-            {/each}
-          </tbody>
-          <tfoot><tr><td colspan="3" class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</td><td class="num money font-semibold">{rupees(subtotal)}</td><td></td></tr></tfoot>
-        </table></div></div>
-      {/if}
+      <div class="card-flush"><div class="table-wrap"><table class="table old-table" style="min-width: 0">
+        <thead><tr><th style="width: 46%">Test name</th><th class="num" style="width: 12%">Qty</th><th class="num" style="width: 15%">Unit price</th>
+          <th class="num" style="width: 17%">Total price</th><th class="num" style="width: 10%">Action</th></tr></thead>
+        <tbody>
+          {#each lines as l, i (l.test.id)}
+            <tr>
+              <td><div class="cell-title">{l.test.name}</div><div class="cell-sub">{l.test.department.name}</div></td>
+              <td class="num"><input class="input tabular" style="width: 72px; text-align: right; margin-left: auto" type="number" min="1" max="20" aria-label="Quantity of {l.test.name}" bind:value={l.quantity} /></td>
+              <td class="num money">{rupees(l.test.price)}</td>
+              <td class="num money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</td>
+              <td class="num"><button class="btn btn-ghost-destructive btn-icon btn-sm" type="button" aria-label="Remove {l.test.name}" onclick={() => lines.splice(i, 1)}><Icon name="x" size="sm" /></button></td>
+            </tr>
+          {:else}
+            <tr><td colspan="5" class="text-muted text-sm" style="text-align: center; padding: 18px">No tests added yet.</td></tr>
+          {/each}
+        </tbody>
+        {#if lines.length}<tfoot><tr><td colspan="3" class="num text-muted">Total</td><td class="num money font-semibold">{rupees(subtotal)}</td><td></td></tr></tfoot>{/if}
+      </table></div></div>
     </section>
 
     <section class="card">
@@ -301,5 +316,9 @@
   .line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
   .line.grand { font-size: 20px; font-weight: 700; font-family: var(--font-heading); }
   .line.is-due { color: var(--destructive); font-weight: 600; }
+  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px auto; gap: 12px; align-items: start; }
+  .test-row > .btn { margin-top: 25px; }
+  .old-table thead th { background: var(--brand-navy); color: #fff; }
   @media (max-width: 900px) { .summary { position: static; } }
+  @media (max-width: 560px) { .test-row { grid-template-columns: 1fr; } }
 </style>
