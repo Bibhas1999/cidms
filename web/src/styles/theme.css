@@ -1,0 +1,173 @@
+/* Supreme DMS: "Clean SaaS" theme. Loaded after globals.css and supreme.css and wins over them.
+   Calm and compact, in the spirit of Linear and Stripe: neutral greys, hairline borders, one blue accent
+   (the logo's) and its orange used sparingly, sentence-case buttons, Inter everywhere. */
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --muted: #f6f7f9;               /* page background, table headers, hovers */
+  --muted-foreground: #64748b;
+  --faint-foreground: #8a94a6;
+  --border: #e6e8ec;
+  --input: #d5d9e0;
+  --accent: #eef4ff;              /* selected rows, active menu item */
+  --accent-foreground: #0b4fb3;
+  --primary: #004aad;
+  --primary-text: #0b55c4;        /* links, focus, active text */
+  --primary-foreground: #ffffff;
+  --secondary: #0f172a;
+  --secondary-hover: #1e293b;
+  --success: #15803d; --success-soft: #ecfdf3;
+  --warning: #b45309; --warning-soft: #fff7ed;
+  --info: #0b55c4; --info-soft: #eef4ff;
+  --destructive: #dc2626; --destructive-soft: #fef2f2;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .04);
+  --shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 1px 2px rgba(15, 23, 42, .04);
+  --shadow-lg: 0 12px 32px -8px rgba(15, 23, 42, .18), 0 4px 8px -4px rgba(15, 23, 42, .06);
+  --font-heading: "Inter", "Segoe UI", system-ui, sans-serif;
+  --sidebar-width: 240px;
+  --topbar-height: 56px;
+  --brand-orange: #f58634;
+}
+:root[data-theme="dark"] {
+  --background: #0f1115; --foreground: #e6e8eb; --card: #15181d; --card-foreground: #e6e8eb; --popover: #1a1d23; --popover-foreground: #e6e8eb;
+  --muted: #0b0d10; --muted-foreground: #9aa3b2; --faint-foreground: #7c8696; --border: #262a31; --input: #353a43;
+  --accent: #14233d; --accent-foreground: #9cc2ff; --primary: #2f7bf0; --primary-text: #7fb0ff; --primary-foreground: #ffffff;
+  --secondary: #e6e8eb; --secondary-hover: #ffffff;
+  --success: #4ade80; --success-soft: #0f2a1c; --warning: #fbbf24; --warning-soft: #2e2208; --info: #7fb0ff; --info-soft: #14233d;
+  --destructive: #f87171; --destructive-soft: #32161a;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4); --shadow: 0 1px 3px rgba(0,0,0,.5); --shadow-lg: 0 16px 40px rgba(0,0,0,.55);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0f1115; --foreground: #e6e8eb; --card: #15181d; --card-foreground: #e6e8eb; --popover: #1a1d23; --popover-foreground: #e6e8eb;
+    --muted: #0b0d10; --muted-foreground: #9aa3b2; --faint-foreground: #7c8696; --border: #262a31; --input: #353a43;
+    --accent: #14233d; --accent-foreground: #9cc2ff; --primary: #2f7bf0; --primary-text: #7fb0ff; --primary-foreground: #ffffff;
+    --secondary: #e6e8eb; --secondary-hover: #ffffff;
+    --success: #4ade80; --success-soft: #0f2a1c; --warning: #fbbf24; --warning-soft: #2e2208; --info: #7fb0ff; --info-soft: #14233d;
+    --destructive: #f87171; --destructive-soft: #32161a;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4); --shadow: 0 1px 3px rgba(0,0,0,.5); --shadow-lg: 0 16px 40px rgba(0,0,0,.55);
+  }
+}
+
+body { font-family: var(--font-sans); font-size: 14px; letter-spacing: -0.006em; background: var(--muted); color: var(--foreground); }
+h1, h2, h3, h4, .page-title, .stat-value { font-family: var(--font-sans); letter-spacing: -0.02em; }
+a { color: var(--primary-text); }
+
+/* ---------- Buttons: sentence case, compact ---------- */
+.btn { height: 36px; padding: 0 14px; gap: 7px; font: 500 13.5px/1 var(--font-sans); letter-spacing: -0.005em; text-transform: none;
+  border-radius: var(--radius-sm); box-shadow: none; }
+.btn-sm { height: 30px; padding: 0 10px; font-size: 13px; }
+.btn-lg { height: 42px; padding: 0 18px; font-size: 14.5px; }
+.btn-icon { width: 34px; padding: 0; }
+.btn-primary { background: var(--primary); color: var(--primary-foreground); box-shadow: 0 1px 2px rgba(0, 74, 173, .25), inset 0 1px 0 rgba(255,255,255,.12); }
+.btn-primary:hover:not(:disabled) { background: #003d8f; }
+.btn-outline { background: var(--card); color: var(--foreground); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.btn-outline:hover:not(:disabled) { background: var(--muted); border-color: var(--input); color: var(--foreground); }
+.btn-ghost { color: var(--muted-foreground); }
+.btn-ghost:hover:not(:disabled) { background: var(--muted); color: var(--foreground); }
+.btn-secondary { background: var(--secondary); color: var(--card); }
+.btn-destructive { background: var(--destructive); }
+:root[data-theme="dark"] .btn-primary, :root[data-theme="dark"] .btn-primary:hover:not(:disabled) { background: var(--primary); color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primary { background: var(--primary); color: #fff; } }
+.link-button { font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* ---------- Cards and stats ---------- */
+.card { border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.card-header { padding: 18px 20px 0; }
+.card-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.card-description { font-size: 13px; margin-top: 3px; }
+.card-content { padding: 18px 20px; }
+.card-footer { padding: 12px 20px; background: transparent; }
+.stat { border-top: 0 !important; padding: 16px 18px; gap: 6px; position: relative; }
+.stat-label { font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted-foreground); }
+.stat-value { font-size: 26px; font-weight: 650; letter-spacing: -0.03em; }
+.stat-note { font-size: 12.5px; }
+.stat .stat-icon { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+  background: var(--accent); color: var(--primary-text); }
+.stat .stat-icon.is-orange { background: #fff4ea; color: #c2410c; }
+.stat .stat-icon.is-green { background: var(--success-soft); color: var(--success); }
+.stat .stat-icon.is-red { background: var(--destructive-soft); color: var(--destructive); }
+a.card.stat:hover { border-color: var(--input); box-shadow: var(--shadow); }
+
+/* ---------- Page header: title first, no ALL-CAPS label ---------- */
+.page { padding: 24px 28px 40px; gap: 18px; }
+.page-header { align-items: center; }
+.page-header .eyebrow { display: none; }
+.page-title { font-size: 22px; font-weight: 650; }
+.page-description { font-size: 14px; margin-top: 4px; }
+.eyebrow { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12.5px; }
+
+/* ---------- Sidebar and top bar ---------- */
+.sidebar { background: var(--card); border-right: 1px solid var(--border); }
+.sidebar-brand { height: var(--topbar-height); border-bottom: 0; padding: 0 16px; }
+.sidebar-nav { padding: 8px 10px 16px; gap: 1px; }
+.nav-heading { font-size: 11.5px; font-weight: 600; letter-spacing: .02em; text-transform: none; color: var(--faint-foreground); padding: 16px 10px 6px; }
+.nav-link { height: 34px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 500; color: var(--foreground); gap: 10px; }
+.nav-link .icon { width: 17px; height: 17px; color: var(--muted-foreground); }
+.nav-link:hover { background: var(--muted); }
+.nav-link.is-active { background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
+.nav-link.is-active .icon { color: var(--primary-text); }
+.sidebar-footer { border-top: 1px solid var(--border); }
+.topbar { height: var(--topbar-height); background: color-mix(in srgb, var(--card) 85%, transparent); border-bottom: 1px solid var(--border); padding: 0 24px; }
+.topbar::before { display: none; }
+.breadcrumbs { font-size: 13px; }
+.profile-button { height: 36px; font-weight: 500; }
+
+/* ---------- Tables ---------- */
+.table { font-size: 13.5px; }
+.table th { background: transparent; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--muted-foreground);
+  padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.table td { padding: 11px 16px; border-bottom: 1px solid var(--border); }
+.table tbody tr:hover td { background: color-mix(in srgb, var(--muted) 70%, transparent); }
+.table tbody tr.is-clickable:hover td { background: var(--accent); }
+.cell-title { font-weight: 550; }
+.old-table thead th, .bill-table thead th { background: var(--muted) !important; color: var(--muted-foreground) !important; }
+.toolbar { padding: 12px 16px; gap: 10px; border-bottom: 1px solid var(--border); }
+
+/* ---------- Badges ---------- */
+.badge { height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 0; gap: 5px; }
+.badge::before { width: 6px; height: 6px; }
+.badge-navy { background: #eef2f7; color: #334155; }
+:root[data-theme="dark"] .badge-navy { background: #1e2530; color: #cbd5e1; }
+
+/* ---------- Form controls ---------- */
+.label { font-size: 13px; font-weight: 500; }
+.input, .select, .textarea { border-radius: var(--radius-sm); border-color: var(--input); background-color: var(--card); }
+.field-error { font-size: 12.5px; }
+.hint { font-size: 12.5px; }
+
+/* ---------- Dialogs, menus, toasts ---------- */
+.dialog { border-radius: var(--radius-lg); }
+.popover { border-radius: 12px; }
+.toast { border-radius: 12px !important; }
+.avatar { background: linear-gradient(135deg, #0b55c4, #004aad); font-weight: 600; }
+
+/* ---------- Bits specific to Supreme DMS ---------- */
+.quick-action { border-radius: var(--radius-lg); }
+.quick-action:hover { background: var(--card); border-color: var(--input); box-shadow: var(--shadow); }
+.bill-title { background: var(--card) !important; color: var(--foreground) !important; border-bottom: 1px solid var(--border); }
+.progress { height: 6px; background: var(--muted); }
+.progress-bar { background: var(--primary-text); }
+
+/* ---------- A card holds its table: inset, in its own rounded box ---------- */
+.card > .table-wrap, .card .card-flush > .table-wrap, .card > .card-flush .table-wrap {
+  margin: 14px 16px 16px; width: auto; border: 1px solid var(--border); border-radius: 10px; overflow-x: auto;
+}
+.card > .card-flush { padding: 0; }
+.card .table thead th { background: var(--muted); border-bottom: 1px solid var(--border); }
+.card .table thead th:first-child { border-top-left-radius: 9px; }
+.card .table thead th:last-child { border-top-right-radius: 9px; }
+.card .table tbody tr:last-child td { border-bottom: 0; }
+.card .table th:first-child, .card .table td:first-child { padding-left: 16px; }
+.card .table th:last-child, .card .table td:last-child { padding-right: 16px; }
+/* The toolbar above a table no longer needs its own dividing line: the table's box separates them. */
+.card > .toolbar { border-bottom: 0; padding-bottom: 0; }
+.card > .pager, .card > .card-footer { border-top: 0; }

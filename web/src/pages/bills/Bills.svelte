@@ -82,7 +82,7 @@
     <div class="table-wrap" aria-busy={loading}>
       <table class="table">
         <thead>
-          <tr><th>Bill</th><th>Patient</th><th>Referred by</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Due</th><th>Payment</th>{#if !dues}<th>Status</th>{/if}</tr>
+          <tr><th>Bill</th><th>Patient</th><th>Referred by</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Due</th><th>Payment</th>{#if !dues}<th>Status</th>{/if}<th class="num">Actions</th></tr>
         </thead>
         <tbody>
           {#each data.items as b (b.id)}
@@ -96,9 +96,19 @@
               <td class="num money {Number(b.due) > 0 ? 'money-due' : ''}">{rupees(b.due)}</td>
               <td><span class="badge {pay[0]}">{pay[1]}</span></td>
               {#if !dues}<td>{#if b.status !== "confirmed"}<span class="badge {BILL_STATUS[b.status][0]}">{BILL_STATUS[b.status][1]}</span>{:else}<span class="text-xs text-muted" title={dateTime(b.created_at)}>by {b.created_by_name || "—"}</span>{/if}</td>{/if}
+              <td class="num nowrap">
+                <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}" aria-label="View {b.invoice_no}" title="View"><Icon name="eye" size="sm" /></a>
+                <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}/print" target="_blank" rel="noopener" aria-label="Print {b.invoice_no}" title="Print"><Icon name="printer" size="sm" /></a>
+                {#if Number(b.due) > 0 && b.status !== "cancelled" && session.can("payments.collect")}
+                  <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}?collect=1" aria-label="Collect due on {b.invoice_no}" title="Collect due"><Icon name="wallet" size="sm" /></a>
+                {/if}
+                {#if b.status !== "cancelled" && session.can("billing.edit")}
+                  <a class="btn btn-ghost btn-icon btn-sm" href="/bills/{b.id}?edit=1" aria-label="Change tests on {b.invoice_no}" title="Change tests"><Icon name="edit" size="sm" /></a>
+                {/if}
+              </td>
             </tr>
           {:else}
-            <tr><td colspan="8"><div class="empty"><Icon name={dues ? "wallet" : "receipt"} />
+            <tr><td colspan="9"><div class="empty"><Icon name={dues ? "wallet" : "receipt"} />
               {filtered ? "No bills match these filters." : dues ? "No dues. Everything is paid." : "No bills yet."}</div></td></tr>
           {/each}
         </tbody>

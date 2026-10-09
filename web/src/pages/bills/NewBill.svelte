@@ -26,7 +26,7 @@
     if (preset) get<Patient>(`/api/patients/${preset}`).then((p) => (patient = p)).catch(() => {});
   });
 
-  const searchPatients = (q: string, signal: AbortSignal) => get<Page<Patient>>("/api/patients", { search: q, size: 8 }, signal).then((r) => r.items);
+  const searchPatients = (q: string, page: number, size: number, signal: AbortSignal) => get<Page<Patient>>("/api/patients", { search: q, page, size }, signal);
 
   let familyTimer: ReturnType<typeof setTimeout>;
   function onMobile() {
@@ -47,7 +47,7 @@
   // ---------- doctor ----------
   let doctorText = $state("");
   let doctor = $state<Doctor | null>(null);
-  const searchDoctors = (q: string, signal: AbortSignal) => get<Page<Doctor>>("/api/doctors", { search: q, active: true, size: 8 }, signal).then((r) => r.items);
+  const searchDoctors = (q: string, page: number, size: number, signal: AbortSignal) => get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal);
 
   // ---------- tests ----------
   interface Line { test: LabTest; quantity: number }
@@ -159,7 +159,7 @@
             <button class="btn btn-ghost btn-sm" onclick={() => (patient = null)}>Change</button>
           </div>
         {:else if !addingPatient}
-          <Combobox id="patient-search" label="Find a patient" placeholder="Name, mobile or patient number…" search={searchPatients} bind:value={patientQuery}
+          <Combobox id="patient-search" label="Find a patient" placeholder="Name, mobile or patient number…" searchPage={searchPatients} bind:value={patientQuery}
                     onpick={(p) => (patient = p)} autofocus emptyText="No patient found. Add them as a new patient.">
             {#snippet option(p)}
               <div class="row-between"><span><span class="font-semibold">{p.name}</span> <span class="text-xs text-muted mono">{p.patient_no}</span></span>
@@ -212,7 +212,7 @@
         <p class="card-description">Pick a doctor, type a new name (it's added to your list), or leave it as self.</p></div></div>
       <div class="card-content row" style="align-items: flex-end">
         <div class="grow">
-          <Combobox id="doctor" label="Referring doctor" placeholder="Self" icon="stethoscope" search={searchDoctors} bind:value={doctorText}
+          <Combobox id="doctor" label="Referring doctor" placeholder="Self" icon="stethoscope" searchPage={searchDoctors} bind:value={doctorText}
                     onpick={(d) => { doctor = d; doctorText = d.name; }} emptyText="Not in your list yet: it'll be added when you save.">
             {#snippet option(d)}<span class="font-semibold">{d.name}</span>{#if d.qualification} <span class="text-xs text-muted">{d.qualification}</span>{/if}{/snippet}
           </Combobox>

@@ -1,17 +1,24 @@
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
+  import { InfiniteList } from "../lib/infinite.svelte";
   import Icon from "./Icon.svelte";
 
   // A search box with a list of matches (WAI-ARIA combobox): type to search, ↑/↓ to move, Enter to pick,
-  // Esc to close. `search` loads the matches; `onpick` receives the chosen one.
-  let { id, label, placeholder = "", search, onpick, option, value = $bindable(""), icon = "search", minChars = 1,
+  // Esc to close. `search` loads the matches; or `searchPage` loads them a page at a time, with more
+  // fetched as the list is scrolled (long lists). `onpick` receives the chosen one.
+  let { id, label, placeholder = "", search, searchPage, onpick, option, value = $bindable(""), icon = "search", minChars = 1,
         emptyText = "No matches.", autofocus = false, inputEl = $bindable() }: {
-    id: string; label: string; placeholder?: string; search: (q: string, signal: AbortSignal) => Promise<T[]>;
+    id: string; label: string; placeholder?: string; search?: (q: string, signal: AbortSignal) => Promise<T[]>;
+    searchPage?: (q: string, page: number, size: number, signal: AbortSignal) => Promise<{ items: T[]; total: number }>;
     onpick: (item: T) => void; option: Snippet<[T]>; value?: string; icon?: string; minChars?: number; emptyText?: string;
     autofocus?: boolean; inputEl?: HTMLInputElement;
   } = $props();
 
-  let items = $state<T[]>([]);
+  let plain = $state<T[]>([]);
+  const list = new InfiniteList<T>((page, size, signal) =>
+    searchPage ? searchPage(value.trim(), page, size, signal) : Promise.resolve({ items: [], total: 0 }), 20, (x: any) => x.id);
+  const paged = $derived(searchPage ? list : null);
+  const items = $derived(paged ? paged.items : plain);
   let open = $state(false);
   let active = $state(0);
   let loading = $state(false);
@@ -21,16 +28,20 @@
   function run(q: string) {
     clearTimeout(timer);
     ctrl?.abort();
-    if (q.trim().length < minChars) { items = []; open = false; return; }
+    if (q.trim().length < minChars) { plain = []; open = false; return; }
+    if (paged) {
+      timer = setTimeout(() => { paged.reset(); active = 0; open = true; }, 180);
+      return;
+    }
     timer = setTimeout(async () => {
       ctrl = new AbortController();
       loading = true;
       try {
-        items = await search(q.trim(), ctrl.signal);
+        plain = await search!(q.trim(), ctrl.signal);
         active = 0;
         open = true;
       } catch (e) {
-        if ((e as Error).name !== "AbortError") { items = []; open = false; }
+        if ((e as Error).name !== "AbortError") { plain = []; open = false; }
       } finally {
         loading = false;
       }
@@ -39,7 +50,7 @@
 
   function pick(item: T) {
     open = false;
-    items = [];
+    plain = [];
     onpick(item);
   }
 
@@ -61,10 +72,11 @@
            aria-activedescendant={open && items[active] ? `${id}-opt-${active}` : undefined}
            oninput={() => run(value)} onkeydown={onkey} onfocus={() => { if (items.length) open = true; }}
            onblur={() => setTimeout(() => (open = false), 150)} />
-    {#if loading}<span class="combo-spin" aria-hidden="true"></span>{/if}
+    {#if loading || paged?.loading}<span class="combo-spin" aria-hidden="true"></span>{/if}
   </div>
   {#if open}
-    <ul class="combo-list" id="{id}-list" role="listbox" aria-label={label}>
+    <ul class="combo-list" id="{id}-list" role="listbox" aria-label={label}
+        onscroll={(e) => { const el = e.currentTarget; if (paged && el.scrollTop + el.clientHeight >= el.scrollHeight - 60) paged.more(); }}>
       {#each items as item, i (i)}
         <li id="{id}-opt-{i}" role="option" aria-selected={i === active} class:is-active={i === active}
             onmousedown={(e) => { e.preventDefault(); pick(item); }} onmouseenter={() => (active = i)}>{@render option(item)}</li>

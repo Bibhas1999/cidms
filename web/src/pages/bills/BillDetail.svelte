@@ -24,6 +24,16 @@
   }
   $effect(() => { params.id; load(); });
 
+  // Opened from a list's row buttons: /bills/<id>?collect=1 or ?edit=1 opens that dialog straight away.
+  let autoOpened = false;
+  $effect(() => {
+    if (!bill || autoOpened) return;
+    autoOpened = true;
+    const q = new URLSearchParams(location.search);
+    if (q.get("collect") && Number(bill.due) > 0 && bill.status !== "cancelled" && session.can("payments.collect")) openPay();
+    else if (q.get("edit") && bill.status !== "cancelled" && session.can("billing.edit")) editOpen = true;
+  });
+
   const live = $derived(bill?.status !== "cancelled");
   const due = $derived(Number(bill?.due ?? 0));
   const paid = $derived(Number(bill?.paid ?? 0));

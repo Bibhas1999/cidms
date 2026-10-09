@@ -145,10 +145,10 @@ def edit_patient(patient_id: uuid.UUID, data: PatientIn, db: Session = DB, curre
 def bills(search: str = Query("", max_length=100), date_from: date | None = Query(None, alias="from"),
           date_to: date | None = Query(None, alias="to"), status_: str | None = Query(None, alias="status", pattern="^(confirmed|on_hold|cancelled)$"),
           due: bool = False, doctor_id: uuid.UUID | None = None, patient_id: uuid.UUID | None = None,
-          sort: str = Query("newest", pattern="^(newest|oldest)$"),
+          sort: str = Query("newest", pattern="^(newest|oldest)$"), paid: bool = False,
           p: Paging = Depends(paging), db: Session = DB, current: CurrentUser = Depends(client_user)):
     items, total, sums = BillingService(db, current).page(search, date_from, date_to, status_, due, doctor_id, patient_id, p.page, p.size,
-                                                          oldest_first=sort == "oldest")
+                                                          oldest_first=sort == "oldest", paid_only=paid)
     return BillPage(items=items, total=total, page=p.page, size=p.size, sums=sums)
 
 

@@ -66,7 +66,8 @@ class BillingService:
         return row
 
     def page(self, search: str, date_from: date | None, date_to: date | None, status: str | None, due_only: bool,
-             doctor_id: uuid.UUID | None, patient_id: uuid.UUID | None, page: int, size: int, oldest_first: bool = False):
+             doctor_id: uuid.UUID | None, patient_id: uuid.UUID | None, page: int, size: int, oldest_first: bool = False,
+             paid_only: bool = False):
         q = select(Invoice).where(Invoice.tenant_id == self.tenant_id)
         s = search.strip()
         if s:
@@ -88,6 +89,8 @@ class BillingService:
             q = q.where(Invoice.status == status)
         if due_only:
             q = q.where(Invoice.due > 0, Invoice.status != "cancelled")
+        if paid_only:
+            q = q.where(Invoice.due <= 0, Invoice.status != "cancelled")
         if doctor_id:
             q = q.where(Invoice.referring_doctor_id == doctor_id)
         if patient_id:

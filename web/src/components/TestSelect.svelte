@@ -1,35 +1,38 @@
 <script lang="ts">
   import { get } from "../lib/api";
+  import { InfiniteList } from "../lib/infinite.svelte";
   import type { LabTest } from "../lib/bill-types";
   import { rupees } from "../lib/format";
   import type { Page } from "../lib/types";
   import Icon from "./Icon.svelte";
 
-  // "Test name" on the bill: type to search, and a short list pops up with a tick-box on each test, so
-  // several can be picked before pressing Add. Picked tests show as chips under the box.
+  // "Test name" on the bill: click the box and a short list drops down (typing narrows it), with a tick-box
+  // on each test, so several can be picked before pressing Add. Picked tests show as chips under the box.
   let { picked = $bindable([]), exclude = new Set<string>(), id = "test-select" }: {
     picked?: LabTest[]; exclude?: Set<string>; id?: string;
   } = $props();
 
   let query = $state("");
   let open = $state(false);
-  let tests = $state<LabTest[]>([]);
-  let loading = $state(false);
+  // The list loads 30 tests at a time and fetches more as you scroll to its bottom.
+  const list = new InfiniteList<LabTest>((page, size, signal) =>
+    get<Page<LabTest>>("/api/tests", { search: query.trim(), active: true, page, size }, signal), 30);
+  const tests = $derived(list.items);
+  const loading = $derived(list.loading);
   let active = $state(0);
   let root = $state<HTMLElement>();
 
   $effect(() => {
+    if (!open) return;
     const q = query.trim();
-    if (!q) { tests = []; open = false; return; }
-    const ctrl = new AbortController();
-    const t = setTimeout(() => {
-      loading = true;
-      get<Page<LabTest>>("/api/tests", { search: q, active: true, size: 30 }, ctrl.signal)
-        .then((r) => { tests = r.items; active = 0; open = true; })
-        .catch(() => {}).finally(() => (loading = false));
-    }, 150);
-    return () => { clearTimeout(t); ctrl.abort(); };
+    const t = setTimeout(() => { list.reset(); active = 0; }, q ? 150 : 0);
+    return () => clearTimeout(t);
   });
+
+  function onscroll(e: Event) {
+    const el = e.currentTarget as HTMLElement;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) list.more();
+  }
 
   // Close on a click outside the box and its list.
   $effect(() => {
@@ -45,8 +48,8 @@
   }
 
   function onkey(e: KeyboardEvent) {
-    if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(tests.length - 1, active + 1); }
+    if (!open) { if (e.key === "ArrowDown") open = true; return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(tests.length - 1, active + 1); if (active >= tests.length - 3) list.more(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(0, active - 1); }
     else if (e.key === "Enter" || e.key === " ") { if (tests[active] && (e.key === "Enter" || e.ctrlKey)) { e.preventDefault(); toggle(tests[active]); } }
     else if (e.key === "Escape") { e.stopPropagation(); open = false; }
@@ -57,13 +60,13 @@
   <div class="input-group">
     <Icon name="search" />
     <input {id} class="input" type="text" role="combobox" autocomplete="off" aria-expanded={open} aria-controls="{id}-list"
-           placeholder={picked.length ? "Type to add more tests…" : "Type to search tests…"}
-           bind:value={query} onkeydown={onkey} onfocus={() => { if (query.trim() && tests.length) open = true; }} />
+           placeholder={picked.length ? "Add more tests…" : "Select or search tests…"}
+           bind:value={query} onkeydown={onkey} onfocus={() => (open = true)} onclick={() => (open = true)} oninput={() => (open = true)} />
   </div>
 
   {#if open}
     <div class="ts-pop">
-      <ul class="ts-list" id="{id}-list" role="listbox" aria-multiselectable="true" aria-label="Tests">
+      <ul class="ts-list" id="{id}-list" role="listbox" aria-multiselectable="true" aria-label="Tests" {onscroll}>
         {#each tests as t, i (t.id)}
           {@const on = isPicked(t)}
           <li role="option" aria-selected={on}>
@@ -77,9 +80,10 @@
         {:else}
           <li class="ts-empty">{loading ? "Searching…" : "No tests match."}</li>
         {/each}
+        {#if tests.length && loading}<li class="ts-empty">Loading more…</li>{/if}
       </ul>
       <div class="ts-foot">
-        <span>{picked.length} selected · Enter ticks the highlighted test</span>
+        <span>{picked.length} selected · {tests.length} of {list.total} tests</span>
         <button type="button" class="link-button" onclick={() => { open = false; query = ""; }}>Done</button>
       </div>
     </div>
