@@ -54,8 +54,13 @@ def branding(tenant: TenantRef) -> dict:
 
 
 def me_out(request: Request, user: User, sess: UserSession, permissions: set[str], roles: list[str]) -> MeOut:
-    return MeOut(id=user.id, email=user.email, full_name=user.full_name, roles=roles, permissions=sorted(permissions),
+    return MeOut(id=user.id, email=user.email, full_name=user.full_name, mobile=user.mobile, avatar_url=avatar_url(user),
+                 roles=roles, permissions=sorted(permissions),
                  must_change_password=user.must_change_password, csrf_token=sess.csrf_token, workspace=workspace_of(request))
+
+
+def avatar_url(user: User) -> str:
+    return f"/api/users/{user.id}/avatar?v={user.avatar_file[:8]}" if user.avatar_file else ""
 
 
 def me_from_current(request: Request, current: CurrentUser) -> MeOut:
@@ -177,3 +182,26 @@ class AuthService:
             other.used_at = now
         revoke_user_sessions(self.db, user.id)
         self.audit.record(user.tenant_id, user.id, "user.password_reset", "user", user.id)
+
+    # ---------- your own profile ----------
+    def update_profile(self, current: CurrentUser, full_name: str, mobile: str) -> None:
+        user = current.user
+        changes = {}
+        for field, value in (("full_name", " ".join(full_name.split())), ("mobile", mobile.strip())):
+            if getattr(user, field) != value:
+                changes[field] = [getattr(user, field), value]
+                setattr(user, field, value)
+        if changes:
+            self.audit.record(user.tenant_id, user.id, "user.profile_updated", "user", user.id, changes)
+
+    def set_avatar(self, current: CurrentUser, data: bytes | None) -> None:
+        from app.core.storage import save_avatar
+        user = current.user
+        old = user.avatar_file
+        user.avatar_file = save_avatar(user.tenant_id, data) if data is not None else ""
+        self.audit.record(user.tenant_id, user.id, "user.picture_changed" if data is not None else "user.picture_removed", "user", user.id)
+        if old:
+            from app.core.storage import avatar_path
+            path = avatar_path(user.tenant_id, old)
+            if path:
+                path.unlink(missing_ok=True)

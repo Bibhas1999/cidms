@@ -66,7 +66,7 @@ class BillingService:
         return row
 
     def page(self, search: str, date_from: date | None, date_to: date | None, status: str | None, due_only: bool,
-             doctor_id: uuid.UUID | None, patient_id: uuid.UUID | None, page: int, size: int):
+             doctor_id: uuid.UUID | None, patient_id: uuid.UUID | None, page: int, size: int, oldest_first: bool = False):
         q = select(Invoice).where(Invoice.tenant_id == self.tenant_id)
         s = search.strip()
         if s:
@@ -96,8 +96,8 @@ class BillingService:
         totals = self.db.execute(select(func.count(), func.coalesce(func.sum(counted.c.total), 0),
                                         func.coalesce(func.sum(counted.c.due), 0))).one()
         total_rows = self.db.scalar(select(func.count()).select_from(q.subquery())) or 0
-        rows = self.db.scalars(q.order_by(Invoice.bill_date.desc(), Invoice.created_at.desc())
-                               .offset((page - 1) * size).limit(size)).all()
+        order = (Invoice.bill_date, Invoice.created_at) if oldest_first else (Invoice.bill_date.desc(), Invoice.created_at.desc())
+        rows = self.db.scalars(q.order_by(*order).offset((page - 1) * size).limit(size)).all()
         return list(rows), total_rows, {"billed": q2(totals[1]), "due": q2(totals[2])}
 
     # ---------- helpers ----------
@@ -387,3 +387,53 @@ def default_worklist_window() -> tuple[date, date]:
     today = local_today()
     return today - timedelta(days=6), today
 
+
+
+class OverviewService(BillingService):
+    """The owner's dashboard: today against yesterday, the month, a 30-day trend and what needs chasing."""
+
+    def overview(self, today: date) -> dict:
+        t = self.tenant_id
+        live = and_(Invoice.tenant_id == t, Invoice.status != "cancelled")
+        yesterday = today - timedelta(days=1)
+        first = today.replace(day=1)
+        start = today - timedelta(days=29)
+
+        y = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.total), 0)).where(live, Invoice.bill_date == yesterday)).one()
+        m = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.total), 0), func.coalesce(func.sum(Invoice.discount_amount), 0))
+                            .where(live, Invoice.bill_date >= first, Invoice.bill_date <= today)).one()
+        signed = case((Payment.kind == "payment", Payment.amount), else_=-Payment.amount)
+        month_collected = self.db.scalar(select(func.coalesce(func.sum(signed), 0))
+                                         .where(Payment.tenant_id == t, Payment.received_on >= first, Payment.received_on <= today)) or 0
+        dues_count = self.db.scalar(select(func.count()).where(live, Invoice.due > 0)) or 0
+
+        billed_by_day = dict(self.db.execute(select(Invoice.bill_date, func.sum(Invoice.total))
+                                             .where(live, Invoice.bill_date >= start, Invoice.bill_date <= today).group_by(Invoice.bill_date)).all())
+        paid_by_day = dict(self.db.execute(select(Payment.received_on, func.sum(signed))
+                                           .where(Payment.tenant_id == t, Payment.received_on >= start, Payment.received_on <= today)
+                                           .group_by(Payment.received_on)).all())
+        trend = [{"day": start + timedelta(days=i), "billed": q2(billed_by_day.get(start + timedelta(days=i), 0)),
+                  "collected": q2(paid_by_day.get(start + timedelta(days=i), 0))} for i in range(30)]
+
+        departments = [{"name": name or "Other", "bills": bills, "amount": q2(amount)} for name, bills, amount in self.db.execute(
+            select(InvoiceItem.department_name, func.count(func.distinct(InvoiceItem.invoice_id)), func.sum(InvoiceItem.amount))
+            .join(Invoice, Invoice.id == InvoiceItem.invoice_id)
+            .where(live, InvoiceItem.status != CANCELLED, Invoice.bill_date >= first, Invoice.bill_date <= today)
+            .group_by(InvoiceItem.department_name).order_by(func.sum(InvoiceItem.amount).desc())).all()]
+        doctors = [{"name": name, "bills": bills, "amount": q2(amount)} for name, bills, amount in self.db.execute(
+            select(Invoice.referring_doctor_name, func.count(), func.sum(Invoice.total))
+            .where(live, Invoice.referring_doctor_id.is_not(None), Invoice.bill_date >= first, Invoice.bill_date <= today)
+            .group_by(Invoice.referring_doctor_name).order_by(func.count().desc(), func.sum(Invoice.total).desc()).limit(8)).all()]
+        pending = dict(self.db.execute(
+            select(InvoiceItem.status, func.count()).join(Invoice, Invoice.id == InvoiceItem.invoice_id)
+            .where(live, InvoiceItem.status.in_(("billed", "scanned")), Invoice.bill_date >= today - timedelta(days=6))
+            .group_by(InvoiceItem.status)).all())
+        oldest_dues = list(self.db.scalars(select(Invoice).where(live, Invoice.due > 0).order_by(Invoice.bill_date, Invoice.created_at).limit(6)))
+        recent = list(self.db.scalars(select(Invoice).where(Invoice.tenant_id == t).order_by(Invoice.created_at.desc()).limit(8)))
+        return {
+            "today": self.day_summary(today), "yesterday_bills": y[0], "yesterday_billed": q2(y[1]),
+            "month_bills": m[0], "month_billed": q2(m[1]), "month_discounts": q2(m[2]), "month_collected": q2(month_collected),
+            "dues_count": dues_count, "trend": trend, "departments": departments, "doctors": doctors,
+            "pending_tests": {"billed": pending.get("billed", 0), "scanned": pending.get("scanned", 0)},
+            "oldest_dues": oldest_dues, "recent_bills": recent,
+        }

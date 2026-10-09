@@ -1,130 +1,149 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { confirmDialog } from "../lib/confirm.svelte";
+  import { CLIENT_NAV, PLATFORM_NAV } from "../lib/nav";
   import { router } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
   import { applyTheme, getTheme, type Theme } from "../lib/theme";
+  import Avatar from "./Avatar.svelte";
+  import Icon from "./Icon.svelte";
 
-  let { children }: { children: Snippet } = $props();
+  // The app frame, laid out like the Sandhata Registry: sidebar with grouped sections, a top bar with
+  // breadcrumbs and the profile menu, and the page. `available` = paths that have a page.
+  let { title, available, children }: { title: string; available: Set<string>; children: Snippet } = $props();
 
-  interface NavItem { href: string; label: string; show: () => boolean }
+  const sections = $derived(
+    (session.isPlatform ? PLATFORM_NAV : CLIENT_NAV)
+      .map((s) => ({ ...s, items: s.items.filter((i) => available.has(i.href) && (!i.permission || session.can(i.permission))) }))
+      .filter((s) => s.items.length),
+  );
+  const isCurrent = (href: string) =>
+    href === "/" ? router.path === "/" : router.path === href || (router.path.startsWith(href + "/") && !available.has(router.path));
 
-  const clientNav: NavItem[] = [
-    { href: "/", label: "Dashboard", show: () => true },
-    { href: "/staff", label: "Staff", show: () => session.can("staff.manage") },
-    { href: "/settings", label: "Centre settings", show: () => session.can("settings.manage") },
-    { href: "/activity", label: "Activity log", show: () => session.can("activity.view") },
-  ];
-  const platformNav: NavItem[] = [
-    { href: "/", label: "Overview", show: () => true },
-    { href: "/clients", label: "Clients", show: () => session.can("platform.clients.view") },
-    { href: "/staff", label: "Platform staff", show: () => session.can("platform.staff.manage") },
-    { href: "/activity", label: "Activity log", show: () => session.can("platform.activity.view") },
-  ];
+  const ws = $derived(session.workspace);
+  const local = location.hostname.endsWith(".localhost");
 
-  const nav = $derived((session.isPlatform ? platformNav : clientNav).filter((i) => i.show()));
-  const isCurrent = (href: string) => (href === "/" ? router.path === "/" : router.path.startsWith(href));
-
-  let menuOpen = $state(false);
   let navOpen = $state(false);
+  let menuOpen = $state(false);
   let theme = $state<Theme>(getTheme());
-
-  function setTheme(t: Theme) {
-    theme = t;
-    applyTheme(t);
-  }
+  let menuButton = $state<HTMLButtonElement>();
+  let menu = $state<HTMLElement>();
 
   $effect(() => {
-    router.path; // close the mobile menu after moving to another page
+    router.path; // close menus after moving to another page
     navOpen = false;
     menuOpen = false;
   });
+
+  // Close the profile menu on a click outside it or Esc, and give focus back to its button.
+  $effect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (!menu?.contains(e.target as Node) && !menuButton?.contains(e.target as Node)) menuOpen = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { menuOpen = false; menuButton?.focus(); }
+    };
+    document.addEventListener("click", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("click", onClick); document.removeEventListener("keydown", onKey); };
+  });
+
+  /** Hand the computer to a colleague: sign out at once and show the accounts used here. */
+  async function switchAccount() {
+    menuOpen = false;
+    await session.logout({ switching: true });
+  }
+
+  async function signOut() {
+    menuOpen = false;
+    if (await confirmDialog({ title: "Sign out of Supreme DMS?", message: "You'll need your email and password to come back.",
+                              confirmLabel: "Sign out", tone: "danger" })) await session.logout();
+  }
 </script>
 
-<a class="skip" href="#main">Skip to content</a>
-<div class="shell" class:nav-open={navOpen}>
-  <aside class="side" aria-label="Main menu">
-    <div class="brand">
-      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/>
-        <path d="M9 17h4l2-6 3 11 2-5h3" fill="none" stroke="var(--on-brand)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <div>
-        <div class="product">Supreme DMS</div>
-        <div class="workspace">{session.workspace?.name}</div>
-      </div>
+<a class="skip-link" href="#main">Skip to main content</a>
+<div class="app" class:nav-open={navOpen}>
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="sidebar-brand">
+      <a href="/" class="link-reset row brand-link" style="gap: 10px">
+        {#if ws?.logo_url}
+          <img class="centre-logo" src={ws.logo_url} alt="" width="34" height="34" />
+        {:else}
+          <span class="centre-mark"><Icon name="activity" /></span>
+        {/if}
+        <span class="grow">
+          <span class="centre-name truncate" style="display:block">{session.isPlatform ? "Supreme DMS" : ws?.name}</span>
+          <span class="centre-sub">{session.isPlatform ? "Platform" : "DMS"}</span>
+        </span>
+      </a>
     </div>
-    <nav>
-      {#each nav as item (item.href)}
-        <a href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>{item.label}</a>
+    <nav class="sidebar-nav" aria-label="Sections">
+      {#each sections as section (section.heading)}
+        <div class="nav-heading" role="presentation">{section.heading}</div>
+        {#each section.items as item (item.href)}
+          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>
+            <Icon name={item.icon} /><span>{item.label}</span>
+          </a>
+        {/each}
       {/each}
     </nav>
-    <div class="soon muted">
-      {#if !session.isPlatform}Billing, reports and imaging arrive in the next phases.{/if}
-    </div>
+    {#if !session.isPlatform}<div class="sidebar-footer"><span class="powered">Powered by Supreme DMS</span></div>{/if}
   </aside>
+  {#if navOpen}<button class="sr-only" onclick={() => (navOpen = false)}>Close menu</button>{/if}
 
-  <div class="main-col">
-    <header class="top">
-      <button class="btn small menu-btn" aria-expanded={navOpen} aria-label="Menu" onclick={() => (navOpen = !navOpen)}>☰</button>
-      <div class="grow"></div>
-      <div class="user">
-        <button class="btn small" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
-          <span class="avatar" aria-hidden="true">{session.me?.full_name.charAt(0).toUpperCase()}</span>
-          <span class="name">{session.me?.full_name}</span>
-        </button>
-        {#if menuOpen}
-          <div class="menu card" role="menu">
-            <div class="who">
-              <strong>{session.me?.full_name}</strong>
-              <div class="muted">{session.me?.email}</div>
-              <div class="muted">{session.me?.roles.join(", ")}</div>
-            </div>
-            <a role="menuitem" href="/change-password">Change password</a>
-            <div class="theme" role="group" aria-label="Appearance">
-              {#each [["system", "System"], ["light", "Light"], ["dark", "Dark"]] as [value, label]}
-                <button class="btn small" aria-pressed={theme === value} onclick={() => setTheme(value as Theme)}>{label}</button>
-              {/each}
-            </div>
-            <button role="menuitem" class="signout" onclick={() => session.logout()}>Sign out</button>
-          </div>
-        {/if}
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon menu-toggle" type="button" aria-label={navOpen ? "Close menu" : "Open menu"}
+              aria-expanded={navOpen} onclick={() => (navOpen = !navOpen)}><Icon name="menu" /></button>
+      <nav class="breadcrumbs grow" aria-label="Breadcrumb">
+        <a href="/" class="text-muted">{session.isPlatform ? "Platform" : ws?.name}</a>
+        <Icon name="chevronRight" size="sm" />
+        <strong aria-current="page">{title}</strong>
+      </nav>
+      {#if local}<span class="badge badge-info badge-plain hide-sm" title="Running on this computer">Local</span>{/if}
+      <div class="topbar-actions">
+        <div class="popover-anchor">
+          <button class="profile-button" type="button" bind:this={menuButton} aria-haspopup="true" aria-expanded={menuOpen}
+                  onclick={() => (menuOpen = !menuOpen)}>
+            <Avatar name={session.me?.full_name ?? ""} url={session.me?.avatar_url} size="sm" />
+            <span class="profile-name hide-sm">{session.me?.full_name.split(" ")[0]}</span>
+            <Icon name="chevronDown" size="sm" />
+            <span class="sr-only">Account menu for {session.me?.full_name}</span>
+          </button>
+          {#if menuOpen}
+            <section class="popover profile-menu" aria-label="Account" bind:this={menu}>
+              <div class="profile-head">
+                <Avatar name={session.me?.full_name ?? ""} url={session.me?.avatar_url} />
+                <div class="grow">
+                  <div class="font-semibold truncate" title={session.me?.full_name}>{session.me?.full_name}</div>
+                  <div class="text-xs text-muted truncate" title={session.me?.email}>{session.me?.email}</div>
+                  {#each session.me?.roles ?? [] as role}<span class="badge badge-info badge-plain mt-2">{role}</span>{/each}
+                </div>
+              </div>
+              <fieldset class="theme-switch">
+                <legend class="sr-only">Theme</legend>
+                <span class="theme-label" aria-hidden="true">Theme</span>
+                <div class="theme-icons">
+                  {#each [["light", "Light", "sun"], ["dark", "Dark", "moon"], ["system", "Match system", "monitor"]] as [value, label, ic] (value)}
+                    <label class="theme-option" title={label}>
+                      <input type="radio" name="theme" class="sr-only" {value} checked={theme === value}
+                             onchange={() => { theme = value as Theme; applyTheme(theme); }} />
+                      <span><Icon name={ic} size="sm" /><span class="sr-only">{label}</span></span>
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
+              <div class="profile-signout">
+                <a class="btn btn-ghost btn-block menu-item" href="/settings"><Icon name="settings" /> Settings</a>
+                <button class="btn btn-ghost btn-block menu-item" type="button" onclick={switchAccount}><Icon name="users" /> Switch account</button>
+                <button class="btn btn-ghost btn-block menu-item" type="button" onclick={signOut}><Icon name="logout" /> Sign out</button>
+              </div>
+            </section>
+          {/if}
+        </div>
       </div>
     </header>
-    <main id="main" tabindex="-1">{@render children()}</main>
+    <main id="main" class="page" tabindex="-1">{@render children()}</main>
   </div>
 </div>
-
-<style>
-  .skip { position: absolute; left: -999px; top: 8px; }
-  .skip:focus { left: 8px; z-index: 200; background: var(--surface); padding: 8px 12px; border-radius: var(--radius); }
-  .shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
-  .side { background: var(--surface); border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 18px;
-    position: sticky; top: 0; height: 100vh; }
-  .brand { display: flex; gap: 10px; align-items: center; padding: 0 6px; }
-  .product { font-weight: 700; }
-  .workspace { font-size: 12px; color: var(--text-2); }
-  nav { display: grid; gap: 2px; }
-  nav a { padding: 8px 10px; border-radius: var(--radius); color: var(--text); text-decoration: none; font-weight: 500; }
-  nav a:hover { background: var(--surface-2); }
-  nav a[aria-current="page"] { background: var(--brand-tint); color: var(--brand-strong); font-weight: 600; }
-  .soon { margin-top: auto; font-size: 12px; padding: 0 6px; }
-  .main-col { min-width: 0; display: flex; flex-direction: column; }
-  .top { display: flex; align-items: center; gap: 10px; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
-  .menu-btn { display: none; }
-  main { padding: 24px; max-width: 1200px; width: 100%; outline: none; }
-  .user { position: relative; }
-  .avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: var(--on-brand); font-size: 12px; }
-  .menu { position: absolute; right: 0; top: calc(100% + 6px); width: 260px; padding: 8px; display: grid; gap: 4px; z-index: 50; }
-  .menu .who { padding: 6px 8px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; font-size: 13px; }
-  .menu a, .menu .signout { padding: 8px; border-radius: var(--radius); color: var(--text); text-decoration: none; text-align: left;
-    background: none; border: 0; font: inherit; cursor: pointer; }
-  .menu a:hover, .menu .signout:hover { background: var(--surface-2); }
-  .theme { display: flex; gap: 4px; padding: 4px 8px; }
-  .theme [aria-pressed="true"] { background: var(--brand-tint); border-color: var(--brand); }
-  @media (max-width: 860px) {
-    .shell { grid-template-columns: 1fr; }
-    .side { position: fixed; inset: 0 auto 0 0; width: 260px; z-index: 60; transform: translateX(-100%); transition: transform .15s; box-shadow: var(--shadow); }
-    .nav-open .side { transform: none; }
-    .menu-btn { display: inline-flex; }
-    .name { display: none; }
-    main { padding: 16px; }
-  }
-</style>

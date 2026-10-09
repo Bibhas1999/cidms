@@ -45,7 +45,7 @@ reset_limiter = RateLimiter(limit=3, per_seconds=900)  # reset emails per addres
 class BodySizeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         length = request.headers.get("content-length")
-        limit = 2_100_000 if request.url.path == "/api/settings/logo" else MAX_JSON_BYTES
+        limit = 2_100_000 if request.url.path in ("/api/settings/logo", "/api/auth/avatar") else MAX_JSON_BYTES
         if request.url.path.startswith("/api/") and length and length.isdigit() and int(length) > limit:
             return JSONResponse({"message": "That request is too large."}, status_code=413)
         return await call_next(request)

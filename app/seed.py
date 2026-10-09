@@ -76,7 +76,7 @@ def seed_supreme(db: Session, email: str, password: str) -> None:
     db.add(TenantSettings(
         tenant_id=tenant.id, legal_name="Supreme Health Care & Medical Solution",
         address="Janai (Near Subedar More), Chanditala, Hooghly-712304", phones="+91 76880 17623",
-        email="supremehealthcaresolution@gmail.com", invoice_prefix="SHC", brand_color="#10254e", tagline="Improving Lives Together",
+        email="supremehealthcaresolution@gmail.com", invoice_prefix="SHC", brand_color="#1250a6", tagline="Improving Lives Together",
         bill_footer="No refund once a test is done. Reports are delivered 4 pm to 8 pm, Monday to Saturday. "
                     "Reports not collected within 30 days are not kept.",
     ))

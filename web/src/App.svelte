@@ -7,7 +7,16 @@
   import { reportError } from "./lib/errors";
   import { navigate, router } from "./lib/router.svelte";
   import { session } from "./lib/session.svelte";
-  import Activity from "./pages/Activity.svelte";
+  import BillDetail from "./pages/bills/BillDetail.svelte";
+  import BillPrint from "./pages/bills/BillPrint.svelte";
+  import Bills from "./pages/bills/Bills.svelte";
+  import Dues from "./pages/bills/Dues.svelte";
+  import NewBill from "./pages/bills/NewBill.svelte";
+  import Doctors from "./pages/catalogue/Doctors.svelte";
+  import Tests from "./pages/catalogue/Tests.svelte";
+  import PatientDetail from "./pages/patients/PatientDetail.svelte";
+  import Patients from "./pages/patients/Patients.svelte";
+  import Worklist from "./pages/Worklist.svelte";
   import ChangePassword from "./pages/ChangePassword.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
   import ForgotPassword from "./pages/ForgotPassword.svelte";
@@ -15,25 +24,60 @@
   import ResetPassword from "./pages/ResetPassword.svelte";
   import Message from "./pages/Message.svelte";
   import Clients from "./pages/platform/Clients.svelte";
-  import Settings from "./pages/Settings.svelte";
-  import Staff from "./pages/Staff.svelte";
+  import SettingsHub from "./pages/settings/SettingsHub.svelte";
 
   interface Route {
+    path: string;              // "/bills/:id" captures id
     component: Component<any>;
     title: string;
     /** Permission needed in a client workspace / in the platform workspace. undefined = everyone; null = not here. */
     client?: string | null;
     platform?: string | null;
+    /** Drawn without the menu and top bar (printouts). */
+    bare?: boolean;
   }
 
-  const routes: Record<string, Route> = {
-    "/": { component: Dashboard, title: "Dashboard" },
-    "/staff": { component: Staff, title: "Staff", client: "staff.manage", platform: "platform.staff.manage" },
-    "/settings": { component: Settings, title: "Centre settings", client: "settings.manage", platform: null },
-    "/activity": { component: Activity, title: "Activity log", client: "activity.view", platform: "platform.activity.view" },
-    "/clients": { component: Clients, title: "Clients", client: null, platform: "platform.clients.view" },
-    "/change-password": { component: ChangePassword, title: "Change password" },
-  };
+  const CLIENT_ONLY = { platform: null };
+  const routes: Route[] = [
+    { path: "/", component: Dashboard, title: "Dashboard" },
+    { path: "/bills", component: Bills, title: "Bills", ...CLIENT_ONLY },
+    { path: "/bills/new", component: NewBill, title: "New bill", client: "billing.create", platform: null },
+    { path: "/bills/:id", component: BillDetail, title: "Bill", ...CLIENT_ONLY },
+    { path: "/bills/:id/print", component: BillPrint, title: "Print bill", bare: true, ...CLIENT_ONLY },
+    { path: "/dues", component: Dues, title: "Dues", client: "payments.collect", platform: null },
+    { path: "/patients", component: Patients, title: "Patients", ...CLIENT_ONLY },
+    { path: "/patients/:id", component: PatientDetail, title: "Patient", ...CLIENT_ONLY },
+    { path: "/worklist", component: Worklist, title: "Worklist", ...CLIENT_ONLY },
+    { path: "/tests", component: Tests, title: "Tests & prices", ...CLIENT_ONLY },
+    { path: "/doctors", component: Doctors, title: "Referring doctors", ...CLIENT_ONLY },
+    { path: "/settings", component: SettingsHub, title: "Settings" },
+    { path: "/settings/:section", component: SettingsHub, title: "Settings" },
+    { path: "/staff", component: SettingsHub, title: "Settings" },
+    { path: "/activity", component: SettingsHub, title: "Settings" },
+    { path: "/clients", component: Clients, title: "Clients", client: null, platform: "platform.clients.view" },
+    { path: "/change-password", component: ChangePassword, title: "Change password" },
+  ];
+
+  function match(path: string): { route: Route; params: Record<string, string> } | null {
+    const parts = path.split("/").filter(Boolean);
+    for (const route of routes) {
+      const want = route.path.split("/").filter(Boolean);
+      if (want.length !== parts.length) continue;
+      const params: Record<string, string> = {};
+      const ok = want.every((w, i) => {
+        if (w.startsWith(":")) {
+          params[w.slice(1)] = decodeURIComponent(parts[i]);
+          return true;
+        }
+        return w === parts[i];
+      });
+      if (ok) return { route, params };
+    }
+    return null;
+  }
+
+  /** Pages the menu may link to (fixed addresses only). */
+  const AVAILABLE = new Set(routes.filter((r) => !r.path.includes(":")).map((r) => r.path));
 
   // Pages for people who aren't signed in.
   const PUBLIC = ["/login", "/forgot-password", "/reset-password"];
@@ -47,7 +91,9 @@
     });
   });
 
-  const route = $derived(routes[router.path]);
+  const found = $derived(match(router.path));
+  const route = $derived(found?.route);
+  const params = $derived(found?.params ?? {});
   const allowed = $derived.by(() => {
     if (!route) return false;
     const need = session.isPlatform ? route.platform : route.client;
@@ -74,11 +120,11 @@
   });
 </script>
 
-{#snippet guarded(Page: Component<any>)}
+{#snippet guarded(Page: Component<any>, pageParams: Record<string, string> = {})}
   <!-- A crash while drawing one screen shows a fallback for that screen only; the menu and top bar keep working. -->
   {#key router.path}
     <svelte:boundary onerror={(error) => reportError("boundary", error)}>
-      <Page />
+      <Page params={pageParams} />
       {#snippet failed(error, reset)}<ErrorFallback {error} {reset} />{/snippet}
     </svelte:boundary>
   {/key}
@@ -87,16 +133,17 @@
 {#if startError}
   <Message title="Supreme DMS couldn't start" text="{startError} Refresh the page to try again." action={false} />
 {:else if !session.ready}
-  <div class="splash" aria-busy="true"><span class="muted">Loading…</span></div>
+  <div class="splash" aria-busy="true"><span class="text-muted">Loading…</span></div>
 {:else if session.workspace?.kind === "none"}
   <div class="nows">
-    <div class="card card-body stack">
-      <h1>There's no workspace at this address</h1>
-      <p class="muted">Each centre has its own address, with the centre's name at the front. Use the address your centre gave you.</p>
+    <div class="card card-content stack">
+      <span class="eyebrow">Supreme DMS</span>
+      <h1 class="page-title">There's no workspace at this address</h1>
+      <p class="text-muted">Each centre has its own address, with the centre's name at the front. Use the address your centre gave you.</p>
       {#if session.workspace.links?.length}
         <p>On this computer, open one of these:</p>
         <ul>
-          {#each session.workspace.links as link (link.url)}<li><a href={link.url}>{link.name}</a> <span class="muted mono">{link.url}</span></li>{/each}
+          {#each session.workspace.links as link (link.url)}<li><a href={link.url}>{link.name}</a> <span class="text-muted mono">{link.url}</span></li>{/each}
         </ul>
       {/if}
     </div>
@@ -107,14 +154,16 @@
   {:else if router.path === "/reset-password"}{@render guarded(ResetPassword)}{/if}
 {:else if session.me.must_change_password}
   {#if router.path === "/change-password"}{@render guarded(ChangePassword)}{/if}
+{:else if route?.bare && allowed}
+  {@render guarded(route.component, params)}
 {:else}
-  <AppShell>
+  <AppShell title={route?.title ?? "Not found"} available={AVAILABLE}>
     {#if !route}
-      <Message title="We couldn't find that page" text="The address may be mistyped, or the page may have moved." />
+      <Message code="Error 404" title="Page not found" text="The address may be mistyped, or the page may have moved." />
     {:else if !allowed}
-      <Message title="You don't have access to this page" text="Ask your centre's owner or admin if you need it." />
+      <Message code="Error 403" title="You don't have access to this page" text="Ask your centre's owner or admin if you need it." />
     {:else}
-      {@render guarded(route.component)}
+      {@render guarded(route.component, params)}
     {/if}
   </AppShell>
 {/if}

@@ -19,8 +19,10 @@ manage_staff = require_any("staff.manage", "platform.staff.manage")
 @router.get("/staff", response_model=Page[StaffOut])
 def list_staff(search: str = Query("", max_length=100), active: bool | None = None, p: Paging = Depends(paging),
                db: Session = DB, current: CurrentUser = Depends(manage_staff)):
+    from app.services.auth import avatar_url
     items, total = StaffService(db, current).page(search, active, p.page, p.size)
-    return Page(items=items, total=total, page=p.page, size=p.size)
+    out = [StaffOut.model_validate(u).model_copy(update={"avatar_url": avatar_url(u)}) for u in items]
+    return Page(items=out, total=total, page=p.page, size=p.size)
 
 
 @router.post("/staff", response_model=StaffOut, status_code=status.HTTP_201_CREATED)

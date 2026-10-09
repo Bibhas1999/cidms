@@ -1,6 +1,7 @@
 // Who is signed in, at which workspace, and what they may do. The session itself is the HttpOnly cookie;
 // this only holds what the server says about it (and the CSRF token it hands back).
 
+import { rememberAccount } from "./accounts";
 import { ApiError, get, post, setApiHooks } from "./api";
 import { navigate, router } from "./router.svelte";
 import type { Me, Workspace } from "./types";
@@ -33,20 +34,22 @@ class Session {
 
   async login(email: string, password: string, remember = false): Promise<Me> {
     this.me = await post<Me>("/api/auth/login", { email, password, remember });
+    rememberAccount({ email: this.me.email, name: this.me.full_name });
     return this.me;
   }
 
-  async logout(): Promise<void> {
+  async logout({ switching = false } = {}): Promise<void> {
     try {
       await post("/api/auth/logout");
     } finally {
       this.me = null;
-      navigate("/login", { replace: true });
+      navigate(switching ? "/login?switch=1" : "/login", { replace: true });
     }
   }
 
   setMe(me: Me): void {
     this.me = me;
+    rememberAccount({ email: me.email, name: me.full_name });
   }
 }
 

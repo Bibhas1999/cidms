@@ -1,13 +1,16 @@
 """Sign-in, sign-out, who am I, and changing your own password."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core import mailer
 from app.core.config import get_settings
 from app.core.db import DB
-from app.core.security import CurrentUser, get_user_allowing_password_change
-from app.schemas import ForgotPasswordIn, LoginIn, MeOut, PasswordChangeIn, ResetPasswordIn, WorkspaceOut
+from app.core.security import CurrentUser, get_current_user, get_user_allowing_password_change
+from app.core.storage import MAX_LOGO_BYTES
+from app.schemas import ForgotPasswordIn, LoginIn, MeOut, PasswordChangeIn, ProfileIn, ResetPasswordIn, WorkspaceOut
 from app.schemas import WorkspaceLink as WorkspaceLinkOut
 from app.services.auth import AuthService, me_from_current, workspace_of
 
@@ -86,6 +89,43 @@ def logout(request: Request, response: Response, db: Session = DB):
 @router.get("/auth/me", response_model=MeOut)
 def me(request: Request, current: CurrentUser = Depends(get_user_allowing_password_change)):
     return me_from_current(request, current)
+
+
+@router.put("/auth/profile", response_model=MeOut)
+def update_profile(data: ProfileIn, request: Request, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
+    """Your own name and mobile. Your email can't be changed here: it's how you sign in."""
+    AuthService(db).update_profile(current, data.full_name, data.mobile)
+    return me_from_current(request, current)
+
+
+@router.post("/auth/avatar", response_model=MeOut)
+async def upload_avatar(avatar: UploadFile, request: Request, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
+    data = await avatar.read(MAX_LOGO_BYTES + 1)
+    AuthService(db).set_avatar(current, data)
+    return me_from_current(request, current)
+
+
+@router.delete("/auth/avatar", response_model=MeOut)
+def remove_avatar(request: Request, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
+    AuthService(db).set_avatar(current, None)
+    return me_from_current(request, current)
+
+
+@router.get("/users/{user_id}/avatar", include_in_schema=False)
+def user_avatar(user_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
+    """A colleague's picture. Only people in the same centre (or platform) can see it."""
+    from fastapi.responses import FileResponse
+
+    from app.core.errors import NotFound
+    from app.core.storage import avatar_path
+    from app.models import User
+    user = db.get(User, user_id)  # row-level security: other centres' people aren't visible
+    if user is None or user.tenant_id != current.user.tenant_id:
+        raise NotFound("No picture.")
+    path = avatar_path(user.tenant_id, user.avatar_file)
+    if path is None:
+        raise NotFound("No picture.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.post("/auth/password", response_model=MeOut)

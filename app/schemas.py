@@ -59,6 +59,16 @@ class ResetPasswordIn(BaseModel):
     new_password: str = Field(min_length=1, max_length=200)
 
 
+class ProfileIn(BaseModel):
+    full_name: str = Field(min_length=2, max_length=200)
+    mobile: str = Field(default="", max_length=20)
+
+    @field_validator("mobile")
+    @classmethod
+    def _mobile_ok(cls, v: str) -> str:
+        return _mobile(v)
+
+
 class PasswordChangeIn(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
     new_password: str = Field(min_length=1, max_length=200)
@@ -75,6 +85,8 @@ class MeOut(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    mobile: str = ""
+    avatar_url: str = ""
     roles: list[str]
     permissions: list[str]
     must_change_password: bool
@@ -88,6 +100,7 @@ class StaffOut(Out):
     id: uuid.UUID
     email: str
     full_name: str
+    avatar_url: str = ""
     mobile: str
     is_active: bool
     must_change_password: bool
@@ -137,6 +150,8 @@ class SettingsIn(BaseModel):
     email: EmailStr | Literal[""] = ""
     gst_number: str = Field(default="", max_length=20, pattern=r"^([0-9A-Z]{15})?$")
     invoice_prefix: str = Field(min_length=1, max_length=10, pattern=r"^[A-Z0-9]+$")
+    bill_paper: Literal["A4", "A5"] = "A5"
+    max_discount_percent: Decimal = Field(default=Decimal("20"), ge=0, le=100, decimal_places=2)
     bill_footer: str = Field(default="", max_length=2000)
     report_footer: str = Field(default="", max_length=2000)
 

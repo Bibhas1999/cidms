@@ -14,7 +14,7 @@ function ensure(): HTMLDivElement {
   bar = document.createElement("div");
   bar.className = "top-loader";
   bar.setAttribute("aria-hidden", "true");
-  bar.innerHTML = '<div class="top-loader-bar"></div>';
+  bar.innerHTML = '<div class="top-loader-bar"><span class="top-loader-glow"></span></div>';
   document.body.appendChild(bar);
   return bar;
 }
@@ -30,7 +30,9 @@ export function start(): void {
   clearTimeout(hide);
   // Quick answers (most of them) don't flash a bar at all.
   show = setTimeout(() => {
-    ensure().classList.add("is-active");
+    const el = ensure();
+    el.classList.remove("is-done");
+    el.classList.add("is-loading");
     set(0.08);
     trickle = setInterval(() => set(progress + (1 - progress) * 0.08), 200);
   }, 150);
@@ -41,10 +43,9 @@ export function done(): void {
   if (active > 0) return;
   clearTimeout(show);
   clearInterval(trickle);
-  if (!bar?.classList.contains("is-active")) return;
+  if (!bar?.classList.contains("is-loading")) return;
   set(1);
-  hide = setTimeout(() => {
-    bar?.classList.remove("is-active");
-    set(0);
-  }, 250);
+  bar.classList.remove("is-loading");
+  bar.classList.add("is-done");
+  hide = setTimeout(() => set(0), 600);
 }

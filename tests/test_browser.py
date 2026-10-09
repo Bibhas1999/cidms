@@ -72,9 +72,9 @@ def test_first_sign_in_forces_a_new_password_then_opens_the_dashboard(page, alph
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
     page.wait_for_url("**/change-password")
-    page.get_by_label("Temporary password").fill("Test-password-1")
-    page.get_by_label("New password", exact=True).fill("My-own-pass-2026")
-    page.get_by_label("New password again").fill("My-own-pass-2026")
+    page.locator("#current").fill("Test-password-1")
+    page.locator("#new").fill("My-own-pass-2026")
+    page.locator("#confirm").fill("My-own-pass-2026")
     page.get_by_role("button", name="Save password").click()
     page.wait_for_url(f"http://alpha.{live_server}/")
     assert page.get_by_role("heading", name="Good", exact=False).is_visible()
@@ -87,7 +87,9 @@ def test_owner_adds_a_receptionist(page, alpha, live_server):
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    page.get_by_role("link", name="Staff", exact=True).click()
+    page.get_by_role("button", name="Account menu", exact=False).click()
+    page.get_by_role("link", name="Settings").click()
+    page.get_by_role("link", name="Staff and roles").click()
     page.get_by_role("button", name="Add a person").click()
     dialog = page.get_by_role("dialog", name="Add a person")
     dialog.get_by_label("Full name").fill("Piu Koley")
@@ -113,14 +115,14 @@ def test_a_screen_that_crashes_shows_a_fallback_and_reports_it(page, alpha, live
     page.route("**/api/staff?*", lambda route: route.fulfill(json={"items": [{"id": "1", "full_name": "X", "email": "x", "mobile": "",
                                                                              "is_active": True, "must_change_password": False,
                                                                              "last_login_at": None, "created_at": "2026-01-01T00:00:00Z",
-                                                                             "roles": None}], "total": 1, "page": 1, "size": 25}))
-    page.get_by_role("link", name="Staff", exact=True).click()
-    assert page.get_by_role("heading", name="This screen ran into a problem").is_visible()
-    assert page.get_by_role("link", name="Activity log", exact=True).is_visible()  # the rest of the app still works
+                                                                             "roles": [None]}], "total": 1, "page": 1, "size": 25}))
+    page.goto(f"http://alpha.{live_server}/settings/staff")
+    page.get_by_role("heading", name="This screen ran into a problem").wait_for()
+    assert page.get_by_role("link", name="Bills", exact=True).is_visible()  # the rest of the app still works
     page.wait_for_timeout(300)
     assert any('"kind":"boundary"' in r for r in reports)
-    page.get_by_role("link", name="Activity log", exact=True).click()
-    assert page.get_by_role("heading", name="Activity log").is_visible()
+    page.get_by_role("link", name="Bills", exact=True).click()
+    page.get_by_role("heading", name="Bills").wait_for()
 
 
 def test_an_ended_session_returns_to_sign_in(page, alpha, live_server):
@@ -130,8 +132,9 @@ def test_an_ended_session_returns_to_sign_in(page, alpha, live_server):
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
     page.wait_for_url(f"http://alpha.{live_server}/")
+    page.wait_for_load_state("networkidle")  # the dashboard has finished loading
     page.context.clear_cookies()  # as if signed out elsewhere or timed out
-    page.get_by_role("link", name="Activity log", exact=True).click()
-    page.wait_for_url("**/login?next=%2Factivity")
+    page.get_by_role("link", name="Bills", exact=True).click()
+    page.wait_for_url("**/login?next=%2Fbills")
     cookie_js = page.evaluate("document.cookie")
     assert "sdms_session" not in cookie_js  # HttpOnly: never visible to scripts

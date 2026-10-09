@@ -50,8 +50,8 @@ function withQuery(path: string, query?: Query): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string,
-                             options: { body?: unknown; query?: Query; signal?: AbortSignal } = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+                             options: { body?: unknown; query?: Query; signal?: AbortSignal; headers?: Record<string, string> } = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", ...(options.headers ?? {}) };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = hooks.csrf();
 
@@ -99,6 +99,9 @@ async function send<T>(method: string, path: string, options: { body?: unknown; 
 }
 
 export const get = <T>(path: string, query?: Query, signal?: AbortSignal) => api<T>("GET", path, { query, signal });
-export const post = <T>(path: string, body?: unknown) => api<T>("POST", path, { body: body ?? {} });
+export const post = <T>(path: string, body?: unknown, headers?: Record<string, string>) => api<T>("POST", path, { body: body ?? {}, headers });
+
+/** A key for one attempt at a change: retries with the same key are done only once (bills, payments). */
+export const newRequestKey = () => crypto.randomUUID();
 export const put = <T>(path: string, body: unknown) => api<T>("PUT", path, { body });
 export const patch = <T>(path: string, body: unknown) => api<T>("PATCH", path, { body });

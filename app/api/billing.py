@@ -25,6 +25,7 @@ from app.schemas_billing import (
     ItemStatusIn,
     LabTestIn,
     LabTestOut,
+    OverviewOut,
     PatientIn,
     PatientOut,
     PaymentIn,
@@ -34,7 +35,7 @@ from app.schemas_billing import (
     TestTypeOut,
     WorklistRowOut,
 )
-from app.services.billing import BillingService, default_worklist_window
+from app.services.billing import BillingService, OverviewService, default_worklist_window
 from app.services.catalogue import CatalogueService
 from app.services.patients import PatientService
 
@@ -144,8 +145,10 @@ def edit_patient(patient_id: uuid.UUID, data: PatientIn, db: Session = DB, curre
 def bills(search: str = Query("", max_length=100), date_from: date | None = Query(None, alias="from"),
           date_to: date | None = Query(None, alias="to"), status_: str | None = Query(None, alias="status", pattern="^(confirmed|on_hold|cancelled)$"),
           due: bool = False, doctor_id: uuid.UUID | None = None, patient_id: uuid.UUID | None = None,
+          sort: str = Query("newest", pattern="^(newest|oldest)$"),
           p: Paging = Depends(paging), db: Session = DB, current: CurrentUser = Depends(client_user)):
-    items, total, sums = BillingService(db, current).page(search, date_from, date_to, status_, due, doctor_id, patient_id, p.page, p.size)
+    items, total, sums = BillingService(db, current).page(search, date_from, date_to, status_, due, doctor_id, patient_id, p.page, p.size,
+                                                          oldest_first=sort == "oldest")
     return BillPage(items=items, total=total, page=p.page, size=p.size, sums=sums)
 
 
@@ -219,3 +222,9 @@ def set_status(item_id: uuid.UUID, data: ItemStatusIn, db: Session = DB, current
 @router.get("/summary/day", response_model=DaySummaryOut)
 def day_summary(day: date | None = None, db: Session = DB, current: CurrentUser = Depends(client_user)):
     return BillingService(db, current).day_summary(day or local_today())
+
+
+@router.get("/summary/overview", response_model=OverviewOut)
+def overview(db: Session = DB, current: CurrentUser = Depends(require("business_reports.view"))):
+    """The owner's dashboard. Business figures, so only for people who may see business reports."""
+    return OverviewService(db, current).overview(local_today())

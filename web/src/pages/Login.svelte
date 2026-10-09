@@ -1,5 +1,6 @@
 <script lang="ts">
   import AuthLayout from "../components/AuthLayout.svelte";
+  import { forgetAccount, recentAccounts, type RecentAccount } from "../lib/accounts";
   import { ApiError } from "../lib/api";
   import { navigate, router } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
@@ -12,6 +13,34 @@
   let remember = $state(false);
   let busy = $state(false);
   let failed = $state(false);
+
+  // Accounts used on this computer before (names and emails only): pick one and type its password.
+  let accounts = $state<RecentAccount[]>(recentAccounts());
+  let chosen = $state<RecentAccount | null>(null);
+  let useOther = $state(recentAccounts().length === 0);
+  let passwordInput = $state<HTMLInputElement>();
+
+  function choose(a: RecentAccount) {
+    chosen = a;
+    email = a.email;
+    password = "";
+    queueMicrotask(() => passwordInput?.focus());
+  }
+
+  function other() {
+    chosen = null;
+    email = "";
+    password = "";
+    useOther = true;
+  }
+
+  function forget(a: RecentAccount) {
+    forgetAccount(a.email);
+    accounts = recentAccounts();
+    if (!accounts.length) useOther = true;
+  }
+
+  const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   const ws = $derived(session.workspace);
   const isPlatform = $derived(ws?.kind === "platform");
@@ -46,10 +75,33 @@
 <AuthLayout>
     <form class="form" onsubmit={submit} novalidate>
       <div class="heading">
-        <h2>Welcome back</h2>
+        <h2>{chosen ? `Hello, ${chosen.name.split(" ")[0]}` : router.query.get("switch") ? "Switch account" : "Welcome back"}</h2>
         <p class="muted">Sign in to {isPlatform ? "the platform" : ws?.name}</p>
       </div>
 
+      {#if !useOther && !chosen}
+        <div class="accounts" role="list" aria-label="Accounts used on this computer">
+          {#each accounts as a (a.email)}
+            <div class="account" role="listitem">
+              <button type="button" class="account-pick" onclick={() => choose(a)}>
+                <span class="account-avatar" aria-hidden="true">{initials(a.name)}</span>
+                <span class="account-text"><span class="account-name">{a.name}</span><span class="account-email">{a.email}</span></span>
+              </button>
+              <button type="button" class="account-forget" aria-label="Remove {a.name} from this computer" title="Remove from this computer" onclick={() => forget(a)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
+            </div>
+          {/each}
+        </div>
+        <button type="button" class="other" onclick={other}>Use another account</button>
+      {:else}
+      {#if chosen}
+        <div class="account is-chosen">
+          <span class="account-avatar" aria-hidden="true">{initials(chosen.name)}</span>
+          <span class="account-text"><span class="account-name">{chosen.name}</span><span class="account-email">{chosen.email}</span></span>
+          <button type="button" class="other" onclick={() => { chosen = null; useOther = accounts.length === 0; }}>Not you?</button>
+        </div>
+      {:else}
       <div class="field">
         <label for="login-email">Email</label>
         <span class="control">
@@ -57,12 +109,13 @@
           <input id="login-email" type="email" autocomplete="username" placeholder="you@example.com" bind:value={email} required aria-invalid={failed} />
         </span>
       </div>
+      {/if}
 
       <div class="field">
         <label for="login-password">Password</label>
         <span class="control">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
-          <input id="login-password" class="password" type={showPassword ? "text" : "password"} autocomplete="current-password" bind:value={password}
+          <input id="login-password" class="password" bind:this={passwordInput} type={showPassword ? "text" : "password"} autocomplete="current-password" bind:value={password}
                  onkeydown={onKey} onkeyup={onKey} required aria-invalid={failed} />
           <button type="button" class="reveal" aria-label={showPassword ? "Hide password" : "Show password"}
                   title={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}
@@ -92,10 +145,26 @@
       </button>
 
       <p class="help muted">Don't tick "Remember me" on a computer other people use.</p>
+      {#if accounts.length && !chosen}<button type="button" class="other" onclick={() => (useOther = false)}>Choose a recent account</button>{/if}
+      {/if}
     </form>
 </AuthLayout>
 
 <style>
+  .accounts { display: grid; gap: 8px; }
+  .account { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  .account:hover { border-color: var(--brand); }
+  .account.is-chosen { padding: 10px 12px; background: var(--surface-2); }
+  .account-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0; background: none; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+  .account-avatar { width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: #fff; font-weight: 700; font-size: 14px; }
+  .account-text { min-width: 0; display: flex; flex-direction: column; }
+  .account-name { font-weight: 650; }
+  .account-email { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account-forget { flex: none; width: 34px; height: 34px; margin-right: 6px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--text-2); cursor: pointer; }
+  .account-forget:hover { background: var(--surface-2); }
+  .account-forget svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .other { justify-self: center; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; padding: 4px; margin-left: auto; }
+  .other:hover { text-decoration: underline; }
   .reveal { position: absolute; right: 6px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 8px;
     background: transparent; color: var(--text-2); cursor: pointer; }
   .reveal:hover { background: var(--surface-2); }

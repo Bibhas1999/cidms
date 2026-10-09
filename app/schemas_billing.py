@@ -288,3 +288,33 @@ class DaySummaryOut(BaseModel):
     refunds: Money
     outstanding_dues: Money           # everything still owed, all days
     items_by_status: dict[str, int]   # today's tests by progress
+
+
+class TrendPointOut(BaseModel):
+    day: date
+    billed: Money
+    collected: Money
+
+
+class BreakdownOut(BaseModel):
+    name: str
+    bills: int
+    amount: Money
+
+
+class OverviewOut(BaseModel):
+    """Everything the owner's dashboard shows, in one request."""
+    today: DaySummaryOut
+    yesterday_billed: Money
+    yesterday_bills: int
+    month_billed: Money
+    month_collected: Money
+    month_bills: int
+    month_discounts: Money
+    dues_count: int
+    trend: list[TrendPointOut]            # last 30 days, oldest first, every day present
+    departments: list[BreakdownOut]       # this month, by amount
+    doctors: list[BreakdownOut]           # this month, top referrers by bills
+    pending_tests: dict[str, int]         # billed / scanned in the last 7 days
+    oldest_dues: list[BillSummaryOut]
+    recent_bills: list[BillSummaryOut]

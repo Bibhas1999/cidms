@@ -1,0 +1,286 @@
+<script lang="ts">
+  import Dialog from "../../components/Dialog.svelte";
+  import EditTestsDialog from "../../components/EditTestsDialog.svelte";
+  import Field from "../../components/Field.svelte";
+  import Icon from "../../components/Icon.svelte";
+  import { ApiError, get, newRequestKey, post } from "../../lib/api";
+  import { BILL_STATUS, LINE_STATUS, PAYMENT_MODES, modeLabel, paymentState, type Bill, type PaymentMode } from "../../lib/bill-types";
+  import { date, dateTime, rupees } from "../../lib/format";
+  import { session } from "../../lib/session.svelte";
+  import { notify, notifyError } from "../../lib/toast.svelte";
+
+  let { params }: { params: Record<string, string> } = $props();
+
+  let bill = $state<Bill | null>(null);
+  let loadError = $state("");
+
+  async function load() {
+    try {
+      bill = await get<Bill>(`/api/bills/${params.id}`);
+      loadError = "";
+    } catch (e) {
+      loadError = (e as Error).message;
+    }
+  }
+  $effect(() => { params.id; load(); });
+
+  const live = $derived(bill?.status !== "cancelled");
+  const due = $derived(Number(bill?.due ?? 0));
+  const paid = $derived(Number(bill?.paid ?? 0));
+  const pay = $derived(bill ? paymentState(bill) : null);
+
+  // ---------- collect a payment / refund ----------
+  let payOpen = $state(false);
+  let refundOpen = $state(false);
+  let amount = $state("");
+  let mode = $state<PaymentMode>("cash");
+  let reference = $state("");
+  let note = $state("");
+  let errors = $state<Record<string, string>>({});
+  let busy = $state(false);
+  let requestKey = "";
+
+  function openPay() {
+    amount = due.toFixed(2); mode = "cash"; reference = ""; note = ""; errors = {}; requestKey = newRequestKey(); payOpen = true;
+  }
+  function openRefund() {
+    amount = ""; mode = "cash"; note = ""; errors = {}; requestKey = newRequestKey(); refundOpen = true;
+  }
+
+  async function submitMoney(kind: "payments" | "refunds") {
+    busy = true; errors = {};
+    try {
+      const body = kind === "payments" ? { mode, amount, reference, note } : { mode, amount, note };
+      bill = await post<Bill>(`/api/bills/${bill!.id}/${kind}`, body, { "Idempotency-Key": requestKey });
+      payOpen = refundOpen = false;
+      notify(kind === "payments" ? `${rupees(amount)} received.${due - Number(amount) <= 0 ? " The bill is fully paid." : ""}` : `${rupees(amount)} refunded.`,
+             { title: kind === "payments" ? "Payment saved" : "Refund saved" });
+    } catch (e) {
+      if (e instanceof ApiError && Object.keys(e.fieldErrors).length) errors = e.fieldErrors;
+      else notifyError(e, { title: kind === "payments" ? "Couldn't save the payment" : "Couldn't save the refund" });
+    } finally {
+      busy = false;
+    }
+  }
+
+  let editOpen = $state(false);
+
+  // ---------- hold / confirm / cancel ----------
+  let reasonOpen = $state<"" | "hold" | "cancel">("");
+  let reason = $state("");
+
+  async function setStatus(action: "hold" | "cancel" | "confirm") {
+    busy = true; errors = {};
+    try {
+      bill = await post<Bill>(`/api/bills/${bill!.id}/${action}`, action === "confirm" ? {} : { reason });
+      reasonOpen = "";
+      notify({ hold: "The bill is on hold.", cancel: "The bill is cancelled.", confirm: "The bill is confirmed." }[action]);
+    } catch (e) {
+      if (e instanceof ApiError && e.field === "reason") errors = { reason: e.message };
+      else notifyError(e, { title: "Couldn't change the bill" });
+    } finally {
+      busy = false;
+    }
+  }
+
+  const discountText = $derived(bill?.discount_type === "percent" ? `${Number(bill.discount_value)}%` : "");
+</script>
+
+{#if loadError}
+  <div class="alert alert-destructive" role="alert"><Icon name="alert" /><div><div class="alert-title">Couldn't open this bill</div>{loadError}</div></div>
+  <a class="btn btn-outline" href="/bills" style="align-self: flex-start">Back to bills</a>
+{:else if !bill}
+  <div class="card"><div class="empty" aria-busy="true">Loading…</div></div>
+{:else}
+  <div class="page-header">
+    <div>
+      <a class="link-button" href="/bills"><Icon name="chevronRight" size="sm" class="flip" /> All bills</a>
+      <div class="meta-row" style="margin-top: 8px">
+        <span class="eyebrow">Bill</span>
+        {#if pay}<span class="badge {pay[0]}">{pay[1]}</span>{/if}
+        {#if bill.status !== "confirmed"}<span class="badge {BILL_STATUS[bill.status][0]}">{BILL_STATUS[bill.status][1]}</span>{/if}
+      </div>
+      <h1 class="page-title mono" style="font-family: var(--font-heading)">{bill.invoice_no}</h1>
+      <p class="page-description">{bill.patient_name} · {date(bill.bill_date)} · billed by {bill.created_by_name || "—"}{#if bill.legacy_no} · old bill #{bill.legacy_no}{/if}</p>
+    </div>
+    <div class="row-wrap">
+      <a class="btn btn-outline" href="/bills/{bill.id}/print" target="_blank" rel="noopener"><Icon name="printer" /> Print</a>
+      {#if live && due > 0 && session.can("payments.collect")}<button class="btn btn-primary" onclick={openPay}><Icon name="wallet" /> Collect {rupees(due)}</button>{/if}
+    </div>
+  </div>
+
+  {#if !live}
+    <div class="alert alert-destructive"><Icon name="alert" /><div><div class="alert-title">This bill is cancelled</div>{bill.cancel_reason}</div></div>
+  {:else if bill.status === "on_hold"}
+    <div class="alert alert-warning"><Icon name="clock" /><div><div class="alert-title">This bill is on hold</div>It isn't counted as confirmed until someone confirms it.</div></div>
+  {/if}
+
+  <div class="grid-3 items-start">
+    <div class="span-2 stack">
+      <section class="card" aria-labelledby="tests-title">
+        <div class="card-header"><div><h2 class="card-title" id="tests-title">Tests</h2>
+          <p class="card-description">Each test's progress: waiting, scanned, reported, delivered.</p></div>
+          {#if live && session.can("billing.edit")}<button class="btn btn-outline btn-sm" onclick={() => (editOpen = true)}><Icon name="plus" size="sm" /> Change tests</button>{/if}
+        </div>
+        <div class="card-flush">
+          <div class="table-wrap"><table class="table" style="min-width: 0">
+            <thead><tr><th>Test</th><th>Progress</th><th class="num">Price</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+              {#each bill.items as line (line.id)}
+                <tr style={line.status === "cancelled" ? "opacity: .55" : ""}>
+                  <td><div class="cell-title" style={line.status === "cancelled" ? "text-decoration: line-through" : ""}>{line.test_name}</div>
+                    <div class="cell-sub">{line.department_name || "—"}{#if line.accession_no} · <span class="mono">{line.accession_no}</span>{/if}</div></td>
+                  <td><span class="badge {LINE_STATUS[line.status][0]}">{LINE_STATUS[line.status][1]}</span></td>
+                  <td class="num money">{rupees(line.unit_price)}</td>
+                  <td class="num tabular">{line.quantity}</td>
+                  <td class="num money">{rupees(line.amount)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table></div>
+        </div>
+        <div class="card-content">
+          <dl class="totals">
+            <div><dt>Subtotal</dt><dd class="money">{rupees(bill.subtotal)}</dd></div>
+            {#if Number(bill.discount_amount) > 0}<div><dt>Discount {discountText}</dt><dd class="money">− {rupees(bill.discount_amount)}</dd></div>{/if}
+            <div class="grand"><dt>Total</dt><dd class="money">{rupees(bill.total)}</dd></div>
+            <div><dt>Paid</dt><dd class="money">{rupees(bill.paid)}</dd></div>
+            <div class={due > 0 ? "is-due" : ""}><dt>Due</dt><dd class="money">{rupees(bill.due)}</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="pay-title">
+        <div class="card-header"><div><h2 class="card-title" id="pay-title">Payments</h2>
+          <p class="card-description">Every amount received or given back. Nothing here is ever changed or removed.</p></div>
+          {#if paid > 0 && session.can("payments.collect")}<button class="btn btn-ghost-destructive btn-sm" onclick={openRefund}>Refund</button>{/if}
+        </div>
+        <div class="card-flush">
+          {#if bill.payments.length}
+            <div class="table-wrap"><table class="table" style="min-width: 0">
+              <thead><tr><th>When</th><th>How</th><th>Received by</th><th class="num">Amount</th></tr></thead>
+              <tbody>
+                {#each bill.payments as p (p.id)}
+                  <tr>
+                    <td class="text-sm nowrap">{dateTime(p.received_at)}</td>
+                    <td><div class="row" style="gap: 8px">{#if p.kind === "refund"}<span class="badge badge-destructive badge-plain">Refund</span>{/if}<span>{modeLabel(p.mode)}</span></div>
+                      {#if p.reference || p.note}<div class="cell-sub">{[p.reference, p.note].filter(Boolean).join(" · ")}</div>{/if}</td>
+                    <td class="text-sm">{p.received_by_name || "—"}</td>
+                    <td class="num money {p.kind === 'refund' ? 'money-due' : ''}">{p.kind === "refund" ? "− " : ""}{rupees(p.amount)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table></div>
+          {:else}
+            <div class="empty"><Icon name="wallet" />Nothing paid yet.</div>
+          {/if}
+        </div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="card" aria-labelledby="patient-title">
+        <div class="card-header"><h2 class="card-title" id="patient-title">Patient</h2>
+          <a class="btn btn-ghost btn-sm" href="/patients/{bill.patient_id}">Open</a></div>
+        <div class="card-content">
+          <dl class="dl" style="grid-template-columns: 1fr">
+            <div><dt>Name</dt><dd class="font-semibold">{bill.patient_name}</dd></div>
+            <div><dt>Age and gender</dt><dd>{[bill.patient_age, bill.patient_gender].filter(Boolean).join(" · ") || "—"}</dd></div>
+            <div><dt>Mobile</dt><dd class="tabular">{bill.patient_mobile || "—"}</dd></div>
+            {#if bill.guardian_name}<div><dt>Guardian (C/O)</dt><dd>{bill.guardian_name}</dd></div>{/if}
+            {#if bill.patient_address}<div><dt>Address</dt><dd>{bill.patient_address}</dd></div>{/if}
+          </dl>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="bill-title">
+        <div class="card-header"><h2 class="card-title" id="bill-title">Bill</h2></div>
+        <div class="card-content">
+          <dl class="dl" style="grid-template-columns: 1fr">
+            <div><dt>Referred by</dt><dd>{bill.referring_doctor_name || "Self"}</dd></div>
+            <div><dt>Billed</dt><dd>{dateTime(bill.created_at)} by {bill.created_by_name || "—"}</dd></div>
+            {#if bill.notes}<div><dt>Notes</dt><dd>{bill.notes}</dd></div>{/if}
+          </dl>
+        </div>
+        {#if live && session.can("billing.edit")}
+          <div class="card-footer card-footer-stack">
+            {#if bill.status === "on_hold"}
+              <button class="btn btn-outline btn-block" disabled={busy} onclick={() => setStatus("confirm")}><Icon name="check" /> Confirm bill</button>
+            {:else}
+              <button class="btn btn-outline btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "hold"; }}><Icon name="clock" /> Put on hold</button>
+            {/if}
+            <button class="btn btn-ghost-destructive btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "cancel"; }}><Icon name="x" /> Cancel bill</button>
+          </div>
+        {/if}
+      </section>
+    </div>
+  </div>
+
+  <EditTestsDialog bind:open={editOpen} {bill} onsaved={(b) => (bill = b)} />
+
+  <Dialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}.">
+    <form id="pay-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("payments"); }} novalidate>
+      <div class="grid-2">
+        <Field id="pay-amount" label="Amount (₹)" required error={errors.amount}>
+          {#snippet children({ invalid, describedby })}<input id="pay-amount" class="input money" type="number" min="0.01" step="0.01" max={due} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+        </Field>
+        <Field id="pay-mode" label="Paid by" required error={errors.mode}>
+          {#snippet children()}<select id="pay-mode" class="select" bind:value={mode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>{/snippet}
+        </Field>
+      </div>
+      {#if mode !== "cash"}
+        <Field id="pay-ref" label="Reference" hint="UPI transaction ID, card slip or bank reference." error={errors.reference}>
+          {#snippet children({ invalid, describedby })}<input id="pay-ref" class="input mono" bind:value={reference} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+        </Field>
+      {/if}
+    </form>
+    {#snippet footer()}
+      <button class="btn btn-outline" type="button" onclick={() => (payOpen = false)}>Cancel</button>
+      <button class="btn btn-primary" type="submit" form="pay-form" disabled={busy || !Number(amount)}><Icon name="check" /> {busy ? "Saving…" : `Receive ${rupees(amount || 0)}`}</button>
+    {/snippet}
+  </Dialog>
+
+  <Dialog bind:open={refundOpen} title="Give money back" icon="alert" tone="destructive" description="{rupees(paid)} has been paid on this bill. A refund is recorded with its reason; nothing is deleted.">
+    <form id="refund-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("refunds"); }} novalidate>
+      <div class="grid-2">
+        <Field id="ref-amount" label="Amount (₹)" required error={errors.amount}>
+          {#snippet children({ invalid, describedby })}<input id="ref-amount" class="input money" type="number" min="0.01" step="0.01" max={paid} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+        </Field>
+        <Field id="ref-mode" label="Given back by" required>
+          {#snippet children()}<select id="ref-mode" class="select" bind:value={mode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>{/snippet}
+        </Field>
+      </div>
+      <Field id="ref-note" label="Reason" required error={errors.note}>
+        {#snippet children({ invalid, describedby })}<textarea id="ref-note" class="textarea" style="min-height: 72px" bind:value={note} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
+      </Field>
+    </form>
+    {#snippet footer()}
+      <button class="btn btn-outline" type="button" onclick={() => (refundOpen = false)}>Cancel</button>
+      <button class="btn btn-destructive" type="submit" form="refund-form" disabled={busy || !Number(amount) || note.trim().length < 3}>{busy ? "Saving…" : "Save refund"}</button>
+    {/snippet}
+  </Dialog>
+
+  <Dialog open={reasonOpen !== ""} onclose={() => (reasonOpen = "")} title={reasonOpen === "cancel" ? "Cancel this bill?" : "Put this bill on hold?"}
+          icon={reasonOpen === "cancel" ? "x" : "clock"} tone={reasonOpen === "cancel" ? "destructive" : "info"}
+          description={reasonOpen === "cancel" ? (paid > 0 ? `${rupees(paid)} has been paid. Refund it first, then cancel.` : "The bill stays on record, marked cancelled, with your reason.") : "It won't count as confirmed until someone confirms it."}>
+    <form id="reason-form" onsubmit={(e) => { e.preventDefault(); setStatus(reasonOpen as "hold" | "cancel"); }} novalidate>
+      <Field id="reason" label="Reason" required error={errors.reason}>
+        {#snippet children({ invalid, describedby })}<textarea id="reason" class="textarea" style="min-height: 72px" bind:value={reason} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
+      </Field>
+    </form>
+    {#snippet footer()}
+      <button class="btn btn-outline" type="button" onclick={() => (reasonOpen = "")}>Keep it</button>
+      <button class="btn {reasonOpen === 'cancel' ? 'btn-destructive' : 'btn-primary'}" type="submit" form="reason-form"
+              disabled={busy || reason.trim().length < 3 || (reasonOpen === "cancel" && paid > 0)}>{reasonOpen === "cancel" ? "Cancel bill" : "Put on hold"}</button>
+    {/snippet}
+  </Dialog>
+{/if}
+
+<style>
+  .totals { margin: 0 0 0 auto; max-width: 340px; display: grid; gap: 8px; }
+  .totals > div { display: flex; justify-content: space-between; gap: 24px; font-size: 14px; }
+  .totals dt { color: var(--muted-foreground); }
+  .totals dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .totals .grand { border-top: 1px solid var(--border); padding-top: 8px; font-weight: 700; font-size: 16px; }
+  .totals .grand dt { color: var(--foreground); }
+  .totals .is-due dd, .totals .is-due dt { color: var(--destructive); font-weight: 700; }
+</style>

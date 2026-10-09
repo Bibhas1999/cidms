@@ -8,7 +8,7 @@
   const ws = $derived(session.workspace);
   const isPlatform = $derived(ws?.kind === "platform");
   // Each centre's own colour; the platform uses the product's.
-  const brand = $derived(ws?.brand_color || "#0f6e6e");
+  const brand = $derived(ws?.brand_color || "#1250a6");
 </script>
 
 <div class="page" style="--brand: {brand}">
@@ -93,7 +93,7 @@
 
   /* ---------- the centre's side ---------- */
   .brand-panel { position: relative; overflow: hidden; color: #fff;
-    background: linear-gradient(150deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 78%, #1aa39a) 100%); }
+    background: linear-gradient(150deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 72%, #0b2f6b) 100%); }
   .backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
   .brand-content { position: relative; height: 100%; display: flex; flex-direction: column; gap: 40px; padding: 56px 56px 32px; }
   .identity { display: flex; align-items: center; gap: 22px; }

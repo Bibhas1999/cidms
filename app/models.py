@@ -126,6 +126,7 @@ class User(Base):
     locked_until: Mapped[datetime | None] = mapped_column(Timestamp)
     last_login_at: Mapped[datetime | None] = mapped_column(Timestamp)
     legacy_id: Mapped[int | None] = mapped_column(Integer)  # users.id in the old Laravel app
+    avatar_file: Mapped[str] = mapped_column(String(100), default="")  # profile picture, in the owner's storage folder
     created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
 
@@ -289,6 +290,7 @@ class Invoice(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
     invoice_no: Mapped[str] = mapped_column(String(40))
     legacy_no: Mapped[int | None] = mapped_column(Integer)
+    legacy_id: Mapped[int | None] = mapped_column(Integer)  # invoices.id in the old Laravel app
     bill_date: Mapped[date] = mapped_column(Date)
     patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patients.id"))
     patient_name: Mapped[str] = mapped_column(String(200))
