@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { ApiError, get, put } from "../lib/api";
+  import { ApiError, put } from "../lib/api";
   import type { Bill, BillLine, LabTest } from "../lib/bill-types";
   import { rupees } from "../lib/format";
   import { notify, notifyError } from "../lib/toast.svelte";
-  import type { Page } from "../lib/types";
-  import Combobox from "./Combobox.svelte";
+  import TestPicker from "./TestPicker.svelte";
   import Dialog from "./Dialog.svelte";
   import Field from "./Field.svelte";
   import Icon from "./Icon.svelte";
@@ -15,27 +14,33 @@
 
   interface Row { line?: BillLine; test?: LabTest; quantity: number }
   let rows = $state<Row[]>([]);
-  let query = $state("");
   let reason = $state("");
   let errors = $state<Record<string, string>>({});
   let saving = $state(false);
-  let input = $state<HTMLInputElement>();
 
   $effect(() => {
     if (open) {
       rows = bill.items.filter((l) => l.status !== "cancelled").map((l) => ({ line: l, quantity: l.quantity }));
-      reason = ""; query = ""; errors = {};
+      reason = ""; errors = {};
     }
   });
 
-  const searchTests = (q: string, signal: AbortSignal) => get<Page<LabTest>>("/api/tests", { search: q, active: true, size: 10 }, signal).then((r) => r.items);
+  const testId = (r: Row) => r.line?.test_id ?? r.test?.id ?? "";
+  const selected = $derived(new Set(rows.map(testId)));
+  // Tests already scanned, reported or delivered stay on the bill.
+  const locked = $derived(new Set(rows.filter((r) => r.line && r.line.status !== "billed").map(testId)));
 
-  function add(t: LabTest) {
-    const fresh = rows.find((r) => r.test?.id === t.id);
-    if (fresh) fresh.quantity += 1;
-    else rows.push({ test: t, quantity: 1 });
-    query = "";
-    queueMicrotask(() => input?.focus());
+  function toggle(t: LabTest, on: boolean) {
+    if (on && !selected.has(t.id)) {
+      // Ticking a test that was on the bill before brings that line back (at the price it was billed at).
+      const before = bill.items.find((l) => l.test_id === t.id && l.status !== "cancelled");
+      rows.push(before ? { line: before, quantity: before.quantity } : { test: t, quantity: 1 });
+    }
+    if (!on) rows = rows.filter((r) => testId(r) !== t.id || locked.has(t.id));
+  }
+
+  function addMany(tests: LabTest[]) {
+    for (const t of tests) toggle(t, true);
   }
 
   const price = (r: Row) => Number(r.line ? r.line.unit_price : r.test!.price);
@@ -67,13 +72,7 @@
 <Dialog bind:open title="Change tests on {bill.invoice_no}" icon="flask" tone="info" wide
         description="Add more tests, or take off tests that haven't been started. Tests already on the bill keep the price they were billed at.">
   <div class="stack">
-    <Combobox id="edit-test-search" label="Add a test" placeholder="Type a test name or code…" icon="flask" search={searchTests}
-              bind:value={query} bind:inputEl={input} onpick={add} emptyText="No test with that name in your catalogue.">
-      {#snippet option(t)}
-        <div class="row-between"><span class="font-semibold">{t.name}</span><span class="money font-semibold">{rupees(t.price)}</span></div>
-        <div class="text-xs text-muted">{t.department.name}</div>
-      {/snippet}
-    </Combobox>
+    <TestPicker {selected} {locked} ontoggle={toggle} onaddmany={addMany} />
     {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
     <div class="table-wrap"><table class="table" style="min-width: 0">
       <thead><tr><th>Test</th><th class="num">Price</th><th class="num" style="width: 100px">Qty</th><th class="num">Amount</th><th><span class="sr-only">Remove</span></th></tr></thead>

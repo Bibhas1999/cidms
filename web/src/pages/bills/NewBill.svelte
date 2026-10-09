@@ -3,6 +3,7 @@
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
+  import TestPicker from "../../components/TestPicker.svelte";
   import { ApiError, get, newRequestKey, post } from "../../lib/api";
   import { PAYMENT_MODES, type Bill, type Doctor, type LabTest, type Patient, type PaymentMode } from "../../lib/bill-types";
   import { rupees } from "../../lib/format";
@@ -51,16 +52,16 @@
   // ---------- tests ----------
   interface Line { test: LabTest; quantity: number }
   let lines = $state<Line[]>([]);
-  let testQuery = $state("");
-  let testInput = $state<HTMLInputElement>();
-  const searchTests = (q: string, signal: AbortSignal) => get<Page<LabTest>>("/api/tests", { search: q, active: true, size: 10 }, signal).then((r) => r.items);
+  const onBill = $derived(new Set(lines.map((l) => l.test.id)));
 
-  function addTest(t: LabTest) {
-    const existing = lines.find((l) => l.test.id === t.id);
-    if (existing) existing.quantity += 1;
-    else lines.push({ test: t, quantity: 1 });
-    testQuery = "";
-    queueMicrotask(() => testInput?.focus());
+  // Ticking a test in the picker puts it on the bill; unticking takes it off.
+  function toggleTest(t: LabTest, on: boolean) {
+    if (on && !onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
+    if (!on) lines = lines.filter((l) => l.test.id !== t.id);
+  }
+
+  function addMany(tests: LabTest[]) {
+    for (const t of tests) if (!onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
   }
 
   // ---------- money ----------
@@ -217,21 +218,16 @@
 
     <section class="card" aria-labelledby="t-title">
       <div class="card-header"><div><h2 class="card-title" id="t-title"><span class="step">3</span> Tests</h2>
-        <p class="card-description">Type a test name or code and press Enter to add it.</p></div></div>
+        <p class="card-description">Tick every test the patient needs: search, or pick a department and tick from the list.</p></div>
+        {#if lines.length}<span class="badge badge-info badge-plain">{lines.length} on the bill</span>{/if}</div>
       <div class="card-content stack">
-        <Combobox id="test-search" label="Add a test" placeholder="e.g. Chest X-ray, CBC, USG whole abdomen…" icon="flask" search={searchTests}
-                  bind:value={testQuery} bind:inputEl={testInput} onpick={addTest} emptyText="No test with that name in your catalogue.">
-          {#snippet option(t)}
-            <div class="row-between"><span><span class="font-semibold">{t.name}</span>{#if t.code} <span class="text-xs text-muted mono">{t.code}</span>{/if}</span>
-              <span class="money font-semibold">{rupees(t.price)}</span></div>
-            <div class="text-xs text-muted">{t.department.name}{#if t.test_type} · {t.test_type.name}{/if}</div>
-          {/snippet}
-        </Combobox>
+        <TestPicker selected={onBill} ontoggle={toggleTest} onaddmany={addMany} />
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
       </div>
       {#if lines.length}
         <div class="card-flush"><div class="table-wrap"><table class="table" style="min-width: 0">
-          <thead><tr><th>Test</th><th class="num">Price</th><th class="num" style="width: 110px">Qty</th><th class="num">Amount</th><th><span class="sr-only">Remove</span></th></tr></thead>
+          <caption class="sr-only">Tests on this bill</caption>
+          <thead><tr><th>On this bill</th><th class="num">Price</th><th class="num" style="width: 110px">Qty</th><th class="num">Amount</th><th><span class="sr-only">Remove</span></th></tr></thead>
           <tbody>
             {#each lines as l, i (l.test.id)}
               <tr>
@@ -243,9 +239,8 @@
               </tr>
             {/each}
           </tbody>
+          <tfoot><tr><td colspan="3" class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</td><td class="num money font-semibold">{rupees(subtotal)}</td><td></td></tr></tfoot>
         </table></div></div>
-      {:else}
-        <div class="empty" style="padding-top: 8px"><Icon name="flask" />No tests yet.</div>
       {/if}
     </section>
 

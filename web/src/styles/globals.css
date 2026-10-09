@@ -11,9 +11,9 @@
 
 :root {
   /* Brand (Supreme Health Care logo) */
-  --brand-teal: #1559c0;        /* logo blue: fills, bars, highlights (name kept from the registry's slot) */
-  --brand-teal-deep: #0f4aa3;
-  --brand-coral: #f08a2c;       /* logo orange: hover and accents */
+  --brand-teal: #004aad;        /* logo blue: fills, bars, highlights (name kept from the registry's slot) */
+  --brand-teal-deep: #003d8f;
+  --brand-coral: #f58634;       /* logo orange: hover and accents */
   --brand-navy: #0b2f6b;        /* deep blue: headings on letterheads, secondary buttons */
   --brand-dark: #111111;
 
@@ -30,7 +30,7 @@
   --primary: var(--brand-teal);
   --primary-hover: var(--brand-coral);
   --primary-foreground: #ffffff;
-  --primary-text: #1250a6;      /* darker teal for links/text on white, readable */
+  --primary-text: #004aad;      /* darker teal for links/text on white, readable */
 
   --secondary: var(--brand-navy);
   --secondary-hover: #0a1a38;
@@ -40,15 +40,15 @@
   --muted-foreground: #5b6673;  /* darker than --sndh-muted (#6b7785) so it passes 4.5:1 on grey backgrounds */
   --faint-foreground: #6b7785;  /* 4.6:1 on white (the site's #98a3b1 is only 2.5:1) */
 
-  --accent: #e9f0fb;            /* teal tint for hovers / selected rows */
+  --accent: #e6eef9;            /* teal tint for hovers / selected rows */
   --accent-foreground: #0b2f6b;
 
   --success: #12805c;
   --success-soft: #e5f5ee;
   --warning: #a35b00;
   --warning-soft: #fff3e0;
-  --info: #1250a6;
-  --info-soft: #e9f0fb;
+  --info: #004aad;
+  --info-soft: #e6eef9;
   --destructive: #c62828;
   --destructive-soft: #fdecec;
   --destructive-foreground: #ffffff;
@@ -67,7 +67,7 @@
   --shadow: 0 2px 8px rgba(17, 17, 17, 0.08);
   --shadow-lg: 0 12px 32px rgba(11, 47, 107, 0.14);
 
-  --gradient-brand: linear-gradient(135deg, #1250a6 0%, var(--brand-navy) 100%); /* white text stays above 4.5:1 */
+  --gradient-brand: linear-gradient(135deg, #004aad 0%, var(--brand-navy) 100%); /* white text stays above 4.5:1 */
 
   --font-sans: "Inter", "Segoe UI", Helvetica, Arial, sans-serif;   /* body, buttons, labels */
   --font-heading: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif; /* the brand brand font, titles only */
@@ -1069,7 +1069,7 @@ td .cell-sub { margin-top: var(--space-1-5); }
    - links in the error summary need a 24px target (WCAG 2.5.8) */
 :root:not([data-theme="dark"]) {
   --success: #0d6b4c;   /* 5.6:1 on #e5f5ee */
-  --info: #02688c;      /* 5.7:1 on #e9f0fb */
+  --info: #02688c;      /* 5.7:1 on #e6eef9 */
   --warning: #8a4b00;   /* 6.1:1 on #fff3e0 */
   --destructive: #b42323; /* 5.9:1 on #fdecec */
 }

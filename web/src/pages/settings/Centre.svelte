@@ -95,7 +95,7 @@
         <div class="stack">
           <div class="row" style="gap: 16px; align-items: center">
             {#if saved.logo_file}
-              <img src="/api/workspace/logo?v={logoVersion}" alt="Current logo" width="72" height="72" style="border-radius: 12px; object-fit: cover; background: var(--brand-navy)" />
+              <img src="/api/workspace/logo?v={logoVersion}" alt="Current logo" width="72" height="72" style="border-radius: 12px; object-fit: contain; background: #fff; border: 1px solid var(--border); padding: 4px" />
             {:else}
               <span class="centre-mark" style="width:72px;height:72px;border-radius:12px;display:grid;place-items:center;background:var(--muted);color:var(--muted-foreground)"><Icon name="building" /></span>
             {/if}

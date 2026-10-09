@@ -124,14 +124,14 @@
   :global(body.is-printout) { background: #fff; }
   .toolbar-print { display: flex; gap: 10px; padding: 16px; justify-content: center; }
   .sheet { max-width: 148mm; margin: 0 auto 32px; padding: 8mm; background: #fff; color: #111; font: 11px/1.45 var(--font-sans); position: relative; }
-  .letterhead { display: flex; gap: 12px; align-items: flex-start; border-bottom: 2px solid #10254e; padding-bottom: 8px; }
+  .letterhead { display: flex; gap: 12px; align-items: flex-start; border-bottom: 2px solid #004aad; padding-bottom: 8px; }
   .logo { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; }
   .grow { flex: 1; min-width: 0; }
-  .centre { font: 700 15px/1.2 var(--font-heading); color: #10254e; }
-  .tag { font-size: 10px; color: #0b7069; font-style: italic; margin-top: 1px; }
+  .centre { font: 700 15px/1.2 var(--font-heading); color: #004aad; }
+  .tag { font-size: 10px; color: #f58634; font-style: italic; margin-top: 1px; }
   .contact { font-size: 9.5px; color: #333; }
   .doc-type { text-align: right; font-size: 10px; }
-  .doc-type .kind { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #10254e; }
+  .doc-type .kind { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #004aad; }
   .doc-type .no { font: 600 11px var(--font-mono); margin: 2px 0; }
   .stamp { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg); font: 800 44px var(--font-heading);
     color: rgba(198, 40, 40, .18); border: 4px solid rgba(198, 40, 40, .18); padding: 4px 18px; pointer-events: none; }
@@ -139,7 +139,7 @@
   .patient .wide { grid-column: 1 / -1; }
   .k { display: inline-block; min-width: 72px; color: #555; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; margin-right: 6px; }
   .items { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  .items th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #555; border-bottom: 1px solid #10254e; padding: 4px 4px; }
+  .items th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #555; border-bottom: 1px solid #004aad; padding: 4px 4px; }
   .items td { padding: 4px; border-bottom: 1px dotted #ccc; }
   .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .bottom { display: flex; gap: 16px; justify-content: space-between; margin-top: 8px; }
@@ -147,7 +147,7 @@
   .note { margin-top: 6px; font-style: italic; }
   .totals { border-collapse: collapse; min-width: 52mm; }
   .totals td { padding: 2px 4px; }
-  .totals .grand td { border-top: 1px solid #10254e; font-weight: 700; font-size: 12px; padding-top: 4px; }
+  .totals .grand td { border-top: 1px solid #004aad; font-weight: 700; font-size: 12px; padding-top: 4px; }
   .totals .due td { font-weight: 700; }
   .foot { margin-top: 14px; border-top: 1px solid #ddd; padding-top: 6px; }
   .terms { margin: 0 0 14px; font-size: 9px; color: #444; white-space: pre-line; }

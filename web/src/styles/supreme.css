@@ -31,7 +31,7 @@
 }
 
 /* Sidebar brand: the centre's own logo and name */
-.sidebar-brand .centre-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; background: var(--brand-navy); }
+.sidebar-brand .centre-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--border); padding: 2px; }
 .sidebar-brand .centre-mark { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: var(--brand-navy); color: #fff; flex: none; }
 .sidebar-brand .centre-name { font-family: var(--font-heading); font-weight: 700; font-size: 14px; line-height: 1.2; color: var(--foreground); }
 .sidebar-brand .centre-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--primary-text); }
@@ -72,15 +72,26 @@
 .quick-action .qa-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent); color: var(--primary-text); flex: none; }
 .quick-action small { display: block; font-weight: 400; font-size: 12px; color: var(--muted-foreground); }
 
-/* ---------- Focus, as the centre asked ----------
-   Text boxes, drop-downs and text areas keep their usual focus outline (globals.css). Everything else
-   (buttons, links, menu items, the chart) shows no outline or dark border; with the Tab key, buttons and
-   links get a faint blue tint so the cursor isn't lost. */
-:focus:not(.input):not(.select):not(.textarea):not(input):not(select):not(textarea),
-:focus-visible:not(.input):not(.select):not(.textarea):not(input):not(select):not(textarea) { outline: none !important; }
+/* ---------- Focus and size of form controls, as the centre asked ----------
+   Like Bootstrap: on focus the border turns light blue with a soft glow, never a hard outline. Every text
+   box, drop-down and date box is the same height (38px). Buttons and links get the same soft glow with
+   the Tab key only. */
+*:focus, *:focus-visible { outline: none !important; }
+.input, .select, .input-sm, .select-sm, .date-field .input, .filter-bar .input, .filter-bar .select {
+  height: 38px !important; min-height: 38px; padding-top: 6px; padding-bottom: 6px; font-size: 14px;
+}
+.input:focus, .select:focus, .textarea:focus, input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: color-mix(in srgb, var(--primary-text) 45%, #ffffff) !important;
+  box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--primary-text) 22%, transparent) !important;
+}
+.input[aria-invalid="true"]:focus, .select[aria-invalid="true"]:focus, .textarea[aria-invalid="true"]:focus {
+  border-color: color-mix(in srgb, var(--destructive) 55%, #ffffff) !important;
+  box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--destructive) 20%, transparent) !important;
+}
 .btn:focus-visible, a:focus-visible, .nav-link:focus-visible, .link-button:focus-visible, .page-num:focus-visible, .tab:focus-visible,
-.checkbox:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-text) 18%, transparent) !important;
+.checkbox:focus-visible, input[type="checkbox"]:focus-visible {
+  box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--primary-text) 22%, transparent) !important;
 }
 
 /* ---------- Toasts: light cards with a coloured edge (not dark boxes) ---------- */

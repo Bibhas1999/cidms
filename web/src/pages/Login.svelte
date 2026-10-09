@@ -165,7 +165,7 @@
   .account-forget svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   .other { justify-self: center; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; padding: 4px; margin-left: auto; }
   .other:hover { text-decoration: underline; }
-  .reveal { position: absolute; right: 6px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  .reveal { position: absolute; right: 4px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px;
     background: transparent; color: var(--text-2); cursor: pointer; }
   .reveal:hover { background: var(--surface-2); }
   .reveal svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

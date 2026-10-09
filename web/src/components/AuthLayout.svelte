@@ -8,10 +8,10 @@
   const ws = $derived(session.workspace);
   const isPlatform = $derived(ws?.kind === "platform");
   // Each centre's own colour; the platform uses the product's.
-  const brand = $derived(ws?.brand_color || "#1250a6");
+  const brand = $derived(ws?.brand_color || "#004aad");
 </script>
 
-<div class="page" style="--brand: {brand}">
+<div class="auth-page" style="--brand: {brand}">
   <!-- The centre's side: its logo, name and what it does. Decorative drawings are hidden from screen readers. -->
   <section class="brand-panel">
     <svg class="backdrop" viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -89,7 +89,7 @@
 </div>
 
 <style>
-  .page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); background: var(--bg); }
+  .auth-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); background: var(--bg); }
 
   /* ---------- the centre's side ---------- */
   .brand-panel { position: relative; overflow: hidden; color: #fff;
@@ -97,12 +97,12 @@
   .backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
   .brand-content { position: relative; height: 100%; display: flex; flex-direction: column; gap: 40px; padding: 56px 56px 32px; }
   .identity { display: flex; align-items: center; gap: 22px; }
-  .logo { width: 132px; height: auto; border-radius: 14px; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); background: var(--brand); }
+  .logo { width: 132px; height: 132px; object-fit: contain; padding: 10px; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
   .mark { width: 72px; height: 72px; }
-  .centre { font-size: 32px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
+  .centre { color: #fff; font-size: 32px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
   .tagline { margin: 8px 0 0; font-size: 16px; opacity: .85; letter-spacing: .02em; }
   .pitch { margin-top: auto; max-width: 520px; }
-  .headline { margin: 0; font-size: 34px; line-height: 1.2; font-weight: 700; letter-spacing: -.015em; }
+  .headline { color: #fff; margin: 0; font-size: 34px; line-height: 1.2; font-weight: 700; letter-spacing: -.015em; }
   .sub { margin: 14px 0 0; font-size: 16px; line-height: 1.55; opacity: .82; }
   .services { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; max-width: 560px; }
   .services li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
@@ -120,8 +120,11 @@
   .form-side :global(.control) { position: relative; display: flex; align-items: center; }
   .form-side :global(.control > svg) { position: absolute; left: 12px; width: 18px; height: 18px; fill: none; stroke: var(--text-2);
     stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-  .form-side :global(.control input) { height: 44px; padding-left: 40px; font-weight: 400; font-size: 15px; }
-  .form-side :global(.control input:focus) { outline-color: var(--brand); }
+  .form-side :global(.control input) { width: 100%; height: 38px; padding: 6px 12px 6px 40px; font: 400 14px var(--font-sans); color: var(--foreground);
+    background: var(--background); border: 1px solid var(--input); border-radius: var(--radius-sm); }
+  .form-side :global(.control input::placeholder) { color: var(--faint-foreground); }
+  .form-side :global(.field label) { font-weight: 600; font-size: 13px; color: var(--foreground); }
+  .form-side :global(.heading h2) { color: var(--foreground); }
   .form-side :global(.submit) { height: 46px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; font: inherit; font-size: 15px;
     font-weight: 650; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: filter .15s, transform .05s; }
   .form-side :global(.submit:hover:not(:disabled)) { filter: brightness(1.12); }
@@ -137,9 +140,9 @@
   .secure svg { width: 16px; height: 16px; fill: none; stroke: var(--success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   @media (max-width: 900px) {
-    .page { grid-template-columns: 1fr; }
+    .auth-page { grid-template-columns: 1fr; }
     .brand-content { padding: 28px 20px; gap: 0; }
-    .logo { width: 72px; border-radius: 10px; }
+    .logo { width: 72px; height: 72px; padding: 6px; border-radius: 12px; }
     .centre { font-size: 22px; }
     .tagline { font-size: 14px; }
     .services, .powered, .pitch { display: none; }
