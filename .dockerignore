@@ -9,3 +9,5 @@ web/dist
 tests
 storage
 *.log
+.env.production
+backups
