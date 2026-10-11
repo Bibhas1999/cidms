@@ -210,7 +210,7 @@ def test_bill_search_filters_and_totals(centre):
     front.post("/api/bills", json={"patient": {**NEW_PATIENT, "name": "Suman Das", "mobile": "7000054321"},
                                    "lines": [{"test_id": t["Lipid profile"]}], "payments": [{"mode": "cash", "amount": "600"}]})
     assert front.get("/api/bills", params={"search": "suman"}).json()["items"][0]["patient_name"] == "Suman Das"
-    assert front.get("/api/bills", params={"search": "0003590"}).json()["total"] == 1
+    assert front.get("/api/bills", params={"search": "0054321"}).json()["total"] == 1
     assert front.get("/api/bills", params={"search": a["invoice_no"]}).json()["items"][0]["id"] == a["id"]
     assert front.get("/api/bills", params={"search": "1"}).json()["items"][0]["id"] == a["id"]  # bill 000001
     dues = front.get("/api/bills", params={"due": "true"}).json()
@@ -224,7 +224,7 @@ def test_patients_are_numbered_and_family_members_share_a_mobile(centre):
     p1 = front.post("/api/patients", json=NEW_PATIENT).json()
     p2 = front.post("/api/patients", json={**NEW_PATIENT, "name": "Pooja Dey", "gender": "female", "age_years": 23}).json()
     assert (p1["patient_no"], p2["patient_no"]) == ("P000001", "P000002")
-    same = front.get("/api/patients/same-mobile", params={"mobile": "+91 90511 36089"}).json()
+    same = front.get("/api/patients/same-mobile", params={"mobile": "+91 90000 12345"}).json()
     assert {p["name"] for p in same} == {"Ramen Kumar Dey", "Pooja Dey"}
     assert front.post("/api/patients", json={**NEW_PATIENT, "age_years": None}).status_code == 422
 

@@ -382,7 +382,7 @@ def test_signing_issues_a_patient_link_that_opens_with_the_mobile_digits(centre)
     assert info.json() == {"centre_name": "Alpha Diagnostics", "has_logo": False, "check": "mobile"}
     wrong = p.post(f"/api/public/reports/{token}/open", json={"check": "0000"})
     assert wrong.status_code == 403 and "match" in wrong.json()["message"]
-    ok = p.post(f"/api/public/reports/{token}/open", json={"check": "6089"})
+    ok = p.post(f"/api/public/reports/{token}/open", json={"check": "2345"})
     assert ok.status_code == 200
     assert ok.headers["cache-control"] == "no-store" and "noindex" in ok.headers["x-robots-tag"]
     assert ok.headers["referrer-policy"] == "no-referrer"
@@ -403,14 +403,14 @@ def test_wrong_checks_lock_the_link(centre):
     p = public(centre)
     for _ in range(report_links.MAX_FAILED):
         assert p.post(f"/api/public/reports/{token}/open", json={"check": "1111"}).status_code == 403
-    assert p.post(f"/api/public/reports/{token}/open", json={"check": "6089"}).status_code == 429
+    assert p.post(f"/api/public/reports/{token}/open", json={"check": "2345"}).status_code == 429
 
 
 def test_revoked_expired_unknown_and_other_centre_links_are_not_found(centre, other):
     rep = signed_report(centre)
     token = share_token(centre, rep["id"])
     assert public(other).get(f"/api/public/reports/{token}").status_code == 404           # another centre's address
-    assert public(other).post(f"/api/public/reports/{token}/open", json={"check": "6089"}).status_code == 404
+    assert public(other).post(f"/api/public/reports/{token}/open", json={"check": "2345"}).status_code == 404
     assert public(centre).get("/api/public/reports/AAAAAAAAAAAAAAAAAAAAAA").status_code == 404
     assert centre["front"].post(f"/api/test-reports/{rep['id']}/share").status_code == 403  # issuing needs reports.write
     new = centre["doc"].post(f"/api/test-reports/{rep['id']}/share").json()
@@ -431,7 +431,7 @@ def test_amending_keeps_the_link_and_shows_the_amendment(centre):
     token = share_token(centre, rep["id"])
     centre["doc"].post(url(centre["item_id"], "amend"), json={"version": rep["version"], "findings": "<p>Revised.</p>", "reason": "Typo fixed"})
     assert share_token(centre, rep["id"]) == token
-    body = public(centre).post(f"/api/public/reports/{token}/open", json={"check": "6089"}).json()
+    body = public(centre).post(f"/api/public/reports/{token}/open", json={"check": "2345"}).json()
     assert body["report"]["findings"] == "<p>Revised.</p>" and body["report"]["amended"]
 
 
