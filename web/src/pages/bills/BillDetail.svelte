@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FEATURES } from "../../lib/features";
   import Dialog from "../../components/Dialog.svelte";
   import EditTestsDialog from "../../components/EditTestsDialog.svelte";
   import Field from "../../components/Field.svelte";
@@ -93,6 +94,35 @@
     }
   }
 
+  // Reports: doctors write them; everyone can open a signed one (to print it for the patient).
+  const canReport = $derived(session.can("reports.write") || session.can("reports.sign"));
+
+  // Each test's report: Pending -> Ready -> Delivered, set here on the bill (one test, or all at once).
+  const canProgress = $derived(session.can("reports.deliver") || session.can("worklist.update"));
+  const liveLines = $derived(bill?.items.filter((l) => l.status !== "cancelled") ?? []);
+  const notAll = (status: string) => liveLines.some((l) => l.status !== status);
+  let progressBusy = $state(false);
+
+  async function setLine(line: { id: string; test_name: string }, status: string) {
+    if (progressBusy) return;
+    progressBusy = true;
+    try {
+      await post(`/api/worklist/${line.id}/status`, { status });
+      notify(`${line.test_name}: ${LINE_STATUS[status][1].toLowerCase()}.`, { kind: "success" });
+      await load();
+    } catch (e) { notifyError(e); await load(); } finally { progressBusy = false; }
+  }
+
+  async function setAll(status: "reported" | "delivered") {
+    if (progressBusy || !bill) return;
+    progressBusy = true;
+    try {
+      await post(`/api/bills/${bill.id}/tests/status`, { status });
+      notify(status === "delivered" ? "All reports marked delivered." : "All reports marked ready.", { kind: "success" });
+      await load();
+    } catch (e) { notifyError(e); } finally { progressBusy = false; }
+  }
+
   const discountText = $derived(bill?.discount_type === "percent" ? `${Number(bill.discount_value)}%` : "");
 </script>
 
@@ -129,18 +159,39 @@
     <div class="span-2 stack">
       <section class="card" aria-labelledby="tests-title">
         <div class="card-header"><div><h2 class="card-title" id="tests-title">Tests</h2>
-          <p class="card-description">Each test's progress: waiting, scanned, reported, delivered.</p></div>
-          {#if live && session.can("billing.edit")}<button class="btn btn-outline btn-sm" onclick={() => (editOpen = true)}><Icon name="plus" size="sm" /> Change tests</button>{/if}
+          <p class="card-description">Each test's report: pending, ready to collect, or delivered to the patient.</p></div>
+          <div class="row-wrap tests-actions">
+            {#if live && canProgress && liveLines.length > 1}
+              {#if notAll("reported") && notAll("delivered")}<button class="btn btn-outline btn-sm" disabled={progressBusy} onclick={() => setAll("reported")}><Icon name="check" size="sm" /> All ready</button>{/if}
+              {#if notAll("delivered")}<button class="btn btn-outline btn-sm" disabled={progressBusy} onclick={() => setAll("delivered")}><Icon name="inbox" size="sm" /> All delivered</button>{/if}
+            {/if}
+            {#if live && session.can("billing.edit")}<button class="btn btn-outline btn-sm" onclick={() => (editOpen = true)}><Icon name="plus" size="sm" /> Change tests</button>{/if}
+          </div>
         </div>
         <div class="card-flush">
           <div class="table-wrap"><table class="table" style="min-width: 0">
-            <thead><tr><th>Test</th><th>Progress</th><th class="num">Price</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
+            <thead><tr><th>Test</th><th>Report</th><th class="num">Price</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
             <tbody>
               {#each bill.items as line (line.id)}
                 <tr style={line.status === "cancelled" ? "opacity: .55" : ""}>
                   <td><div class="cell-title" style={line.status === "cancelled" ? "text-decoration: line-through" : ""}>{line.test_name}</div>
-                    <div class="cell-sub">{line.department_name || "—"}{#if line.accession_no} · <span class="mono">{line.accession_no}</span>{/if}</div></td>
-                  <td><span class="badge {LINE_STATUS[line.status][0]}">{LINE_STATUS[line.status][1]}</span></td>
+                    <div class="cell-sub">{line.department_name || "—"}{#if line.accession_no} · <span class="mono">{line.accession_no}</span>{/if}</div>
+                    {#if FEATURES.testReports && line.status !== "cancelled" && line.test_id && (canReport || line.status === "reported")}
+                      <a class="link-button text-sm" href="/test-reports/{line.id}" aria-label="Report for {line.test_name}">
+                        <Icon name="clipboard" size="sm" /> {canReport && line.status !== "reported" && line.status !== "delivered" ? "Write report" : "Report"}</a>
+                    {/if}</td>
+                  <td>
+                    {#if live && canProgress && line.status !== "cancelled"}
+                      <label class="sr-only" for="prog-{line.id}">Report for {line.test_name}</label>
+                      <select id="prog-{line.id}" class="select select-sm progress-select is-{line.status}" value={line.status} disabled={progressBusy}
+                              onchange={(e) => setLine(line, e.currentTarget.value)}>
+                        <option value="billed">Pending</option>
+                        {#if line.status === "scanned"}<option value="scanned">In progress</option>{/if}
+                        <option value="reported">Ready</option>
+                        <option value="delivered">Delivered</option>
+                      </select>
+                    {:else}<span class="badge {LINE_STATUS[line.status][0]}">{LINE_STATUS[line.status][1]}</span>{/if}
+                  </td>
                   <td class="num money">{rupees(line.unit_price)}</td>
                   <td class="num tabular">{line.quantity}</td>
                   <td class="num money">{rupees(line.amount)}</td>
@@ -293,4 +344,9 @@
   .totals .grand { border-top: 1px solid var(--border); padding-top: 8px; font-weight: 700; font-size: 16px; }
   .totals .grand dt { color: var(--foreground); }
   .totals .is-due dd, .totals .is-due dt { color: var(--destructive); font-weight: 700; }
+  .tests-actions { gap: 8px; justify-content: flex-end; }
+  .progress-select { width: 128px; height: 32px; font-size: 13px; font-weight: 500; }
+  .progress-select.is-billed, .progress-select.is-scanned { color: var(--warning-text, #b45309); }
+  .progress-select.is-reported { color: var(--primary-text); }
+  .progress-select.is-delivered { color: var(--success); }
 </style>

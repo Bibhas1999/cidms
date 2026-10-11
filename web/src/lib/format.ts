@@ -18,7 +18,8 @@ export function shortDate(iso: string): string {
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
 }
 
-export function rupees(value: string | number, { paise = true } = {}): string {
+export function rupees(value: string | number | null, { paise = true } = {}): string {
+  if (value === null) return "—"; // a figure this person may not see (e.g. turnover without analytics.view)
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: paise ? 2 : 0,
                                           maximumFractionDigits: paise ? 2 : 0 }).format(Number(value));
 }

@@ -12,7 +12,17 @@ from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import auth, billing, centre, platform, staff, system
+from app.api import (
+    analytics,
+    auth,
+    billing,
+    centre,
+    platform,
+    reports,
+    staff,
+    system,
+    test_reports,  # test reports, imaging, DICOMweb proxy, viewer, WhatsApp
+)
 from app.core.config import get_settings
 from app.core.db import is_transient
 from app.core.errors import DomainError
@@ -119,7 +129,11 @@ def mount_web(app: FastAPI) -> None:
             return _error(404, "We couldn't find that.")
         candidate = (WEB_DIST / path).resolve()
         if path and candidate.is_file() and WEB_DIST in candidate.parents:
-            return FileResponse(candidate)  # favicon and other files at the top level
+            if path == "sw.js":  # the service worker: always check for a new one
+                return FileResponse(candidate, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+            if path == "manifest.webmanifest":
+                return FileResponse(candidate, media_type="application/manifest+json")
+            return FileResponse(candidate)  # icons and other files at the top level
         return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
@@ -139,8 +153,15 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLogMiddleware)
     install_error_handlers(app)
 
-    for module in (system, auth, staff, centre, billing, platform):
+    for module in (system, auth, staff, centre, billing, platform, reports, analytics):
         app.include_router(module.router)
+    app.include_router(test_reports.router)
+    from app.api.roles import router as roles_router  # Settings > Roles & permissions
+    app.include_router(roles_router)
+    from app.api.integrations import install as install_integrations  # API keys, and the integration API at /api/v1
+    install_integrations(app)
+    from app.api.notifications import router as notifications_router  # the bell, live stream, background job results
+    app.include_router(notifications_router)
     mount_web(app)
     return app
 

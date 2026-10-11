@@ -74,6 +74,20 @@ def test_an_admin_cannot_create_owners(alpha):
     assert r.status_code == 403
 
 
+def test_the_default_temporary_password_is_supreme_at_123(alpha):
+    make_user(alpha, "owner@alpha.in", ["owner"])
+    c = browser("alpha.localhost")
+    c.login("owner@alpha.in")
+    r = c.post("/api/staff", json={"full_name": "Tapas Patra", "email": "tapas@alpha.in", "role_ids": _role_ids(c, "receptionist")})
+    assert r.status_code == 201, r.text
+    first = browser("alpha.localhost")
+    assert first.login("tapas@alpha.in", "supreme@123").json()["must_change_password"] is True
+    # A reset without a password gives the same one, and they must choose their own again.
+    assert c.post(f"/api/staff/{r.json()['id']}/reset-password", json={}).status_code == 204
+    again = browser("alpha.localhost")
+    assert again.login("tapas@alpha.in", "supreme@123").json()["must_change_password"] is True
+
+
 def test_deactivating_someone_signs_them_out(alpha):
     make_user(alpha, "owner@alpha.in", ["owner"])
     tech = make_user(alpha, "tech@alpha.in", ["technician"])
@@ -147,7 +161,8 @@ def test_platform_staff_list_shows_only_platform_people(alpha):
 def test_built_in_roles_match_the_catalogue():
     with scoped_session(platform=True) as db:
         codes = set(db.scalars(select(Role.code).where(Role.tenant_id.is_(None))))
-    assert {"owner", "admin", "receptionist", "technician", "doctor", "accounts", "platform_owner", "platform_support"} == codes
+    from app.catalog import ROLES
+    assert set(ROLES) == codes and {"owner", "admin", "receptionist", "developer", "platform_owner"} <= codes
 
 
 def test_unknown_addresses_have_no_workspace():

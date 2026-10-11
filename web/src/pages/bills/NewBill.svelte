@@ -1,25 +1,52 @@
 <script lang="ts">
+  import { z } from "zod";
+  import Button from "../../components/Button.svelte";
   import Combobox from "../../components/Combobox.svelte";
+  import DataTable from "../../components/DataTable.svelte";
+  import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
+  import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
+  import InfoTip from "../../components/InfoTip.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
+  import PhoneInput from "../../components/PhoneInput.svelte";
   import TestSelect from "../../components/TestSelect.svelte";
   import { ApiError, get, newRequestKey, post } from "../../lib/api";
   import { PAYMENT_MODES, type Bill, type Doctor, type LabTest, type Patient, type PaymentMode } from "../../lib/bill-types";
+  import { Form } from "../../lib/form.svelte";
   import { rupees } from "../../lib/format";
+  import { formatPhone, splitPhone } from "../../lib/phone";
   import { navigate, router, setBeforeLeave } from "../../lib/router.svelte";
+  import { optionalText, phone, submitting, text, wholeNumber } from "../../lib/schemas";
+  import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
-  import type { Page } from "../../lib/types";
+  import { GENDER_LABELS, type CentreSettings, type Page } from "../../lib/types";
 
   // One screen for the front desk: find or add the patient, the referring doctor, the tests, the discount
   // and what's paid now. Prices come from the catalogue; the server works out every total again.
+  // On phones the summary goes under the form and a bar along the bottom keeps the total and Save in reach.
 
   // ---------- patient ----------
   let patient = $state<Patient | null>(null);
   let addingPatient = $state(false);
   let patientQuery = $state("");
-  let np = $state({ name: "", guardian_name: "", age_years: "", gender: "", mobile: "", address: "" });
   let family = $state<Patient[]>([]);
+
+  const patientSchema = z.object({
+    name: text("Enter the patient's name.", 200, 2),
+    mobile: phone(false),
+    age_years: wholeNumber({ min: 0, max: 130, required: "Enter the age in years.", label: "the age in years" }),
+    gender: z.string().refine((v) => v in GENDER_LABELS, "Choose the gender."),
+    guardian_name: optionalText(200),
+    address: optionalText(500),
+  });
+  const patientLabels = { name: "Full name", mobile: "Mobile", age_years: "Age", gender: "Gender", guardian_name: "Guardian", address: "Address" };
+  let pendingPrint = false;
+  const np = new Form({
+    schema: patientSchema,
+    initial: { name: "", mobile: "", age_years: null as number | null, gender: "", guardian_name: "", address: "" },
+    onSubmit: (data) => saveBill(pendingPrint, data),
+  });
 
   const preset = router.query.get("patient");
   $effect(() => {
@@ -30,17 +57,20 @@
 
   let familyTimer: ReturnType<typeof setTimeout>;
   function onMobile() {
+    np.field("mobile").oninput();
     clearTimeout(familyTimer);
-    const digits = np.mobile.replace(/\D/g, "");
-    if (digits.length < 10) { family = []; return; }
-    familyTimer = setTimeout(() => get<Patient[]>("/api/patients/same-mobile", { mobile: np.mobile }).then((r) => (family = r)).catch(() => {}), 250);
+    const { number } = splitPhone(np.values.mobile);
+    if (number.length < 8) { family = []; return; }
+    familyTimer = setTimeout(() => get<Patient[]>("/api/patients/same-mobile", { mobile: np.values.mobile }).then((r) => (family = r)).catch(() => {}), 250);
   }
 
   function startNewPatient() {
     addingPatient = true;
     patient = null;
+    np.reset();
     const q = patientQuery.trim();
-    if (/^[+\d\s]{6,}$/.test(q)) np.mobile = q; else if (q) np.name = q;
+    if (/^[+\d\s]{6,}$/.test(q)) np.values.mobile = q.startsWith("+") ? q.replace(/\s/g, "") : `+91${q.replace(/\D/g, "").slice(-10)}`;
+    else if (q) np.values.name = q;
     onMobile();
   }
 
@@ -49,35 +79,28 @@
   let doctor = $state<Doctor | null>(null);
   const searchDoctors = (q: string, page: number, size: number, signal: AbortSignal) => get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal);
 
-  // A doctor not in the list yet: add them here (saved to the list at once) and they're chosen for this bill.
+  // A doctor not in the list yet: add them in a dialog (saved to the list at once) and they're chosen for this bill.
   let addingDoctor = $state(false);
-  let nd = $state({ name: "", qualification: "", phone: "" });
-  let ndErrors = $state<Record<string, string>>({});
-  let ndSaving = $state(false);
+  const doctorForm = new Form({
+    schema: z.object({ name: text("Enter the doctor's name.", 200, 2), qualification: optionalText(200), phone: phone(false) }),
+    initial: { name: "", qualification: "", phone: "" },
+    onSubmit: async (v) => {
+      try {
+        const d = await post<Doctor>("/api/doctors", v);
+        doctor = d;
+        doctorText = d.name;
+        addingDoctor = false;
+        notify(`${d.name} is added to your doctors and chosen for this bill.`);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409) { doctorForm.errors = { name: "This doctor is already in your list: search for them instead." }; return; }
+        throw e;
+      }
+    },
+  });
 
   function startNewDoctor() {
-    nd = { name: doctorText.trim(), qualification: "", phone: "" };
-    ndErrors = {};
+    doctorForm.reset({ name: doctorText.trim(), qualification: "", phone: "" });
     addingDoctor = true;
-  }
-
-  async function saveDoctor() {
-    ndSaving = true;
-    ndErrors = {};
-    try {
-      const d = await post<Doctor>("/api/doctors", { name: nd.name.trim(), qualification: nd.qualification.trim(), phone: nd.phone.trim() });
-      doctor = d;
-      doctorText = d.name;
-      addingDoctor = false;
-      notify(`${d.name} is added to your doctors and chosen for this bill.`);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        ndErrors = { name: "This doctor is already in your list: search for them above." };
-      } else if (e instanceof ApiError && Object.keys(e.fieldErrors).length) ndErrors = e.fieldErrors;
-      else notifyError(e, { title: "Couldn't add the doctor" });
-    } finally {
-      ndSaving = false;
-    }
   }
 
   // ---------- tests ----------
@@ -85,11 +108,15 @@
   let lines = $state<Line[]>([]);
   const onBill = $derived(new Set(lines.map((l) => l.test.id)));
 
-  // Ticking a test in the drop-down puts it on the bill straight away; unticking (or ×) takes it off.
+  // Ticking a test in the drop-down puts it on the bill straight away; unticking (or Remove) takes it off.
   function toggleTest(t: LabTest, on: boolean) {
     if (on && !onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
     if (!on) lines = lines.filter((l) => l.test.id !== t.id);
     errors = { ...errors, lines: "" };
+  }
+  function setQty(id: string, n: number) {
+    const l = lines.find((x) => x.test.id === id);
+    if (l) l.quantity = Math.max(1, Math.min(20, Math.round(n) || 1));
   }
 
   // ---------- money ----------
@@ -100,6 +127,12 @@
   let payRef = $state("");
   let notes = $state("");
   let hold = $state(false);
+  let maxDiscount = $state<number | null>(null);
+  $effect(() => {
+    get<CentreSettings & { max_discount_percent?: string }>("/api/settings")
+      .then((s) => { if (s.max_discount_percent !== undefined) maxDiscount = Number(s.max_discount_percent); }).catch(() => {});
+  });
+  const overLimitOk = $derived(session.can("billing.discount_over_limit"));
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const subtotal = $derived(round2(lines.reduce((s, l) => s + Number(l.test.price) * l.quantity, 0)));
@@ -110,6 +143,12 @@
   const total = $derived(round2(subtotal - discount));
   const paying = $derived(Math.min(total, round2(Number(payNow) || 0)));
   const dueAfter = $derived(round2(total - paying));
+  const overLimit = $derived(maxDiscount !== null && subtotal > 0 && discount * 100 > subtotal * maxDiscount);
+
+  const discountTip = $derived(
+    `A percentage of the subtotal, or a fixed amount in rupees. ${maxDiscount !== null ? `The centre allows up to ${maxDiscount}% ` : "The centre sets a limit "}` +
+    (overLimitOk ? "(you may go above it)." : "without the owner's permission; ask the owner for more."),
+  );
 
   // ---------- save ----------
   let errors = $state<Record<string, string>>({});
@@ -122,14 +161,20 @@
     return () => setBeforeLeave(null);
   });
 
-  async function save(print: boolean) {
+  function save(print: boolean) {
+    if (saving || np.submitting) return;
     errors = {};
-    if (!patient && !addingPatient) { errors = { patient: "Choose a patient or add a new one." }; return; }
-    if (!lines.length) { errors = { lines: "Add at least one test." }; return; }
+    if (!patient && !addingPatient) { errors = { patient: "Choose a patient or add a new one." }; document.getElementById("patient-search")?.focus(); return; }
+    if (addingPatient) { pendingPrint = print; void np.submit(); return; }
+    void saveBill(print, null);
+  }
+
+  async function saveBill(print: boolean, newPatient: z.output<typeof patientSchema> | null) {
+    if (!lines.length) { errors = { lines: "Add at least one test." }; document.getElementById("nb-test")?.focus(); return; }
     saving = true;
     const body = {
       patient_id: patient?.id ?? null,
-      patient: addingPatient ? { ...np, age_years: np.age_years === "" ? null : Number(np.age_years), gender: np.gender || "other" } : null,
+      patient: newPatient ? { ...newPatient, age_years: Number(newPatient.age_years), gender: newPatient.gender || "other" } : null,
       referring_doctor_id: doctor && doctor.name === doctorText ? doctor.id : null,
       referring_doctor_name: doctor && doctor.name === doctorText ? "" : doctorText,
       lines: lines.map((l) => ({ test_id: l.test.id, quantity: l.quantity })),
@@ -146,7 +191,12 @@
     } catch (e) {
       requestKey = newRequestKey();
       if (e instanceof ApiError && Object.keys(e.fieldErrors).length) {
-        errors = Object.fromEntries(Object.entries(e.fieldErrors).map(([k, v]) => [k.replace(/^patient\./, "np_"), v]));
+        const own: Record<string, string> = {}, theirs: Record<string, string> = {};
+        for (const [k, v] of Object.entries(e.fieldErrors)) {
+          if (k.startsWith("patient.")) theirs[k.slice(8)] = v; else own[k] = v;
+        }
+        if (Object.keys(theirs).length) { np.errors = theirs; np.submitted = true; }
+        errors = own;
         notifyError(e, { title: "Check the bill" });
       } else notifyError(e, { title: "Couldn't save the bill" });
     } finally {
@@ -162,14 +212,21 @@
 
 <svelte:window onkeydown={onKeys} />
 
+{#snippet testCell(l: Line)}<div class="cell-title">{l.test.name}</div><div class="cell-sub">{l.test.department.name}</div>{/snippet}
+{#snippet qtyCell(l: Line)}
+  <input class="input tabular qty" type="number" min="1" max="20" inputmode="numeric" aria-label="Quantity of {l.test.name}" value={l.quantity}
+         onchange={(e) => setQty(l.test.id, e.currentTarget.valueAsNumber)} />
+{/snippet}
+{#snippet lineTotal(l: Line)}<span class="money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</span>{/snippet}
+
 <PageHeader eyebrow="Front desk" title="New bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
   {#snippet actions()}<span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
 </PageHeader>
 
-<div class="grid-3 items-start">
-  <div class="span-2 stack">
+<div class="nb-grid">
+  <div class="stack nb-main">
     <section class="card" aria-labelledby="p-title">
-      <div class="card-header"><div><h2 class="card-title" id="p-title"><span class="step">1</span> Patient</h2>
+      <div class="card-header"><div><h2 class="card-title" id="p-title">Patient</h2>
         <p class="card-description">Search by name, mobile or patient number, or add someone new.</p></div></div>
       <div class="card-content stack">
         {#if patient}
@@ -177,53 +234,59 @@
             <span class="avatar" aria-hidden="true">{patient.name.charAt(0)}</span>
             <div class="grow">
               <div class="font-semibold">{patient.name} <span class="badge badge-navy badge-plain mono">{patient.patient_no}</span></div>
-              <div class="text-sm text-muted">{[patient.age_years !== null ? `${patient.age_years} Y` : "", patient.gender, patient.mobile, patient.guardian_name ? `C/O ${patient.guardian_name}` : ""].filter(Boolean).join(" · ")}</div>
+              <div class="text-sm text-muted">{[patient.age_years !== null ? `${patient.age_years} Y` : "", patient.gender, formatPhone(patient.mobile), patient.guardian_name ? `C/O ${patient.guardian_name}` : ""].filter(Boolean).join(" · ")}</div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick={() => (patient = null)}>Change</button>
+            <Button variant="ghost" size="sm" onclick={() => (patient = null)}>Change</Button>
           </div>
         {:else if !addingPatient}
           <Combobox id="patient-search" label="Find a patient" placeholder="Name, mobile or patient number…" searchPage={searchPatients} bind:value={patientQuery}
                     onpick={(p) => (patient = p)} autofocus emptyText="No patient found. Add them as a new patient.">
             {#snippet option(p)}
               <div class="row-between"><span><span class="font-semibold">{p.name}</span> <span class="text-xs text-muted mono">{p.patient_no}</span></span>
-                <span class="text-sm text-muted tabular">{p.mobile || "—"}</span></div>
+                <span class="text-sm text-muted tabular">{formatPhone(p.mobile) || "—"}</span></div>
               <div class="text-xs text-muted">{[p.age_years !== null ? `${p.age_years} Y` : "", p.gender, p.guardian_name ? `C/O ${p.guardian_name}` : "", p.address].filter(Boolean).join(" · ")}</div>
             {/snippet}
           </Combobox>
-          <div><button class="btn btn-outline btn-sm" onclick={startNewPatient}><Icon name="plus" size="sm" /> New patient</button></div>
+          <div><Button size="sm" icon="plus" onclick={startNewPatient}>New patient</Button></div>
           {#if errors.patient}<p class="field-error"><Icon name="alert" size="sm" />{errors.patient}</p>{/if}
         {:else}
-          <div class="grid-2">
-            <Field id="np-name" label="Full name" required error={errors.np_name}>
-              {#snippet children({ invalid, describedby })}<input id="np-name" class="input" bind:value={np.name} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+          <FormErrors form={np} labels={patientLabels} idPrefix="np-" />
+          <div class="form-grid">
+            <Field id="np-name" label="Full name" required error={np.error("name")}>
+              {#snippet children({ invalid, describedby })}<input id="np-name" class="input" autocomplete="off" bind:value={np.values.name} {...np.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
             </Field>
-            <Field id="np-mobile" label="Mobile" error={errors.np_mobile}>
-              {#snippet children({ invalid, describedby })}<input id="np-mobile" class="input tabular" type="tel" bind:value={np.mobile} oninput={onMobile} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+            <Field id="np-mobile" label="Mobile" optional error={np.error("mobile")}
+                   tip="Others already registered with this number are shown, so a family member isn't added twice. Bills and reports can be sent here.">
+              {#snippet children({ invalid, describedby })}
+                {@const f = np.field("mobile")}
+                <PhoneInput id="np-mobile" bind:value={np.values.mobile} {invalid} {describedby} onblur={f.onblur} oninput={onMobile} />
+              {/snippet}
             </Field>
           </div>
           {#if family.length}
             <div class="alert alert-info"><Icon name="info" /><div><div class="alert-title">Already registered with this mobile</div>
-              <div class="row-wrap" style="margin-top: 6px">
-                {#each family as f (f.id)}<button class="btn btn-outline btn-sm" type="button" onclick={() => { patient = f; addingPatient = false; }}>{f.name} · {f.age_years ?? "?"} Y</button>{/each}
-              </div><div class="text-xs" style="margin-top: 6px">Pick one if it's the same person, or carry on for a family member.</div></div></div>
+              <div class="row-wrap family">
+                {#each family as f (f.id)}<Button size="sm" onclick={() => { patient = f; addingPatient = false; }}>{f.name} · {f.age_years ?? "?"} Y</Button>{/each}
+              </div><div class="text-xs family-note">Pick one if it's the same person, or carry on for a family member.</div></div></div>
           {/if}
-          <div class="grid-3">
-            <Field id="np-age" label="Age (years)" required error={errors.np_age_years || errors.patient}>
-              {#snippet children({ invalid, describedby })}<input id="np-age" class="input tabular" type="number" min="0" max="130" bind:value={np.age_years} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+          <div class="form-grid three">
+            <Field id="np-age_years" label="Age (years)" required error={np.error("age_years")}
+                   tip="In completed years; 0 for a baby under one. The date of birth can be added later on the patient's page, and the age is then worked out from it.">
+              {#snippet children({ invalid, describedby })}<input id="np-age_years" class="input tabular" type="number" min="0" max="130" inputmode="numeric" bind:value={np.values.age_years} {...np.field("age_years")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
             </Field>
-            <Field id="np-gender" label="Gender" required error={errors.np_gender}>
+            <Field id="np-gender" label="Gender" required error={np.error("gender")}>
               {#snippet children({ invalid, describedby })}
-                <select id="np-gender" class="select" bind:value={np.gender} aria-invalid={invalid} aria-describedby={describedby}>
+                <select id="np-gender" class="select" bind:value={np.values.gender} {...np.field("gender")} aria-invalid={invalid} aria-describedby={describedby}>
                   <option value="" disabled>Choose…</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
                 </select>
               {/snippet}
             </Field>
-            <Field id="np-guardian" label="Guardian (C/O)" error={errors.np_guardian_name}>
-              {#snippet children({ invalid, describedby })}<input id="np-guardian" class="input" bind:value={np.guardian_name} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+            <Field id="np-guardian_name" label="Guardian (C/O)" optional error={np.error("guardian_name")} tip="Father, husband or whoever the patient comes with. Printed on the bill as C/O.">
+              {#snippet children({ invalid, describedby })}<input id="np-guardian_name" class="input" bind:value={np.values.guardian_name} {...np.field("guardian_name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
             </Field>
           </div>
-          <Field id="np-address" label="Address" error={errors.np_address}>
-            {#snippet children({ invalid, describedby })}<input id="np-address" class="input" bind:value={np.address} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+          <Field id="np-address" label="Address" optional error={np.error("address")}>
+            {#snippet children({ invalid, describedby })}<input id="np-address" class="input" bind:value={np.values.address} {...np.field("address")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
           </Field>
           <div><button class="link-button" type="button" onclick={() => (addingPatient = false)}>Search existing patients instead</button></div>
         {/if}
@@ -231,7 +294,8 @@
     </section>
 
     <section class="card" aria-labelledby="d-title">
-      <div class="card-header"><div><h2 class="card-title" id="d-title"><span class="step">2</span> Referred by</h2>
+      <div class="card-header"><div><h2 class="card-title" id="d-title">Referred by
+        <InfoTip about="Referred by" text="The doctor who sent the patient. It prints on the bill as Consultant, and the referral reports count bills by doctor. Leave it empty when the patient came on their own (Self)." /></h2>
         <p class="card-description">Choose a doctor from your list, add a new one, or leave it as self.</p></div></div>
       <div class="card-content stack">
         {#if doctor && doctor.name === doctorText}
@@ -239,48 +303,33 @@
             <span class="avatar" aria-hidden="true"><Icon name="stethoscope" size="sm" /></span>
             <div class="grow">
               <div class="font-semibold">{doctor.name}</div>
-              <div class="text-sm text-muted">{[doctor.qualification, doctor.phone].filter(Boolean).join(" · ") || "Referring doctor"}</div>
+              <div class="text-sm text-muted">{[doctor.qualification, formatPhone(doctor.phone)].filter(Boolean).join(" · ") || "Referring doctor"}</div>
             </div>
-            <button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctor = null; doctorText = ""; }}>Change</button>
+            <Button variant="ghost" size="sm" onclick={() => { doctor = null; doctorText = ""; }}>Change</Button>
           </div>
-        {:else if !addingDoctor}
+        {:else}
           <Combobox id="doctor" label="Find a doctor" placeholder="Search by name… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
                     bind:value={doctorText} onpick={(d) => { doctor = d; doctorText = d.name; }}
                     emptyText="Not in your list yet. Press New doctor to add them.">
             {#snippet option(d)}<span class="font-semibold">{d.name}</span>{#if d.qualification} <span class="text-xs text-muted">{d.qualification}</span>{/if}{/snippet}
           </Combobox>
           <div class="row-wrap">
-            <button class="btn btn-outline btn-sm" type="button" onclick={startNewDoctor}><Icon name="plus" size="sm" /> New doctor</button>
-            {#if doctorText}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctorText = ""; doctor = null; }}>Self</button>{/if}
-          </div>
-        {:else}
-          <div class="grid-3">
-            <Field id="nd-name" label="Doctor's name" required error={ndErrors.name}>
-              {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" placeholder="e.g. Dr. Kakali Sarkar" bind:value={nd.name} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-            </Field>
-            <Field id="nd-qual" label="Qualification" error={ndErrors.qualification}>
-              {#snippet children({ invalid, describedby })}<input id="nd-qual" class="input" placeholder="e.g. MBBS, MD" bind:value={nd.qualification} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-            </Field>
-            <Field id="nd-phone" label="Phone" error={ndErrors.phone}>
-              {#snippet children({ invalid, describedby })}<input id="nd-phone" class="input tabular" type="tel" bind:value={nd.phone} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-            </Field>
-          </div>
-          <div class="row-wrap">
-            <button class="btn btn-primary btn-sm" type="button" disabled={ndSaving || nd.name.trim().length < 2} onclick={saveDoctor}><Icon name="check" size="sm" /> {ndSaving ? "Adding…" : "Add doctor"}</button>
-            <button class="btn btn-ghost btn-sm" type="button" onclick={() => (addingDoctor = false)}>Search the list instead</button>
+            <Button size="sm" icon="plus" onclick={startNewDoctor}>New doctor</Button>
+            {#if doctorText}<Button variant="ghost" size="sm" onclick={() => { doctorText = ""; doctor = null; }} tooltip="No referring doctor: the patient came on their own">Self</Button>{/if}
           </div>
         {/if}
       </div>
     </section>
 
     <section class="card" aria-labelledby="t-title">
-      <div class="card-header"><div><h2 class="card-title" id="t-title"><span class="step">3</span> Tests</h2>
+      <div class="card-header"><div><h2 class="card-title" id="t-title">Tests</h2>
         <p class="card-description">Tick the tests in the list: each one goes straight onto the bill.</p></div>
         {#if lines.length}<span class="badge badge-info badge-plain">{lines.length} on the bill</span>{/if}</div>
       <div class="card-content stack">
         <div class="test-row">
           <div class="field">
-            <label class="label" for="nb-test">Test name</label>
+            <div class="label-row"><label class="label" for="nb-test">Test name</label>
+              <InfoTip about="Test name" text="Type part of the name or the short code. Tick as many as needed; the list stays open. Only active tests are listed, at today's price." /></div>
             <TestSelect id="nb-test" selected={onBill} ontoggle={toggleTest} />
           </div>
           <div class="field">
@@ -290,50 +339,44 @@
         </div>
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
       </div>
-      <div class="card-flush"><div class="table-wrap"><table class="table old-table" style="min-width: 0">
-        <thead><tr><th style="width: 46%">Test name</th><th class="num" style="width: 12%">Qty</th><th class="num" style="width: 15%">Unit price</th>
-          <th class="num" style="width: 17%">Total price</th><th class="num" style="width: 10%">Action</th></tr></thead>
-        <tbody>
-          {#each lines as l, i (l.test.id)}
-            <tr>
-              <td><div class="cell-title">{l.test.name}</div><div class="cell-sub">{l.test.department.name}</div></td>
-              <td class="num"><input class="input tabular" style="width: 72px; text-align: right; margin-left: auto" type="number" min="1" max="20" aria-label="Quantity of {l.test.name}" bind:value={l.quantity} /></td>
-              <td class="num money">{rupees(l.test.price)}</td>
-              <td class="num money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</td>
-              <td class="num"><button class="btn btn-ghost-destructive btn-icon btn-sm" type="button" aria-label="Remove {l.test.name}" onclick={() => lines.splice(i, 1)}><Icon name="x" size="sm" /></button></td>
-            </tr>
-          {:else}
-            <tr><td colspan="5" class="text-muted text-sm" style="text-align: center; padding: 18px">No tests added yet.</td></tr>
-          {/each}
-        </tbody>
-        {#if lines.length}<tfoot><tr><td colspan="3" class="num text-muted">Total</td><td class="num money font-semibold">{rupees(subtotal)}</td><td></td></tr></tfoot>{/if}
-      </table></div></div>
+      <DataTable label="Tests on the bill" rows={lines} rowKey={(l) => l.test.id}
+                 actionsInline minWidth={0}
+                 actions={(l) => [{ label: `Remove ${l.test.name}`, icon: "trash", tone: "danger", onclick: () => toggleTest(l.test, false) }]}
+                 actionsLabel={(l) => `Actions for ${l.test.name}`}
+                 empty={{ icon: "flask", title: "No tests added yet.", text: "Use the box above to find and tick tests." }}
+                 columns={[
+                   { key: "test", label: "Test name", cell: testCell, mobile: "title", width: "44%" },
+                   { key: "qty", label: "Qty", cell: qtyCell, align: "right", width: "12%" },
+                   { key: "unit", label: "Unit price", value: (l) => rupees(l.test.price), align: "right", class: "money", width: "15%" },
+                   { key: "total", label: "Total price", cell: lineTotal, align: "right", mobile: "end", width: "17%" },
+                 ]} />
     </section>
 
     <section class="card">
       <div class="card-content">
-        <Field id="notes" label="Notes on the bill" hint="Optional. Printed on the bill.">
-          {#snippet children({ describedby })}<textarea id="notes" class="textarea" style="min-height: 64px" bind:value={notes} aria-describedby={describedby}></textarea>{/snippet}
+        <Field id="notes" label="Notes on the bill" optional hint="Printed on the bill.">
+          {#snippet children({ describedby })}<textarea id="notes" class="textarea notes" bind:value={notes} aria-describedby={describedby}></textarea>{/snippet}
         </Field>
       </div>
     </section>
   </div>
 
-  <aside class="card summary" aria-labelledby="s-title">
+  <aside class="card summary" aria-labelledby="s-title" id="bill-summary">
     <div class="card-header"><h2 class="card-title" id="s-title">Summary</h2><span class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</span></div>
     <div class="card-content stack">
       <div class="line"><span class="text-muted">Subtotal</span><span class="money">{rupees(subtotal)}</span></div>
       <div class="field">
-        <span class="label">Discount</span>
-        <div class="row">
-          <select class="select" style="width: 128px" aria-label="Discount type" bind:value={discountType}>
+        <div class="label-row"><span class="label" id="disc-label">Discount</span><InfoTip about="Discount" text={discountTip} /></div>
+        <div class="row" role="group" aria-labelledby="disc-label">
+          <select class="select disc-type" aria-label="Discount type" bind:value={discountType}>
             <option value="none">None</option><option value="percent">Percent</option><option value="amount">Amount ₹</option>
           </select>
           {#if discountType !== "none"}
             <input class="input money" type="number" min="0" step={discountType === "percent" ? "1" : "0.01"} max={discountType === "percent" ? 100 : subtotal}
-                   aria-label={discountType === "percent" ? "Discount percent" : "Discount amount"} bind:value={discountValue} aria-invalid={!!errors.discount_value} />
+                   inputmode="decimal" aria-label={discountType === "percent" ? "Discount percent" : "Discount amount"} bind:value={discountValue} aria-invalid={!!errors.discount_value} />
           {/if}
         </div>
+        {#if overLimit && !overLimitOk}<p class="field-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
         {#if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
       </div>
       {#if discount > 0}<div class="line"><span class="text-muted">Discount</span><span class="money">− {rupees(discount)}</span></div>{/if}
@@ -341,34 +384,102 @@
 
       <hr class="divider" />
       <div class="field">
-        <div class="row-between"><label class="label" for="pay-now">Paid now (₹)</label>
+        <div class="row-between"><div class="label-row"><label class="label" for="pay-now">Paid now (₹)</label>
+          <InfoTip about="Paid now" text="What the patient pays at the desk now. Leave it empty if nothing is paid; the rest stays due and can be collected later from Dues, in as many instalments as needed." /></div>
           {#if total > 0}<button class="link-button" type="button" onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
-        <div class="row">
-          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} placeholder="0" bind:value={payNow} />
-          <select class="select" style="width: 140px" aria-label="Paid by" bind:value={payMode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
+        <div class="row pay-row">
+          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} />
+          <label class="sr-only" for="pay-mode">Paid by</label>
+          <select id="pay-mode" class="select pay-mode" bind:value={payMode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
+          <InfoTip about="Paid by" text="How the money was taken. The day's collection is split by this (cash in the drawer, UPI, card…). Add the UPI or card reference so it can be matched with the bank." />
         </div>
         {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} />{/if}
       </div>
       <div class="line {dueAfter > 0 ? 'is-due' : ''}"><span>{dueAfter > 0 ? "Due after this" : "Nothing due"}</span><span class="money">{rupees(dueAfter)}</span></div>
-      <label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} /> Put the bill on hold</label>
+      <div class="check-line"><label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} /> Put the bill on hold</label>
+        <InfoTip about="On hold" text="Saves the bill without sending its tests to the worklist, e.g. while waiting for the doctor's slip. Confirm it later from the bill." /></div>
     </div>
-    <div class="card-footer card-footer-stack">
-      <button class="btn btn-primary btn-lg btn-block" disabled={saving} onclick={() => save(true)}><Icon name="printer" /> {saving ? "Saving…" : "Save and print"}</button>
-      <button class="btn btn-outline btn-block" disabled={saving} onclick={() => save(false)}><Icon name="check" /> Save bill</button>
+    <div class="card-footer card-footer-stack summary-actions">
+      <Button variant="primary" size="lg" block icon="printer" loading={saving || np.submitting} loadingText="Saving…" onclick={() => save(true)}>Save and print</Button>
+      <Button block icon="check" disabled={saving || np.submitting} onclick={() => save(false)}>Save bill</Button>
     </div>
   </aside>
 </div>
 
+<!-- Phones and tablets: the total and Save stay at the bottom of the screen. -->
+<div class="savebar" role="region" aria-label="Bill total and save">
+  <a class="savebar-total" href="#bill-summary">
+    <span class="text-xs text-muted">Total · {lines.length} {lines.length === 1 ? "test" : "tests"}</span>
+    <strong class="money">{rupees(total)}</strong>
+    {#if dueAfter > 0 && lines.length}<span class="text-xs money-due">{rupees(dueAfter)} due</span>{/if}
+  </a>
+  <Button disabled={saving || np.submitting} onclick={() => save(false)} aria-label="Save bill">Save</Button>
+  <Button variant="primary" icon="printer" loading={saving || np.submitting} onclick={() => save(true)} aria-label="Save and print">Save & print</Button>
+</div>
+<div class="savebar-space" aria-hidden="true"></div>
+
+<Dialog bind:open={addingDoctor} title="Add a referring doctor" icon="stethoscope" tone="info"
+        description="They're added to your list of doctors and chosen for this bill.">
+  <form id="doctor-form" class="stack" onsubmit={submitting(doctorForm, "Couldn't add the doctor")} novalidate>
+    <FormErrors form={doctorForm} labels={{ name: "Name", qualification: "Qualification", phone: "Phone" }} idPrefix="nd-" />
+    <Field id="nd-name" label="Doctor's name" required error={doctorForm.error("name")} tip="As it should print on the bill, e.g. Dr. Kakali Sarkar.">
+      {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" autocomplete="off" placeholder="e.g. Dr. Kakali Sarkar" bind:value={doctorForm.values.name} {...doctorForm.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+    </Field>
+    <div class="form-grid">
+      <Field id="nd-qualification" label="Qualification" optional error={doctorForm.error("qualification")}>
+        {#snippet children({ invalid, describedby })}<input id="nd-qualification" class="input" placeholder="e.g. MBBS, MD" bind:value={doctorForm.values.qualification} {...doctorForm.field("qualification")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+      </Field>
+      <Field id="nd-phone" label="Phone" optional error={doctorForm.error("phone")}>
+        {#snippet children({ invalid, describedby })}
+          {@const f = doctorForm.field("phone")}
+          <PhoneInput id="nd-phone" bind:value={doctorForm.values.phone} {invalid} {describedby} onblur={f.onblur} oninput={f.oninput} />
+        {/snippet}
+      </Field>
+    </div>
+  </form>
+  {#snippet footer()}
+    <Button onclick={() => (addingDoctor = false)}>Cancel</Button>
+    <Button variant="primary" type="submit" form="doctor-form" icon="check" loading={doctorForm.submitting} loadingText="Adding…">Add doctor</Button>
+  {/snippet}
+</Dialog>
+
 <style>
-  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 6px; border-radius: 50%; font-size: 12px;
-    background: var(--accent); color: var(--primary-text); vertical-align: 1px; }
-  .picked { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
+  .nb-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+  .nb-main { min-width: 0; }
+  .picked { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
   .summary { position: sticky; top: calc(var(--topbar-height) + 16px); }
   .line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
   .line.grand { font-size: 20px; font-weight: 700; font-family: var(--font-heading); }
   .line.is-due { color: var(--destructive); font-weight: 600; }
-  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: start; }
-  .old-table thead th { background: var(--brand-navy); color: #fff; }
-  @media (max-width: 900px) { .summary { position: static; } }
-  @media (max-width: 560px) { .test-row { grid-template-columns: 1fr; } }
+  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: end; }
+  .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .family, .family-note { margin-top: 6px; }
+  .notes { min-height: 64px; }
+  .disc-type { flex: none; width: 128px; }
+  .pay-row { gap: 8px; }
+  .pay-mode { flex: none; width: 140px; }
+  .qty { width: 72px; margin-left: auto; text-align: right; }
+  .savebar, .savebar-space { display: none; }
+  @media (max-width: 900px) {
+    .nb-grid { grid-template-columns: minmax(0, 1fr); }
+    .summary { position: static; }
+    .summary-actions { display: none; }
+    .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px;
+      padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      background: color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
+      box-shadow: 0 -6px 20px rgb(15 23 42 / .08); }
+    .savebar-space { display: block; height: calc(72px + env(safe-area-inset-bottom)); }
+    .savebar-total { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; color: inherit; text-decoration: none !important; }
+    .savebar-total strong { font-size: 18px; }
+    .savebar :global(.btn) { height: 44px; flex: none; }
+  }
+  @media (max-width: 640px) {
+    .test-row { grid-template-columns: 1fr; }
+    .form-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .form-grid.three > :global(:last-child) { grid-column: 1 / -1; }
+    .qty { margin-left: 0; width: 84px; }
+  }
+  @media (max-width: 380px) {
+    .savebar :global(.btn-outline) { padding: 0 12px; }
+  }
 </style>

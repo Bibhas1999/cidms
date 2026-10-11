@@ -33,11 +33,27 @@ class SettingsService:
             self.db.refresh(row)
         return row
 
+    def set_wordmark(self, data: bytes | None) -> TenantSettings:
+        """Upload (or with None, remove) the wide logo with the centre's name and slogan."""
+        from app.core.storage import wordmark_image
+        row = self.get()
+        old = row.wordmark_file
+        if data is None:
+            row.wordmark_data, row.wordmark_mime, row.wordmark_file = "", "", ""
+        else:
+            image = wordmark_image(data)
+            row.wordmark_data, row.wordmark_mime, row.wordmark_file = image.data, image.mime, image.version
+        AuditService(self.db).record(row.tenant_id, self.current.id, "settings.wordmark_changed", "tenant", row.tenant_id,
+                                     {"wordmark_file": [old, row.wordmark_file]})
+        self.db.flush()
+        return row
+
     def set_logo(self, data: bytes) -> TenantSettings:
-        from app.core.storage import save_logo
+        from app.core.storage import logo_image
         row = self.get()
         old = row.logo_file
-        row.logo_file = save_logo(row.tenant_id, data)
+        image = logo_image(data)
+        row.logo_data, row.logo_mime, row.logo_file = image.data, image.mime, image.version
         AuditService(self.db).record(row.tenant_id, self.current.id, "settings.logo_changed", "tenant", row.tenant_id,
                                      {"logo_file": [old, row.logo_file]})
         self.db.flush()

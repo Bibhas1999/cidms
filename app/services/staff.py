@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.catalog import OWNER_ONLY_ROLES
+from app.core.config import get_settings
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound
 from app.core.passwords import check_strength, hash_password
 from app.core.security import CurrentUser, revoke_user_sessions
@@ -12,6 +13,7 @@ from app.models import Tenant, User
 from app.repositories.users import RoleRepository, UserRepository
 from app.schemas import StaffCreateIn, StaffUpdateIn
 from app.services.audit import AuditService
+from app.services.roles import RoleService, permission_diff
 
 
 class StaffService:
@@ -31,15 +33,54 @@ class StaffService:
         return user
 
     def _is_owner(self, user: User) -> bool:
-        return any(r.code in OWNER_ONLY_ROLES for r in user.roles)
+        return any(r.code in OWNER_ONLY_ROLES and r.tenant_id is None for r in user.roles)
 
-    def _resolve_roles(self, role_ids: list[uuid.UUID]):
+    def _resolve_roles(self, role_ids: list[uuid.UUID], current_roles: list | None = None):
+        """The chosen roles, checked: visible here (row-level security hides other centres' roles), the owner
+        role only from an owner, and no role given or taken away that can do more than the person choosing."""
         roles = self.roles.by_ids(self.scope, role_ids)
         if len(roles) != len(set(role_ids)):
             raise Invalid("Choose roles from the list.", "role_ids")
-        if any(r.code in OWNER_ONLY_ROLES for r in roles) and not self._is_owner(self.current.user):
+        old_ids = {r.id for r in current_roles or []}
+        new_ids = {r.id for r in roles}
+        added = [r for r in roles if r.id not in old_ids]
+        if any(r.code in OWNER_ONLY_ROLES and r.tenant_id is None for r in added) and not self._is_owner(self.current.user):
             raise Forbidden("Only an owner can make someone an owner.")
+        changed = added + [r for r in current_roles or [] if r.id not in new_ids]
+        perms = RoleService(self.db, self.current).permissions_of([r.id for r in changed])
+        beyond = sorted({r.name for r in changed if not perms[r.id] <= self.current.permissions
+                         and not (r.code in OWNER_ONLY_ROLES and r.tenant_id is None)})
+        if beyond:
+            raise Forbidden(f"You can't give or take away a role that can do more than you can: {', '.join(beyond)}.")
         return roles
+
+    def _role_change(self, user: User, roles: list) -> dict | None:
+        """Give someone exactly these roles (already checked). Returns the before/after for the activity log."""
+        was_owner = self._is_owner(user)
+        if was_owner and not self._is_owner(self.current.user):
+            raise Forbidden("Only an owner can change another owner's roles.")
+        old = list(user.roles)
+        if {r.id for r in old} == {r.id for r in roles}:
+            return None
+        if was_owner and not any(r.code in OWNER_ONLY_ROLES and r.tenant_id is None for r in roles):
+            self._keep_an_owner(user)
+        perms = RoleService(self.db, self.current).permissions_of(list({r.id for r in old} | {r.id for r in roles}))
+        before = set().union(*(perms[r.id] for r in old)) if old else set()
+        after = set().union(*(perms[r.id] for r in roles)) if roles else set()
+        if user.id == self.current.id and self.scope == "client" and "roles.manage" in before and "roles.manage" not in after:
+            raise Conflict("That would take away your own access to roles & permissions. Ask another owner or admin.")
+        self.users.set_roles(user, roles)
+        return {"roles": [sorted(r.code for r in old), sorted(r.code for r in roles)],
+                "role_names": [sorted(r.name for r in old), sorted(r.name for r in roles)],
+                "permission_changes": permission_diff(before, after)}
+
+    def set_roles(self, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> User:
+        user = self._get(user_id)
+        roles = self._resolve_roles(role_ids, list(user.roles))
+        change = self._role_change(user, roles)
+        if change:
+            self.audit.record(self.tenant_id, self.current.id, "staff.roles_changed", "user", user.id, {"email": user.email, **change})
+        return user
 
     def _check_user_limit(self) -> None:
         if self.tenant_id is None:
@@ -56,15 +97,18 @@ class StaffService:
         if self.users.by_email(self.tenant_id, email):
             raise Conflict("Someone here already uses that email.", "email")
         roles = self._resolve_roles(data.role_ids)
-        check_strength(data.temporary_password, "temporary_password")
+        temporary = data.temporary_password.strip() or get_settings().default_temporary_password
+        check_strength(temporary, "temporary_password")
         self._check_user_limit()
         user = User(tenant_id=self.tenant_id, email=email, full_name=data.full_name.strip(), mobile=data.mobile,
-                    password_hash=hash_password(data.temporary_password), must_change_password=True)
+                    password_hash=hash_password(temporary), must_change_password=True)
         self.db.add(user)
         self.db.flush()
         self.users.set_roles(user, roles)
         self.audit.record(self.tenant_id, self.current.id, "staff.created", "user", user.id,
                           {"email": email, "roles": [r.code for r in roles]})
+        from app.services import events  # notifications: owners and admins hear about new staff
+        events.staff_added(self.db, user, self.current)
         return user
 
     def update(self, user_id: uuid.UUID, data: StaffUpdateIn) -> User:
@@ -78,16 +122,10 @@ class StaffService:
             changes["mobile"] = [user.mobile, data.mobile]
             user.mobile = data.mobile
         if data.role_ids is not None:
-            roles = self._resolve_roles(data.role_ids)
-            if was_owner and not self._is_owner(self.current.user):
-                raise Forbidden("Only an owner can change another owner's roles.")
-            new_codes = sorted(r.code for r in roles)
-            old_codes = sorted(r.code for r in user.roles)
-            if new_codes != old_codes:
-                if was_owner and not any(r.code in OWNER_ONLY_ROLES for r in roles):
-                    self._keep_an_owner(user)
-                self.users.set_roles(user, roles)
-                changes["roles"] = [old_codes, new_codes]
+            roles = self._resolve_roles(data.role_ids, list(user.roles))
+            change = self._role_change(user, roles)
+            if change:
+                changes.update(change)
         if data.is_active is not None and data.is_active != user.is_active:
             if user.id == self.current.id:
                 raise Invalid("You can't deactivate yourself.", "is_active")
@@ -107,6 +145,7 @@ class StaffService:
         user = self._get(user_id)
         if self._is_owner(user) and not self._is_owner(self.current.user):
             raise Forbidden("Only an owner can reset an owner's password.")
+        temporary_password = temporary_password.strip() or get_settings().default_temporary_password
         check_strength(temporary_password, "temporary_password")
         user.password_hash = hash_password(temporary_password)
         user.must_change_password = True

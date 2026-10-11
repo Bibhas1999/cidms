@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "../lib/tooltip";
   import { count } from "../lib/format";
   import { setQuery } from "../lib/router.svelte";
   import Icon from "./Icon.svelte";
@@ -27,7 +28,7 @@
 <nav class="pager card-footer" aria-label="Pages">
   <p class="pager-summary text-sm text-muted">Showing <strong>{count(from)}–{count(to)}</strong> of <strong>{count(total)}</strong></p>
   <div class="pagination">
-    <button class="btn btn-ghost btn-sm page-step" class:is-disabled={page <= 1} disabled={page <= 1} onclick={() => onchange(page - 1)}>
+    <button class="btn btn-ghost btn-sm page-step" class:is-disabled={page <= 1} disabled={page <= 1} use:tooltip={"Previous page"} onclick={() => onchange(page - 1)}>
       <Icon name="chevronRight" size="sm" class="flip" /><span>Previous</span></button>
     <ul class="page-list">
       {#each list as p, i (i)}
@@ -36,7 +37,7 @@
                          aria-label="Page {p}" onclick={() => onchange(p)} style="cursor:pointer; background-color: {p === page ? '' : 'transparent'}">{p}</button></li>{/if}
       {/each}
     </ul>
-    <button class="btn btn-ghost btn-sm page-step" class:is-disabled={page >= pages} disabled={page >= pages} onclick={() => onchange(page + 1)}>
+    <button class="btn btn-ghost btn-sm page-step" class:is-disabled={page >= pages} disabled={page >= pages} use:tooltip={"Next page"} onclick={() => onchange(page + 1)}>
       <span>Next</span><Icon name="chevronRight" size="sm" /></button>
   </div>
   <div class="pager-size">

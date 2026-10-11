@@ -73,7 +73,7 @@ def test_first_sign_in_forces_a_new_password_then_opens_the_dashboard(page, alph
     page.get_by_role("button", name="Sign in").click()
     page.wait_for_url("**/change-password")
     page.locator("#current").fill("Test-password-1")
-    page.locator("#new").fill("My-own-pass-2026")
+    page.locator("#next").fill("My-own-pass-2026")
     page.locator("#confirm").fill("My-own-pass-2026")
     page.get_by_role("button", name="Save password").click()
     page.wait_for_url(f"http://alpha.{live_server}/")

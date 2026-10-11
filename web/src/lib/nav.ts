@@ -2,6 +2,8 @@
 // profile) are in the profile menu, not here. An item shows when its page exists (see
 // App.svelte's routes) and the person holds its permission.
 
+import { FEATURES } from "./features";
+
 export interface NavItem {
   href: string;
   label: string;
@@ -15,7 +17,13 @@ export interface NavSection {
 }
 
 export const CLIENT_NAV: NavSection[] = [
-  { heading: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
+  {
+    heading: "Overview",
+    items: [
+      { href: "/", label: "Dashboard", icon: "dashboard" },
+      { href: "/analytics", label: "Analytics", icon: "barChart", permission: "analytics.view" },
+    ],
+  },
   {
     heading: "Front desk",
     items: [
@@ -25,7 +33,15 @@ export const CLIENT_NAV: NavSection[] = [
       { href: "/dues", label: "Dues", icon: "wallet", permission: "payments.collect" },
     ],
   },
-  { heading: "Lab", items: [{ href: "/worklist", label: "Worklist", icon: "clipboard" }] },
+  ...(FEATURES.worklist ? [{ heading: "Lab", items: [{ href: "/worklist", label: "Worklist", icon: "clipboard" }] }] : []),
+  {
+    heading: "Reports",
+    items: [
+      // Test reports: scanned tests waiting for a report (the reporting dashboard replaces this when it lands).
+      ...(FEATURES.testReports ? [{ href: "/worklist?tab=scanned", label: "Test reports", icon: "fileText", permission: "reports.write" }] : []),
+      { href: "/reports", label: "Billing reports", icon: "barChart", permission: "business_reports.view" },
+    ],
+  },
   {
     heading: "Catalogue",
     items: [

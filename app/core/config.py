@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     max_failed_logins: int = 5
     lockout_minutes: int = 15
     min_password_length: int = 10
+    # The temporary password given to new staff and on a password reset (owner's choice). It works once:
+    # at their first sign-in they must choose their own. Set DEFAULT_TEMPORARY_PASSWORD to change it.
+    default_temporary_password: str = "supreme@123"  # noqa: S105 - the owner's chosen one-time password, not a secret
 
     # First sign-in details used by "python -m app.seed" (each person must change the password at first sign-in).
     seed_platform_owner_email: str = "owner@supremedms.local"
@@ -50,6 +53,32 @@ class Settings(BaseSettings):
 
     # Files the app keeps (logos now; signatures, reports and uploads later), outside the web folder.
     storage_dir: str = "storage"
+
+    # Medical images: the Orthanc image server (only the app talks to it, with these credentials) and the
+    # OHIF viewer, both reached through the app at /api/dicom-web and /viewer so they share its sign-in.
+    orthanc_url: str = "http://127.0.0.1:8042"
+    orthanc_user: str = "supreme"
+    orthanc_password: str = "local-orthanc-only"  # noqa: S105 (local default, like the database's)
+    ohif_url: str = "http://127.0.0.1:3005"
+    imaging_max_upload_mb: int = 500
+
+    # Sending signed reports to patients on WhatsApp. "" = off; "meta" = WhatsApp Business Cloud API, sending
+    # the approved template `whatsapp_template` (document header; body {{1}} patient name, {{2}} centre name,
+    # {{3}} the patient's link to view the report online).
+    whatsapp_provider: str = ""
+    whatsapp_token: str = Field(default="", repr=False)
+    whatsapp_phone_number_id: str = ""
+    whatsapp_template: str = "report_ready"
+    whatsapp_template_lang: str = "en"
+    whatsapp_api_version: str = "v21.0"
+    whatsapp_verify_token: str = Field(default="", repr=False)  # the webhook's subscribe check
+    whatsapp_app_secret: str = Field(default="", repr=False)    # checks X-Hub-Signature-256 on webhook calls
+
+    # The patient's link to a signed report (the QR code on it): how long it works.
+    report_link_days: int = 90
+    # The reporting dashboard: how long a test may wait for its signed report before it counts as overdue.
+    report_target_hours_imaging: int = 24
+    report_target_hours_other: int = 48
 
     log_level: str = "INFO"
     display_timezone: str = "Asia/Kolkata"  # dates are stored in UTC and shown in this time zone

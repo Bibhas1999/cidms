@@ -13,6 +13,7 @@ export default defineConfig({
     proxy: {
       "/api": { target: "http://localhost:8000", changeOrigin: false },
       "/healthz": { target: "http://localhost:8000", changeOrigin: false },
+      "/viewer": { target: "http://localhost:8000", changeOrigin: false },  // the image viewer, through the app
     },
   },
   build: { outDir: "dist", emptyOutDir: true, sourcemap: true },

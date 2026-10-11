@@ -24,11 +24,11 @@ from tests.conftest import make_tenant
     ("DR. S. K . HALDER", "SK HALDER"),
     ("Dr S.K.Halder", "SK HALDER"),
     ("DR.S.K HALDER", "SK HALDER"),
-    ("  dr  kakali   sarkar ", "KAKALI SARKAR"),
-    ("KAKALI SARKAR", "KAKALI SARKAR"),
-    ("DR, RAJNI BAGAI", "RAJNI BAGAI"),
-    ("A.H.AQSHA NURSING HOME", "AH AQSHA NURSING HOME"),
-    ("A. H. AQSHA NURSING HOME", "AH AQSHA NURSING HOME"),
+    ("  dr  mita   roy ", "MITA ROY"),
+    ("MITA ROY", "MITA ROY"),
+    ("DR, RANI BOSE", "RANI BOSE"),
+    ("A.H.ASHA NURSING HOME", "AH ASHA NURSING HOME"),
+    ("A. H. ASHA NURSING HOME", "AH ASHA NURSING HOME"),
     ("DRISHTI EYE CARE", "DRISHTI EYE CARE"),  # "DR" only as a whole word
     ("SELF", ""), (" self ", ""), ("-", ""), ("NA", ""), ("N.A.", ""), ("None", ""), ("", ""), (None, ""), ("DR.", ""),
 ])
@@ -38,16 +38,16 @@ def test_doctor_key(raw, key):
 
 def test_doctor_display_uses_the_most_common_spelling_in_nice_case():
     assert doctor_display({"DR. S. K . HALDER": 1, "DR. S.K.HALDER": 5, "S K HALDER": 1}) == "Dr. S.K. Halder"
-    assert doctor_display({"KAKALI SARKAR": 3, "DR. KAKALI SARKAR": 1}) == "Dr. Kakali Sarkar"
-    assert doctor_display({"A.H.AQSHA NURSING HOME": 2}) == "A.H. Aqsha Nursing Home"
+    assert doctor_display({"MITA ROY": 3, "DR. MITA ROY": 1}) == "Dr. Mita Roy"
+    assert doctor_display({"A.H.ASHA NURSING HOME": 2}) == "A.H. Asha Nursing Home"
     assert doctor_display({"MEDICAL COLLEGE AND HOSPITAL": 1}) == "Medical College and Hospital"
     assert doctor_display({"SSKM HOSPITAL": 1}) == "SSKM Hospital"
     assert doctor_display({"BAKSHA P. H. C": 1}) == "Baksha P.H.C."
     assert doctor_display({"DR. SUCHETA MUKHERJEE (DUTTA)": 1}) == "Dr. Sucheta Mukherjee (Dutta)"
     assert doctor_display({"DR. MD ABDUL MOKIT": 1}) == "Dr. MD Abdul Mokit"
     assert doctor_display({"DR. AH KHAN": 1}) == "Dr. AH Khan"
-    assert doctor_display({"DR, RAJNI BAGAI": 1}) == "Dr. Rajni Bagai"
-    assert doctor_display({"PROF. (DR.) TARASANKAR BAG": 1}) == "Prof. (Dr.) Tarasankar Bag"
+    assert doctor_display({"DR, RANI BOSE": 1}) == "Dr. Rani Bose"
+    assert doctor_display({"PROF. (DR.) TARASANKAR DEY": 1}) == "Prof. (Dr.) Tarasankar Dey"
 
 
 @pytest.mark.parametrize(("raw", "years", "how"), [
@@ -62,11 +62,11 @@ def test_parse_age(raw, years, how):
 
 
 def test_patient_key_needs_a_full_mobile():
-    assert patient_key(" Phoni  Bhusan bag ", "+91 90511-36089") == "PHONI BHUSAN BAG|9051136089"
-    assert patient_key("PHONI BHUSAN BAG", "09051136089") == patient_key("phoni bhusan bag", "9051136089")
-    assert patient_key("PHONI BHUSAN BAG", "905113608") is None
-    assert patient_key("PHONI BHUSAN BAG", None) is None
-    assert patient_key("A", "9051136089") != patient_key("B", "9051136089")
+    assert patient_key(" Ramen  Kumar dey ", "+91 90000-12345") == "RAMEN KUMAR DEY|9000012345"
+    assert patient_key("RAMEN KUMAR DEY", "09000012345") == patient_key("ramen kumar dey", "9000012345")
+    assert patient_key("RAMEN KUMAR DEY", "900001234") is None
+    assert patient_key("RAMEN KUMAR DEY", None) is None
+    assert patient_key("A", "9000012345") != patient_key("B", "9000012345")
 
 
 def test_invoice_numbers_with_repeats():
