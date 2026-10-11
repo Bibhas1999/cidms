@@ -42,3 +42,22 @@ def client_error(data: ClientErrorIn, request: Request):
         "client_error": {"kind": data.kind, "url": data.url, "stack": data.stack[:4000]},
         "user_id": getattr(request.state, "user_id", None),
     })
+
+
+@router.get("/internal/tls-allowed", include_in_schema=False)
+def tls_allowed(domain: str, request: Request):
+    """Caddy asks before getting an HTTPS certificate for a new address (on-demand TLS): only the platform's
+    address and real centres' addresses get one, so nobody can make the server request certificates for junk
+    names. Answers only callers on the private network (Caddy on the same Docker network)."""
+    import ipaddress
+
+    from app.core.tenancy import classify_host, lookup_tenant
+    try:
+        if not ipaddress.ip_address(request.client.host if request.client else "").is_private:
+            return JSONResponse({"allowed": False}, status_code=403)
+    except ValueError:
+        return JSONResponse({"allowed": False}, status_code=403)
+    kind, slug = classify_host(domain)
+    if kind == "platform" or (kind == "client" and slug and lookup_tenant(slug) is not None):
+        return {"allowed": True}
+    return JSONResponse({"allowed": False}, status_code=404)

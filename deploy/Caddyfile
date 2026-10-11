@@ -1,0 +1,37 @@
+# HTTPS for every address: the platform (admin.<domain>) and each centre (<slug>.<domain>).
+# Certificates come from Let's Encrypt when an address is first opened ("on-demand"), but only after the app
+# confirms it's a real centre or the platform, so nobody can make this server ask for certificates for junk names.
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://app:8000/internal/tls-allowed
+	}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+# Every centre and the platform, one rule for all of them.
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	# Uploads (logos, pictures; images later) and long downloads.
+	request_body {
+		max_size 520MB
+	}
+	reverse_proxy app:8000 {
+		# The live notification stream must not be buffered.
+		flush_interval -1
+		header_up X-Forwarded-Proto https
+	}
+	# The app sets its own security headers; Caddy only adds HSTS once HTTPS works.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Plain http:// goes to https:// (Caddy does this by itself for on-demand addresses).

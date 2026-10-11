@@ -91,7 +91,14 @@ def seed_supreme(db: Session, email: str, password: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--supreme", action="store_true", help="also add Supreme Health Care as a client")
+    parser.add_argument("--roles-only", action="store_true",
+                        help="only bring the built-in permissions, roles and plans up to date (safe on a live server)")
     args = parser.parse_args()
+    if args.roles_only:
+        with scoped_session(platform=True) as db, db.begin():
+            seed_reference(db)
+        print("Permissions and roles are up to date.")
+        return
     s = get_settings()
     if s.is_production and "Change-me-now-1" in (s.seed_platform_owner_password, s.seed_supreme_owner_password):
         raise SystemExit("Set SEED_PLATFORM_OWNER_PASSWORD (and SEED_SUPREME_OWNER_PASSWORD) before seeding production.")
