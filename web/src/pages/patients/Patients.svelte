@@ -1,10 +1,13 @@
 <script lang="ts">
-  import Icon from "../../components/Icon.svelte";
+  import { tooltip } from "../../lib/tooltip";
+  import DataTable from "../../components/DataTable.svelte";
+  import FilterBar from "../../components/FilterBar.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
-  import Pagination from "../../components/Pagination.svelte";
+  import type { RowAction } from "../../components/RowMenu.svelte";
   import { get } from "../../lib/api";
   import { date } from "../../lib/format";
-  import { navigate, router, setQuery } from "../../lib/router.svelte";
+  import { formatPhone } from "../../lib/phone";
+  import { router } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
   import { ageGender, type Page, type Patient } from "../../lib/types";
 
@@ -16,7 +19,6 @@
   let loadError = $state("");
   let loading = $state(false);
   let reload = $state(0);
-  let searchText = $state(router.query.get("search") ?? "");
 
   $effect(() => {
     const ctrl = new AbortController();
@@ -30,62 +32,39 @@
     return () => ctrl.abort();
   });
 
-  let searchTimer: ReturnType<typeof setTimeout>;
-  function onSearch() {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => setQuery({ search: searchText.trim(), page: null }), 300);
-  }
-
-  function openRow(e: MouseEvent, id: string) {
-    // Let real links and selected text behave normally; anywhere else on the row opens the patient.
-    if ((e.target as Element).closest("a, button") || window.getSelection()?.toString()) return;
-    navigate(`/patients/${id}`);
+  function actionsFor(p: Patient): RowAction[] {
+    return [
+      { label: "Open patient", icon: "eye", href: `/patients/${p.id}` },
+      ...(session.can("billing.create") ? [{ label: "New bill", icon: "plus", href: `/bills/new?patient=${p.id}` }] : []),
+      { label: "Their bills", icon: "receipt", href: `/patients/${p.id}#bills` },
+    ];
   }
 </script>
 
-<PageHeader eyebrow="Front desk" title="Patients" description="Everyone who has been billed at the centre. Open a patient to see their details and bills.">
-  {#snippet actions()}
-    {#if session.can("billing.create")}<a class="btn btn-primary" href="/bills/new"><Icon name="plus" /> New bill</a>{/if}
-  {/snippet}
-</PageHeader>
+{#snippet nameCell(p: Patient)}
+  <div class="cell-title"><a href="/patients/{p.id}">{p.name}</a></div><div class="cell-sub mono">{p.patient_no}</div>
+{/snippet}
+{#snippet addressCell(p: Patient)}<div class="truncate address" use:tooltip={p.address}>{p.address || "—"}</div>{/snippet}
 
-<section class="card">
-  <div class="toolbar">
-    <div class="input-group">
-      <Icon name="search" />
-      <label class="sr-only" for="search">Search patients</label>
-      <input id="search" class="input" type="search" placeholder="Search by name, mobile or patient number…" bind:value={searchText} oninput={onSearch} />
-    </div>
-  </div>
+<PageHeader eyebrow="Front desk" title="Patients" description="Everyone who has been billed at the centre. Open a patient to see their details and bills." />
 
-  {#if loadError}
-    <div class="card-content"><div class="alert alert-destructive" role="alert"><Icon name="alert" /><div>{loadError} <button class="link-button" onclick={() => reload++}>Try again</button></div></div></div>
-  {:else if data}
-    <div class="table-wrap" aria-busy={loading}>
-      <table class="table">
-        <thead><tr><th>Patient</th><th>Age / gender</th><th>Mobile</th><th>Address</th><th>Registered</th></tr></thead>
-        <tbody>
-          {#each data.items as p (p.id)}
-            <tr class="clickable" onclick={(e) => openRow(e, p.id)}>
-              <td><div class="cell-title"><a href="/patients/{p.id}">{p.name}</a></div><div class="cell-sub mono">{p.patient_no}</div></td>
-              <td>{ageGender(p)}</td>
-              <td class="tabular">{p.mobile || "—"}</td>
-              <td class="address"><div class="truncate" title={p.address}>{p.address || "—"}</div></td>
-              <td class="text-sm nowrap">{date(p.created_at)}</td>
-            </tr>
-          {:else}
-            <tr><td colspan="5"><div class="empty"><Icon name="users" />{search ? "No patient matches that search." : "No patients yet. They're added when their first bill is made."}</div></td></tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    {#if data.total > 0}<Pagination page={data.page} size={data.size} total={data.total} onchange={(p) => setQuery({ page: p }, { replace: false })} />{/if}
-  {:else}
-    <div class="empty" aria-busy="true">Loading…</div>
-  {/if}
+<section class="card" aria-label="Patients">
+  <FilterBar placeholder="Search by name, mobile or patient number…" searchLabel="Search patients"
+             searchTip="Type part of a name, a mobile number (any part) or a patient number." />
+  <DataTable label="Patients" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
+             rowHref={(p) => `/patients/${p.id}`} actions={actionsFor} actionsLabel={(p) => `Actions for ${p.name}`}
+             empty={{ icon: "users", title: search ? "No patient matches that search." : "No patients yet.",
+                      text: search ? "Check the spelling, or search by mobile number." : "They're added when their first bill is made." }}
+             columns={[
+               { key: "name", label: "Patient", cell: nameCell, mobile: "title" },
+               { key: "age", label: "Age / gender", value: (p) => ageGender(p), mobile: "end" },
+               { key: "mobile", label: "Mobile", value: (p) => formatPhone(p.mobile) || "—", class: "tabular", nowrap: true },
+               { key: "address", label: "Address", cell: addressCell, optional: true, mobile: "sub" },
+               { key: "created", label: "Registered", value: (p) => date(p.created_at), nowrap: true, optional: true, mobile: "hide" },
+             ]} />
 </section>
 
 <style>
-  .clickable { cursor: pointer; }
   .address { max-width: 280px; }
+  @media (max-width: 640px) { .address { max-width: none; } }
 </style>

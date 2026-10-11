@@ -6,6 +6,8 @@ import "@fontsource/inter/700.css";
 import "./styles/globals.css";
 import "./styles/supreme.css";
 import "./styles/theme.css";
+import "./charts.css";
+import "./styles/mobile.css";
 import { mount } from "svelte";
 import App from "./App.svelte";
 import { installGlobalErrorHandlers } from "./lib/errors";
@@ -17,3 +19,10 @@ installGlobalErrorHandlers();
 installRouter();
 
 export default mount(App, { target: document.getElementById("app")! });
+
+// Installable app (PWA). Only the built app registers the worker: in development Vite serves fresh files.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((e) => console.warn("Service worker not registered", e));
+  });
+}

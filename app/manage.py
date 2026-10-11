@@ -7,7 +7,6 @@ A temporary password is printed once; the person must choose their own at first 
 """
 
 import argparse
-import secrets
 
 from sqlalchemy import select
 
@@ -18,7 +17,9 @@ from app.models import Role, Tenant, User, UserRole
 
 
 def temporary_password() -> str:
-    return f"Temp-{secrets.token_urlsafe(9)}"
+    """The centre's one-time temporary password (DEFAULT_TEMPORARY_PASSWORD); they choose their own at first sign-in."""
+    from app.core.config import get_settings
+    return get_settings().default_temporary_password
 
 
 def create_user(workspace: str, email: str, name: str, role_code: str) -> str:
@@ -48,6 +49,34 @@ def create_user(workspace: str, email: str, name: str, role_code: str) -> str:
     return password
 
 
+def move_images_to_database() -> None:
+    """Logos and profile pictures saved as files (before they moved into the database) are copied in."""
+    from pathlib import Path
+
+    from app.core.config import get_settings
+    from app.core.storage import avatar_image, logo_image
+    from app.models import TenantSettings
+    base = Path(get_settings().storage_dir)
+    moved = 0
+    with scoped_session(platform=True) as db, db.begin():
+        for row in db.scalars(select(TenantSettings).where(TenantSettings.logo_file != "", TenantSettings.logo_data == "")):
+            path = base / "tenants" / str(row.tenant_id) / row.logo_file
+            if path.is_file():
+                image = logo_image(path.read_bytes())
+                row.logo_data, row.logo_mime, row.logo_file = image.data, image.mime, image.version
+                moved += 1
+        for user in db.scalars(select(User).where(User.avatar_file != "", User.avatar_data == "")):
+            folder = base / ("platform" if user.tenant_id is None else f"tenants/{user.tenant_id}") / "avatars"
+            path = folder / user.avatar_file
+            if path.is_file():
+                image = avatar_image(path.read_bytes())
+                user.avatar_data, user.avatar_mime, user.avatar_file = image.data, image.mime, image.version
+                moved += 1
+            else:
+                user.avatar_file = ""
+    print(f"Moved {moved} pictures into the database.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -56,7 +85,11 @@ def main() -> None:
     cu.add_argument("--email", required=True)
     cu.add_argument("--name", required=True)
     cu.add_argument("--role", required=True, help=", ".join(ROLES))
+    sub.add_parser("move-images-to-db", help="copy logos and profile pictures saved as files into the database")
     args = parser.parse_args()
+    if args.command == "move-images-to-db":
+        move_images_to_database()
+        return
     if args.command == "create-user":
         password = create_user(args.workspace, args.email, args.name, args.role)
         print(f"Created {args.email.lower()} in {args.workspace} as {args.role}. Temporary password: {password}")

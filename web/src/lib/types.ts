@@ -8,6 +8,8 @@ export interface Workspace {
   brand_color?: string;
   tagline?: string;
   logo_url?: string;
+  /** The wide logo with the centre's name and slogan, when it has one. */
+  wordmark_url?: string;
   /** Development only: the workspaces to open when this address has none. */
   links?: { name: string; url: string }[];
 }
@@ -21,6 +23,8 @@ export interface Me {
   roles: string[];
   permissions: string[];
   must_change_password: boolean;
+  /** May change their own email and password (owner, centre admin, platform staff). */
+  manage_own_account: boolean;
   csrf_token: string;
   workspace: Workspace;
 }
@@ -57,6 +61,7 @@ export interface CentreSettings {
   tagline: string;
   brand_color: string;
   logo_file: string;
+  wordmark_file: string;
   address: string;
   phones: string;
   email: string;
@@ -138,21 +143,42 @@ export interface Breakdown {
   amount: string;
 }
 
-export interface Overview {
-  today: DaySummary;
-  yesterday_billed: string;
-  yesterday_bills: number;
-  month_billed: string;
-  month_collected: string;
-  month_bills: number;
-  month_discounts: string;
+/** GET /api/summary/desk: the dashboard for staff without analytics.view (no billed totals). */
+export interface DeskSummary {
+  date_from: string;
+  date_to: string;
+  all_time: boolean;
+  bills: number;
+  billed: string;
+  collected: Record<string, string>;
+  collected_total: string;
+  dues_collected: string;
+  refunds: string;
+  due_on_bills: string;
+  due_bills: number;
+  outstanding_dues: string;
   dues_count: number;
+  pending_tests: { billed: number; scanned: number };
+}
+
+export interface Overview {
+  date_from: string;
+  date_to: string;
+  days: number;
+  all_time: boolean;
+  period: {
+    bills: number; billed: string; discounts: string; due_on_bills: string; patients: number;
+    collected: Record<string, string>; collected_total: string; dues_collected: string; refunds: string;
+  };
+  previous: { date_from: string; date_to: string; bills: number; billed: string; collected_total: string };
+  dues_count: number;
+  outstanding_dues: string;
   trend: { day: string; billed: string; collected: string }[];
+  trend_unit: "day" | "month";
   departments: Breakdown[];
   doctors: Breakdown[];
   pending_tests: { billed: number; scanned: number };
   oldest_dues: BillSummary[];
-  recent_bills: BillSummary[];
 }
 
 // ---------- catalogue, patients, worklist ----------

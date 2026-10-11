@@ -39,8 +39,11 @@ class Toasts {
 
   show(message: string, { kind = "success", title = "", detail = "", duration }: NotifyOptions = {}): number | null {
     const key = `${kind}:${title}:${message}`;
-    if (Date.now() - (recent.get(key) ?? 0) < 4000) return null;
-    recent.set(key, Date.now());
+    // The same message twice in a row is shown once; a progress spinner always shows (each is its own request).
+    if (kind !== "progress") {
+      if (Date.now() - (recent.get(key) ?? 0) < 4000) return null;
+      recent.set(key, Date.now());
+    }
     const id = next++;
     this.items.push({ id, kind, title, message, detail, leaving: false });
     const ms = duration ?? (kind === "error" || kind === "progress" ? 0 : kind === "warning" ? 9000 : 5000);

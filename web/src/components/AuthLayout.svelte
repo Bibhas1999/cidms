@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { session } from "../lib/session.svelte";
+  import Credit from "./Credit.svelte";
 
   // The sign-in, forgot-password and reset-password pages: the centre's branded panel beside a form card.
   let { children }: { children: Snippet } = $props();
@@ -28,6 +29,10 @@
 
     <div class="brand-content">
       <div class="identity">
+        {#if !isPlatform && ws?.wordmark_url}
+          <div class="wordmark-tile"><img class="wordmark" src={ws.wordmark_url} alt="{ws.name}{ws.tagline ? ` — ${ws.tagline}` : ''}" /></div>
+          <h1 class="sr-only">{ws.name}</h1>
+        {:else}
         {#if ws?.logo_url}
           <img class="logo" src={ws.logo_url} alt="{ws.name} logo" />
         {:else}
@@ -38,6 +43,7 @@
           <h1 class="centre">{isPlatform ? "Supreme DMS" : ws?.name}</h1>
           <p class="tagline">{isPlatform ? "Platform administration" : ws?.tagline || "Diagnostics, reports and billing in one place"}</p>
         </div>
+        {/if}
       </div>
 
       <div class="pitch">
@@ -75,7 +81,7 @@
         </ul>
       {/if}
 
-      <p class="powered">Powered by <strong>Supreme DMS</strong></p>
+      <p class="powered"><Credit inherit /></p>
     </div>
   </section>
 
@@ -85,6 +91,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6z" /><path d="m9 12 2 2 4-4" /></svg>
       Patient information is kept private and every sign-in is recorded.
     </p>
+    <p class="terms muted">By signing in you agree to the <a href="/terms">Terms and conditions</a>.</p>
   </section>
 </div>
 
@@ -97,6 +104,8 @@
   .backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
   .brand-content { position: relative; height: 100%; display: flex; flex-direction: column; gap: 40px; padding: 56px 56px 32px; }
   .identity { display: flex; align-items: center; gap: 22px; }
+  .wordmark-tile { display: inline-block; max-width: 100%; padding: 14px 20px; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
+  .wordmark { display: block; width: 400px; max-width: 100%; height: auto; }
   .logo { width: 132px; height: 132px; object-fit: contain; padding: 10px; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
   .mark { width: 72px; height: 72px; }
   .centre { color: #fff; font-size: 32px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
@@ -143,11 +152,15 @@
     .auth-page { grid-template-columns: 1fr; }
     .brand-content { padding: 28px 20px; gap: 0; }
     .logo { width: 72px; height: 72px; padding: 6px; border-radius: 12px; }
+    .wordmark-tile { padding: 10px 14px; border-radius: 12px; }
+    .wordmark { width: 280px; }
     .centre { font-size: 22px; }
     .tagline { font-size: 14px; }
-    .services, .powered, .pitch { display: none; }
+    .services, .pitch { display: none; }
     .form-side { padding: 24px 16px 32px; justify-content: flex-start; }
     .form-side :global(.form) { padding: 28px 20px; }
   }
   @media (prefers-reduced-motion: reduce) { .form-side :global(.spinner) { animation: none; } }
+  .terms { margin: 10px 0 0; font-size: 12.5px; text-align: center; }
+  .terms a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 </style>

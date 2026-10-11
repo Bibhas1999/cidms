@@ -28,6 +28,18 @@ def update_settings(data: SettingsIn, db: Session = DB, current: CurrentUser = D
     return SettingsService(db, client_user(current)).update(data)
 
 
+@router.post("/settings/wordmark", response_model=SettingsOut)
+async def upload_wordmark(wordmark: UploadFile, db: Session = DB, current: CurrentUser = Depends(require("settings.manage"))):
+    """The wide logo with the centre's name and slogan (PNG, JPG or WebP, under 2 MB), stored in the database."""
+    data = await wordmark.read(MAX_LOGO_BYTES + 1)
+    return SettingsService(db, client_user(current)).set_wordmark(data)
+
+
+@router.delete("/settings/wordmark", response_model=SettingsOut)
+def remove_wordmark(db: Session = DB, current: CurrentUser = Depends(require("settings.manage"))):
+    return SettingsService(db, client_user(current)).set_wordmark(None)
+
+
 @router.post("/settings/logo", response_model=SettingsOut)
 async def upload_logo(logo: UploadFile, db: Session = DB, current: CurrentUser = Depends(require("settings.manage"))):
     data = await logo.read(MAX_LOGO_BYTES + 1)

@@ -2,11 +2,21 @@
   import { date, rupees, rupeesShort, shortDate } from "../lib/format";
   import Icon from "./Icon.svelte";
 
-  // Billed and collected per day: two series of the same unit on one axis. Lines 2px, a legend plus
+  // Billed and collected per day (or per month for long periods): two series of the same unit on one axis. Lines 2px, a legend plus
   // labels at the line ends, recessive grid, a crosshair tooltip on hover (and with the arrow keys),
   // and a table for screen readers. Colours: --chart-1 / --chart-2 (validated for colour-blind readers).
   interface Point { day: string; billed: string | number; collected: string | number }
-  let { points }: { points: Point[] } = $props();
+  let { points, unit = "day", period = "the last 30 days" }: {
+    points: Point[]; unit?: "day" | "month";
+    /** Words for the span shown, for the empty message and screen readers ("the last 14 days"). */
+    period?: string;
+  } = $props();
+
+  const month = (iso: string, style: "short" | "long") =>
+    new Intl.DateTimeFormat("en-IN", { month: style, year: style === "long" ? "numeric" : "2-digit", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
+  const tick = (iso: string) => (unit === "month" ? month(iso, "short") : shortDate(iso));
+  const full = (iso: string) => (unit === "month" ? month(iso, "long") : date(iso));
+  const per = $derived(unit === "month" ? "month" : "day");
 
   const H = 260, PAD = { top: 16, right: 92, bottom: 28, left: 56 };
   let width = $state(720);
@@ -77,15 +87,15 @@
   </div>
 
   {#if empty}
-    <div class="empty"><Icon name="trendUp" />No bills or payments in the last 30 days yet.</div>
+    <div class="empty"><Icon name="trendUp" />No bills or payments in {period}.</div>
   {:else if showTable}
     <div class="table-wrap">
       <table class="table">
-        <caption class="sr-only">Billed and collected per day, last 30 days</caption>
-        <thead><tr><th>Day</th><th class="num">Billed</th><th class="num">Collected</th></tr></thead>
+        <caption class="sr-only">Billed and collected per {per}, {period}</caption>
+        <thead><tr><th>{unit === "month" ? "Month" : "Day"}</th><th class="num">Billed</th><th class="num">Collected</th></tr></thead>
         <tbody>
           {#each [...points].reverse() as p (p.day)}
-            <tr><td>{date(p.day)}</td><td class="num">{rupees(p.billed)}</td><td class="num">{rupees(p.collected)}</td></tr>
+            <tr><td>{full(p.day)}</td><td class="num">{rupees(p.billed)}</td><td class="num">{rupees(p.collected)}</td></tr>
           {/each}
         </tbody>
       </table>
@@ -94,7 +104,7 @@
     <div class="chart" bind:clientWidth={width}>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <svg viewBox="0 0 {width} {H}" height={H} role="img" tabindex="0"
-           aria-label="Billed and collected per day for the last 30 days. Use the left and right arrow keys to read each day."
+           aria-label="Billed and collected per {per} for {period}. Use the left and right arrow keys to read each {per}."
            onpointermove={pick} onpointerleave={() => (active = null)} onkeydown={key} onblur={() => (active = null)}>
         {#each ticks as t (t)}
           <line x1={PAD.left} x2={PAD.left + plotW} y1={y(t)} y2={y(t)} stroke="var(--chart-grid)" stroke-width="1" />
@@ -102,7 +112,7 @@
         {/each}
         {#each points as p, i (p.day)}
           {#if i % labelEvery === 0 || i === points.length - 1}
-            <text x={x(i)} y={H - 8} text-anchor="middle" font-size="11" fill="var(--chart-axis)">{shortDate(p.day)}</text>
+            <text x={x(i)} y={H - 8} text-anchor="middle" font-size="11" fill="var(--chart-axis)">{tick(p.day)}</text>
           {/if}
         {/each}
         {#each series as s (s.key)}
@@ -123,7 +133,7 @@
       {#if active !== null}
         {@const p = points[active]}
         <div class="chart-tooltip" style="left: {Math.min(x(active) + 12, width - 190)}px; top: 8px" role="status">
-          <div class="font-semibold" style="margin-bottom: 6px">{date(p.day)}</div>
+          <div class="font-semibold" style="margin-bottom: 6px">{full(p.day)}</div>
           {#each series as s (s.key)}
             <div class="row"><span class="key"><i style="background:{s.color}"></i>{s.label}</span><strong class="money">{rupees(p[s.key])}</strong></div>
           {/each}

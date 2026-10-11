@@ -2,24 +2,28 @@
 
 import uuid
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import Paging, client_user, paging
 from app.core.db import DB
+from app.core.errors import Forbidden, Invalid
 from app.core.idempotency import run_once
 from app.core.money import local_today
 from app.core.security import CurrentUser, require
 from app.schemas import Page
 from app.schemas_billing import (
     BillIn,
+    BillItemsStatusIn,
     BillOut,
     BillPage,
     BillUpdateIn,
     DaySummaryOut,
     DepartmentIn,
     DepartmentOut,
+    DeskSummaryOut,
     DoctorIn,
     DoctorOut,
     ItemStatusIn,
@@ -35,7 +39,7 @@ from app.schemas_billing import (
     TestTypeOut,
     WorklistRowOut,
 )
-from app.services.billing import BillingService, OverviewService, default_worklist_window
+from app.services.billing import BillFilters, BillingService, OverviewService, default_worklist_window
 from app.services.catalogue import CatalogueService
 from app.services.patients import PatientService
 
@@ -103,7 +107,6 @@ def doctors(search: str = Query("", max_length=100), active: bool | None = None,
 def add_doctor(data: DoctorIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
     """Adding a referring doctor is front-desk work too: anyone who bills (or manages the catalogue) may."""
     if not (current.can("catalogue.manage") or current.can("billing.create")):
-        from app.core.errors import Forbidden
         raise Forbidden("You don't have permission to add doctors.")
     return CatalogueService(db, current).save_doctor(data)
 
@@ -145,14 +148,30 @@ def edit_patient(patient_id: uuid.UUID, data: PatientIn, db: Session = DB, curre
 
 # ---------- bills ----------
 
+def bill_filters(search: str = Query("", max_length=100), date_from: date | None = Query(None, alias="from"),
+                 date_to: date | None = Query(None, alias="to"),
+                 status_: str | None = Query(None, alias="status", pattern="^(confirmed|on_hold|cancelled)$"),
+                 payment: str = Query("", pattern="^(|due|paid|part|unpaid)$"),
+                 due: bool = False, paid: bool = False,
+                 mode: str = Query("", pattern="^(|cash|upi|card|bank|other)$"),
+                 doctor_id: uuid.UUID | None = None, self_referred: bool = False, patient_id: uuid.UUID | None = None,
+                 department_id: uuid.UUID | None = None, test_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
+                 min_total: Decimal | None = Query(None, ge=0), max_total: Decimal | None = Query(None, ge=0),
+                 discount: str = Query("", pattern="^(|yes|no)$"),
+                 report: str = Query("", pattern="^(|pending|ready|delivered)$"),
+                 sort: str = Query("newest", pattern="^(newest|oldest)$")) -> BillFilters:
+    """The bills list's filters from the query string (also used by exports, so they match what's on screen)."""
+    return BillFilters(search=search, date_from=date_from, date_to=date_to, status=status_,
+                       payment=payment or ("due" if due else "paid" if paid else ""), mode=mode, doctor_id=doctor_id,
+                       self_referred=self_referred, patient_id=patient_id, department_id=department_id, test_id=test_id,
+                       created_by=created_by, min_total=min_total, max_total=max_total, discount=discount, report=report,
+                       oldest_first=sort == "oldest")
+
+
 @router.get("/bills", response_model=BillPage)
-def bills(search: str = Query("", max_length=100), date_from: date | None = Query(None, alias="from"),
-          date_to: date | None = Query(None, alias="to"), status_: str | None = Query(None, alias="status", pattern="^(confirmed|on_hold|cancelled)$"),
-          due: bool = False, doctor_id: uuid.UUID | None = None, patient_id: uuid.UUID | None = None,
-          sort: str = Query("newest", pattern="^(newest|oldest)$"), paid: bool = False,
-          p: Paging = Depends(paging), db: Session = DB, current: CurrentUser = Depends(client_user)):
-    items, total, sums = BillingService(db, current).page(search, date_from, date_to, status_, due, doctor_id, patient_id, p.page, p.size,
-                                                          oldest_first=sort == "oldest", paid_only=paid)
+def bills(f: BillFilters = Depends(bill_filters), p: Paging = Depends(paging), db: Session = DB,
+          current: CurrentUser = Depends(client_user)):
+    items, total, sums = BillingService(db, current).page(f, p.page, p.size)
     return BillPage(items=items, total=total, page=p.page, size=p.size, sums=sums)
 
 
@@ -223,17 +242,45 @@ def worklist(department_id: uuid.UUID | None = None, status_: list[str] = Query(
     return Page(items=items, total=total, page=p.page, size=p.size)
 
 
+def can_update_progress(current: CurrentUser = Depends(client_user)) -> CurrentUser:
+    """Marking tests pending / ready / delivered: the front desk (reports.deliver) or the lab (worklist.update)."""
+    if not (current.can("reports.deliver") or current.can("worklist.update")):
+        raise Forbidden("You don't have permission to change a test's progress.")
+    return current
+
+
 @router.post("/worklist/{item_id}/status", status_code=status.HTTP_204_NO_CONTENT)
-def set_status(item_id: uuid.UUID, data: ItemStatusIn, db: Session = DB, current: CurrentUser = Depends(require("worklist.update"))):
+def set_status(item_id: uuid.UUID, data: ItemStatusIn, db: Session = DB, current: CurrentUser = Depends(can_update_progress)):
     BillingService(db, current).set_item_status(item_id, data.status)
+
+
+@router.post("/bills/{bill_id}/tests/status", status_code=status.HTTP_204_NO_CONTENT)
+def set_bill_tests_status(bill_id: uuid.UUID, data: BillItemsStatusIn, db: Session = DB,
+                          current: CurrentUser = Depends(can_update_progress)):
+    """Mark tests on one bill pending, ready or delivered — all of them, or the ones listed."""
+    BillingService(db, current).set_bill_items_status(bill_id, data.status, data.item_ids)
 
 
 @router.get("/summary/day", response_model=DaySummaryOut)
 def day_summary(day: date | None = None, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """The day at a glance, for everyone who works at the centre."""
     return BillingService(db, current).day_summary(day or local_today())
 
 
+@router.get("/summary/desk", response_model=DeskSummaryOut)
+def desk_summary(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
+                 db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """The dashboard for everyone in the centre: money collected and dues for a period, never the turnover."""
+    if date_from and date_to and date_from > date_to:
+        raise Invalid("The start date is after the end date.", field="from")
+    return BillingService(db, current).desk_summary(local_today(), date_from, date_to)
+
+
 @router.get("/summary/overview", response_model=OverviewOut)
-def overview(db: Session = DB, current: CurrentUser = Depends(require("business_reports.view"))):
-    """The owner's dashboard. Business figures, so only for people who may see business reports."""
-    return OverviewService(db, current).overview(local_today())
+def overview(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
+             db: Session = DB, current: CurrentUser = Depends(require("analytics.view"))):
+    """The owner's dashboard for a period; without a start date, everything since the first bill.
+    Turnover and business figures, so only for the owner and the centre admin (analytics.view)."""
+    if date_from and date_to and date_from > date_to:
+        raise Invalid("The start date is after the end date.", field="from")
+    return OverviewService(db, current).overview(local_today(), date_from, date_to)

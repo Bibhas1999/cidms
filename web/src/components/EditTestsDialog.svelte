@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "../lib/tooltip";
   import { ApiError, put } from "../lib/api";
   import type { Bill, BillLine, LabTest } from "../lib/bill-types";
   import { rupees } from "../lib/format";
@@ -88,7 +89,7 @@
                                    aria-label="Quantity" bind:value={r.quantity} disabled={started} /></td>
             <td class="num money">{rupees(price(r) * r.quantity)}</td>
             <td class="num">
-              {#if !started}<button class="btn btn-ghost-destructive btn-icon btn-sm" aria-label="Take off {r.line?.test_name ?? r.test?.name}" onclick={() => rows.splice(i, 1)}><Icon name="x" size="sm" /></button>{/if}
+              {#if !started}<button class="btn btn-ghost-destructive btn-icon btn-sm" aria-label="Take off {r.line?.test_name ?? r.test?.name}" use:tooltip={"Take this test off the bill"} onclick={() => rows.splice(i, 1)}><Icon name="x" size="sm" /></button>{/if}
             </td>
           </tr>
         {/each}

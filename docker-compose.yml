@@ -33,6 +33,60 @@ services:
     ports: ["3307:3306"]
     volumes: ["supreme-legacy:/var/lib/mysql"]
 
+  # Medical images (phase 4). Orthanc keeps the DICOM studies; only the app talks to its web port (127.0.0.1),
+  # with the user and password below (set ORTHANC_USER / ORTHANC_PASSWORD in .env, the same values the app uses).
+  # Scanners send studies to its DICOM port 4242 (AE title SUPREME).
+  orthanc:
+    image: orthancteam/orthanc:latest
+    environment:
+      ORTHANC__NAME: "Supreme DMS images"
+      ORTHANC__DICOM_AET: SUPREME
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: '{"${ORTHANC_USER:-supreme}": "${ORTHANC_PASSWORD:-local-orthanc-only}"}'
+      DICOM_WEB_PLUGIN_ENABLED: "true"
+      ORTHANC__DICOM_WEB__ENABLE: "true"
+      ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
+      ORTHANC__DICOM_WEB__STUDIES_METADATA: "MainDicomTags"
+      ORTHANC__DICOM_WEB__SERIES_METADATA: "Full"
+      ORTHANC__OVERWRITE_INSTANCES: "false"
+      VERBOSE_STARTUP: "false"
+    ports:
+      - "127.0.0.1:8042:8042"   # REST + DICOMweb: this machine only (the app)
+      - "4242:4242"             # DICOM: for the scanners on the centre's network
+    volumes:
+      - supreme-orthanc:/var/lib/orthanc/db
+    restart: unless-stopped
+
+  # The OHIF image viewer. Browsers reach it only through the app at /viewer (same address, same sign-in);
+  # its data source is the app's DICOMweb proxy at /api/dicom-web (docker/ohif/app-config.js).
+  ohif:
+    image: ohif/app:latest
+    environment:
+      PORT: "80"
+    ports:
+      - "127.0.0.1:3005:80"
+    volumes:
+      - ./docker/ohif/app-config.js:/config/app-config.js:ro
+    entrypoint: ["/bin/sh", "-c", "cp /config/app-config.js /usr/share/nginx/html/app-config.js && exec /usr/src/entrypoint.sh nginx -g 'daemon off;'"]
+    restart: unless-stopped
+
+  # Background jobs (daily summaries, dues digests, exports, notifications, cleanup): python -m app.worker.
+  # Started only when asked:  docker compose --profile worker up -d worker   (or run it directly, see app/worker.py)
+  # Scale out with --scale worker=3: workers share the queue safely.
+  worker:
+    build: .
+    profiles: ["worker"]
+    command: ["python", "-m", "app.worker", "--concurrency", "2"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://supreme_app:local-app-only@postgres:5432/supreme
+    depends_on:
+      postgres: { condition: service_healthy }
+    stop_signal: SIGTERM
+    stop_grace_period: 60s   # lets the job in hand finish
+    restart: unless-stopped
+
 volumes:
   supreme-pg:
   supreme-legacy:
+  supreme-orthanc:

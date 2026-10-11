@@ -1,6 +1,5 @@
 """Request and response shapes for the JSON API."""
 
-import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -9,7 +8,6 @@ from typing import Generic, Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 T = TypeVar("T")
-MOBILE = re.compile(r"^\+?[0-9 ]{10,15}$")
 
 
 class Out(BaseModel):
@@ -39,6 +37,7 @@ class WorkspaceOut(BaseModel):
     brand_color: str = ""
     tagline: str = ""
     logo_url: str = ""
+    wordmark_url: str = ""   # the wide logo with name and slogan, when the centre has one
     # Development only, at an address with no workspace: where the workspaces are.
     links: list[WorkspaceLink] = []
 
@@ -69,6 +68,11 @@ class ProfileIn(BaseModel):
         return _mobile(v)
 
 
+class EmailChangeIn(BaseModel):
+    email: EmailStr
+    current_password: str = Field(min_length=1, max_length=200)
+
+
 class PasswordChangeIn(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
     new_password: str = Field(min_length=1, max_length=200)
@@ -90,6 +94,7 @@ class MeOut(BaseModel):
     roles: list[str]
     permissions: list[str]
     must_change_password: bool
+    manage_own_account: bool = False  # may change their own email and password (owner, centre admin, platform staff)
     csrf_token: str
     workspace: WorkspaceOut
 
@@ -110,10 +115,9 @@ class StaffOut(Out):
 
 
 def _mobile(v: str) -> str:
-    v = v.strip()
-    if v and not MOBILE.match(v):
-        raise ValueError("Enter a 10-digit mobile number.")
-    return v
+    """A valid mobile for its country, saved as +<code><number>; "" when left empty (see app/core/phone.py)."""
+    from app.core.phone import normalise_mobile
+    return normalise_mobile(v)
 
 
 class StaffCreateIn(BaseModel):
@@ -121,7 +125,7 @@ class StaffCreateIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=200)
     mobile: str = Field(default="", max_length=20)
     role_ids: list[uuid.UUID] = Field(min_length=1)
-    temporary_password: str = Field(min_length=1, max_length=200)
+    temporary_password: str = Field(default="", max_length=200)  # empty: the centre's default temporary password
 
     _m = field_validator("mobile")(_mobile)
 
@@ -136,7 +140,7 @@ class StaffUpdateIn(BaseModel):
 
 
 class PasswordResetIn(BaseModel):
-    temporary_password: str = Field(min_length=1, max_length=200)
+    temporary_password: str = Field(default="", max_length=200)  # empty: the default temporary password
 
 
 # ---------- centre settings ----------
@@ -159,6 +163,7 @@ class SettingsIn(BaseModel):
 class SettingsOut(Out, SettingsIn):
     email: str = ""
     logo_file: str = ""
+    wordmark_file: str = ""
     updated_at: datetime
 
 

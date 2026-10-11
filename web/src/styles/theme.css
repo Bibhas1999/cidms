@@ -86,7 +86,7 @@ a { color: var(--primary-text); }
 .card-description { font-size: 13px; margin-top: 3px; }
 .card-content { padding: 18px 20px; }
 .card-footer { padding: 12px 20px; background: transparent; }
-.stat { border-top: 0 !important; padding: 16px 18px; gap: 6px; position: relative; }
+.stat { border-top-width: 1px !important; border-top-color: var(--border); padding: 16px 18px; gap: 6px; position: relative; }
 .stat-label { font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted-foreground); }
 .stat-value { font-size: 26px; font-weight: 650; letter-spacing: -0.03em; }
 .stat-note { font-size: 12.5px; }
@@ -171,3 +171,21 @@ a.card.stat:hover { border-color: var(--input); box-shadow: var(--shadow); }
 /* The toolbar above a table no longer needs its own dividing line: the table's box separates them. */
 .card > .toolbar { border-bottom: 0; padding-bottom: 0; }
 .card > .pager, .card > .card-footer { border-top: 0; }
+
+/* Tooltips for icon buttons (lib/tooltip.ts): one bubble in <body>, placed with position: fixed. */
+.ui-tooltip {
+  position: fixed; z-index: 1000; max-width: min(260px, calc(100vw - 16px)); padding: 6px 9px; border-radius: 7px;
+  background: var(--brand-dark, #0f172a); color: #f3f6fa; font: 500 12px/1.4 var(--font-sans); pointer-events: none;
+  box-shadow: 0 6px 20px rgb(15 23 42 / 0.18); opacity: 0; transform: translateY(2px); transition: opacity .12s ease, transform .12s ease;
+}
+.ui-tooltip.is-open { opacity: 1; transform: none; }
+:root[data-theme="dark"] .ui-tooltip { background: #e6edf3; color: #0d1117; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui-tooltip { background: #e6edf3; color: #0d1117; } }
+@media (prefers-reduced-motion: reduce) { .ui-tooltip { transition: none; } }
+
+/* Toasts at the top right, under the top bar (owner's preference), sliding down into place. */
+.toast-region { top: calc(var(--topbar-height, 56px) + 12px); bottom: auto !important; }
+.toast { animation-name: toast-down; }
+@keyframes toast-down { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) { .toast-region { top: calc(var(--topbar-height, 56px) + 8px + env(safe-area-inset-top)); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
