@@ -142,6 +142,21 @@
   .foot ol { font-size: 12px; font-weight: bold; margin: 0; padding-left: 20px; }
   .sign { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; font-size: 13px; font-weight: bold; }
   .signatory { border-top: 1px solid #000; padding-top: 2px; }
+  /* Screen only, on phones and small tablets: the same receipt, fitted to the screen (paper is unchanged). */
+  @media screen and (max-width: 800px) {
+    .bar { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 12px;
+      padding-top: max(10px, env(safe-area-inset-top)); }
+    .bar .btn { flex: 1 1 0; height: 44px; }
+    .receipt { width: 100%; max-width: 190mm; box-sizing: border-box; margin: 12px auto 24px; padding: 14px 12px; font-size: 12px;
+      box-shadow: 0 1px 3px rgb(0 0 0 / .12); overflow-wrap: anywhere; }
+    .head h1 { font-size: 20px; }
+    .head p { font-size: 12px; }
+    .top .c { font-size: 15px; } .top .l, .top .r { font-size: 11px; }
+    .patient td, .items td, .items th { font-size: 12px; }
+    .gap, .gap2 { width: 12px; } .pad { width: 12px; } .pad2 { width: 24px; }
+    .due { font-size: 14px; padding-right: 8px !important; }
+    :global(body.is-printout) { background: var(--muted) !important; }
+  }
   @media print {
     .screen-only { display: none !important; }
     .receipt { width: auto; margin: 0; padding: 0; }

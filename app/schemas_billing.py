@@ -192,7 +192,13 @@ class ReasonIn(BaseModel):
 
 
 class ItemStatusIn(BaseModel):
-    status: Literal["billed", "scanned", "delivered"]
+    status: Literal["billed", "scanned", "reported", "delivered"]
+
+
+class BillItemsStatusIn(BaseModel):
+    """Several tests on one bill at once; no item_ids means every test on the bill (not taken off)."""
+    status: Literal["billed", "reported", "delivered"]
+    item_ids: list[uuid.UUID] | None = Field(None, max_length=200)
 
 
 class BillLineOut(Out):
@@ -239,7 +245,9 @@ class BillSummaryOut(Out):
 
 
 class BillPage(Page[BillSummaryOut]):
-    sums: dict[str, Money]  # billed and due across every matching bill (cancelled ones left out), not just this page
+    # billed, paid and due across every matching bill (cancelled ones left out), not just this page.
+    # billed is null for people who may not see turnover (no analytics.view).
+    sums: dict[str, Money | None]
 
 
 class BillOut(BillSummaryOut):
@@ -280,14 +288,32 @@ class WorklistRowOut(BaseModel):
 class DaySummaryOut(BaseModel):
     day: date
     bills: int
-    billed: Money
-    discounts: Money
+    billed: Money | None              # null without analytics.view
+    discounts: Money | None           # null without analytics.view
     collected: dict[str, Money]       # by payment mode, refunds taken off
     collected_total: Money
     dues_collected: Money             # paid today against bills from earlier days
     refunds: Money
     outstanding_dues: Money           # everything still owed, all days
     items_by_status: dict[str, int]   # today's tests by progress
+
+
+class DeskSummaryOut(BaseModel):
+    """The dashboard for staff without analytics.view: the period's totals, without the analytics."""
+    date_from: date
+    date_to: date
+    all_time: bool
+    bills: int                        # the period's bills
+    billed: Money                     # what they came to, after discounts (cancelled left out)
+    collected: dict[str, Money]       # received in the period, by payment mode, refunds taken off
+    collected_total: Money
+    dues_collected: Money             # paid in the period against bills from before it
+    refunds: Money
+    due_on_bills: Money               # still owed on the period's bills
+    due_bills: int                    # how many of the period's bills still have money due
+    outstanding_dues: Money           # everything still owed, any date
+    dues_count: int
+    pending_tests: dict[str, int]     # billed / scanned, from the period's bills
 
 
 class TrendPointOut(BaseModel):
@@ -302,19 +328,39 @@ class BreakdownOut(BaseModel):
     amount: Money
 
 
+class PeriodOut(BaseModel):
+    bills: int
+    billed: Money
+    discounts: Money
+    due_on_bills: Money               # still owed on the period's bills
+    patients: int
+    collected: dict[str, Money]       # by payment mode, refunds taken off
+    collected_total: Money
+    dues_collected: Money             # paid in the period against bills from before it
+    refunds: Money
+
+
+class PreviousPeriodOut(BaseModel):
+    date_from: date
+    date_to: date
+    bills: int
+    billed: Money
+    collected_total: Money
+
+
 class OverviewOut(BaseModel):
-    """Everything the owner's dashboard shows, in one request."""
-    today: DaySummaryOut
-    yesterday_billed: Money
-    yesterday_bills: int
-    month_billed: Money
-    month_collected: Money
-    month_bills: int
-    month_discounts: Money
-    dues_count: int
-    trend: list[TrendPointOut]            # last 30 days, oldest first, every day present
-    departments: list[BreakdownOut]       # this month, by amount
-    doctors: list[BreakdownOut]           # this month, top referrers by bills
-    pending_tests: dict[str, int]         # billed / scanned in the last 7 days
+    """Everything the owner's dashboard shows for the chosen period, in one request."""
+    date_from: date
+    date_to: date
+    days: int
+    all_time: bool                        # no start date given: everything since the first bill
+    period: PeriodOut
+    previous: PreviousPeriodOut           # the same number of days just before
+    dues_count: int                       # everything still owed, any date
+    outstanding_dues: Money
+    trend: list[TrendPointOut]            # oldest first, every day (or month) present
+    trend_unit: str                       # day | month
+    departments: list[BreakdownOut]       # the period, by amount
+    doctors: list[BreakdownOut]           # the period, top referrers by bills
+    pending_tests: dict[str, int]         # billed / scanned, from the period's bills
     oldest_dues: list[BillSummaryOut]
-    recent_bills: list[BillSummaryOut]

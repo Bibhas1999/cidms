@@ -7,7 +7,9 @@
   import Activity from "../Activity.svelte";
   import Staff from "../Staff.svelte";
   import Appearance from "./Appearance.svelte";
+  import ApiKeys from "./ApiKeys.svelte";
   import Centre from "./Centre.svelte";
+  import NotificationSettings from "./NotificationSettings.svelte";
   import Password from "./Password.svelte";
   import Profile from "./Profile.svelte";
 
@@ -18,13 +20,18 @@
   interface Section { id: string; label: string; icon: string; group: string; component: Component<any>; show: () => boolean }
   const SECTIONS: Section[] = [
     { id: "profile", label: "My profile", icon: "user", group: "Your account", component: Profile, show: () => true },
-    { id: "password", label: "Password", icon: "lock", group: "Your account", component: Password, show: () => true },
+    // Only the owner, the centre admin and platform staff change their own password; for everyone else the
+    // section simply isn't there (their owner or admin gives them a temporary one from Staff).
+    { id: "password", label: "Password", icon: "lock", group: "Your account", component: Password, show: () => !!session.me?.manage_own_account },
     { id: "appearance", label: "Appearance", icon: "sun", group: "Your account", component: Appearance, show: () => true },
+    { id: "notifications", label: "Notifications", icon: "bell", group: "Your account", component: NotificationSettings, show: () => true },
     { id: "centre", label: "Centre details", icon: "building", group: "Centre", component: Centre, show: () => !session.isPlatform && session.can("settings.manage") },
     { id: "staff", label: session.isPlatform ? "Platform staff" : "Staff and roles", icon: "shield", group: session.isPlatform ? "Platform" : "Centre", component: Staff,
       show: () => session.can(session.isPlatform ? "platform.staff.manage" : "staff.manage") },
     { id: "activity", label: "Activity log", icon: "activity", group: session.isPlatform ? "Platform" : "Centre", component: Activity,
       show: () => session.can(session.isPlatform ? "platform.activity.view" : "activity.view") },
+    { id: "integrations", label: "API & integrations", icon: "settings", group: "Centre", component: ApiKeys,
+      show: () => !session.isPlatform && session.can("integrations.manage") },
   ];
 
   const visible = $derived(SECTIONS.filter((s) => s.show()));

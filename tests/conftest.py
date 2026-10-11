@@ -4,8 +4,10 @@ from the migrations at the start of the run, with the same row-level security th
 import os
 
 os.environ["ENVIRONMENT"] = "test"
-os.environ["DATABASE_URL"] = "postgresql+psycopg://supreme_app:local-app-only@localhost:5433/supreme_test"
-os.environ["MIGRATION_DATABASE_URL"] = "postgresql+psycopg://supreme_owner:local-owner-only@localhost:5433/supreme_test"
+# TEST_DB picks another (existing, empty) database, so two test runs at once don't wipe each other's rows.
+os.environ.setdefault("TEST_DB", "supreme_test")
+os.environ["DATABASE_URL"] = f"postgresql+psycopg://supreme_app:local-app-only@localhost:5433/{os.environ['TEST_DB']}"
+os.environ["MIGRATION_DATABASE_URL"] = f"postgresql+psycopg://supreme_owner:local-owner-only@localhost:5433/{os.environ['TEST_DB']}"
 
 import pytest
 from alembic import command

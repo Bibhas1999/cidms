@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "../lib/tooltip";
   import AuthLayout from "../components/AuthLayout.svelte";
   import { forgetAccount, recentAccounts, type RecentAccount } from "../lib/accounts";
   import { ApiError } from "../lib/api";
@@ -87,7 +88,7 @@
                 <span class="account-avatar" aria-hidden="true">{initials(a.name)}</span>
                 <span class="account-text"><span class="account-name">{a.name}</span><span class="account-email">{a.email}</span></span>
               </button>
-              <button type="button" class="account-forget" aria-label="Remove {a.name} from this computer" title="Remove from this computer" onclick={() => forget(a)}>
+              <button type="button" class="account-forget" aria-label="Remove {a.name} from this computer" use:tooltip={"Remove from this computer"} onclick={() => forget(a)}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
               </button>
             </div>
@@ -118,7 +119,7 @@
           <input id="login-password" class="password" bind:this={passwordInput} type={showPassword ? "text" : "password"} autocomplete="current-password" bind:value={password}
                  onkeydown={onKey} onkeyup={onKey} required aria-invalid={failed} />
           <button type="button" class="reveal" aria-label={showPassword ? "Hide password" : "Show password"}
-                  title={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}
+                  use:tooltip={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}
                   onclick={() => (showPassword = !showPassword)}>
             {#if showPassword}
               <!-- eye-off -->

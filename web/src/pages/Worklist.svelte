@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FEATURES } from "../lib/features";
   import DateRange from "../components/DateRange.svelte";
   import Icon from "../components/Icon.svelte";
   import PageHeader from "../components/PageHeader.svelte";
@@ -8,6 +9,7 @@
   import { date, dateTime, rupees } from "../lib/format";
   import { router, setQuery } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
+  import { tooltip } from "../lib/tooltip";
   import { notify, notifyError } from "../lib/toast.svelte";
   import type { Department, Page, WorklistRow } from "../lib/types";
 
@@ -73,6 +75,25 @@
     // Changing one end fixes the other at what's shown, so the range doesn't jump back to the default.
     const other = key === "from" ? { to: to || istToday } : { from: from || weekAgo };
     setQuery({ [key]: value, ...other, page: null });
+  }
+
+  const canReport = $derived(session.can("reports.write") || session.can("reports.sign"));
+
+  /** Opens the test's first study in the viewer (a tab opened at the click, so it isn't blocked as a pop-up). */
+  async function viewImages(r: WorklistRow) {
+    const tab = window.open("about:blank", "_blank");
+    try {
+      const studies = await get<{ viewer_url: string }[]>(`/api/imaging/items/${r.item_id}/studies`);
+      if (!studies.length) {
+        tab?.close();
+        notify(`No images have been uploaded for ${r.test_name} yet. Add them on the report page.`, { kind: "info" });
+        return;
+      }
+      if (tab) tab.location.href = studies[0].viewer_url;
+    } catch (e) {
+      tab?.close();
+      notifyError(e, { title: "Couldn't open the images" });
+    }
   }
 
   const hasDue = (r: WorklistRow) => Number(r.due) > 0;
@@ -146,7 +167,17 @@
               <td><div class="cell-title mono"><a href="/bills/{r.invoice_id}">{r.invoice_no}</a></div><div class="cell-sub">{date(r.bill_date)}</div></td>
               <td><div class="cell-title">{r.patient_name}</div><div class="cell-sub">{[r.patient_age, r.patient_gender].filter(Boolean).join(" · ")}</div></td>
               <td><div class="cell-title">{r.test_name}</div>
-                <div class="cell-sub">{r.department_name}{#if r.accession_no} · <span class="mono">{r.accession_no}</span>{/if}</div></td>
+                <div class="cell-sub">{r.department_name}{#if r.accession_no} · <span class="mono">{r.accession_no}</span>{/if}</div>
+                <div class="row-wrap" style="gap: 10px; margin-top: 2px">
+                  {#if FEATURES.testReports && (canReport || r.status === "reported")}
+                    <a class="link-button text-sm" href="/test-reports/{r.item_id}" aria-label="{canReport ? 'Write report' : 'Report'} for {r.test_name}, {r.patient_name}">
+                      <Icon name="clipboard" size="sm" /> {canReport && r.status !== "reported" && r.status !== "delivered" ? "Write report" : "Report"}</a>
+                  {/if}
+                  {#if FEATURES.testReports && r.is_imaging && r.status !== "billed"}
+                    <button class="link-button text-sm" type="button" aria-label="View images for {r.test_name}, {r.patient_name}"
+                            use:tooltip={"Opens the image viewer in a new tab"} onclick={() => viewImages(r)}><Icon name="eye" size="sm" /> View images</button>
+                  {/if}
+                </div></td>
               <td><span class="badge {st[0]}" title={r.status_changed_at ? `Since ${dateTime(r.status_changed_at)}` : undefined}>{st[1]}</span></td>
               <td class="num">
                 {#if hasDue(r)}<div class="row justify-end gap-sm"><span class="badge badge-destructive badge-plain">Due</span><span class="money money-due">{rupees(r.due)}</span></div>

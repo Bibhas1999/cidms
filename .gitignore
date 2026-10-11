@@ -8,3 +8,8 @@ web/node_modules/
 web/dist/
 storage/
 *.log
+
+# Production secrets and server backups never go into git
+.env.production
+backups/
+*.dump

@@ -35,7 +35,7 @@ def centre(alpha):
     return {"owner": owner, "front": front, "tests": tests, "tenant": alpha}
 
 
-NEW_PATIENT = {"name": "Phoni  Bhusan Bag", "guardian_name": "Self", "age_years": 61, "gender": "male", "mobile": "9051136089",
+NEW_PATIENT = {"name": "Ramen  Kumar Dey", "guardian_name": "Self", "age_years": 61, "gender": "male", "mobile": "9000012345",
                "address": "Janai, Hooghly"}
 
 
@@ -56,7 +56,7 @@ def test_a_bill_is_priced_from_the_catalogue_and_numbered_per_financial_year(cen
     assert b["invoice_no"] == f"TST/{FY}/000001"
     assert money(b["subtotal"]) == Decimal("600.50") and money(b["total"]) == Decimal("600.50")
     assert money(b["paid"]) == Decimal("300") and money(b["due"]) == Decimal("300.50")
-    assert b["patient_name"] == "Phoni Bhusan Bag" and b["patient_age"] == "61 Y" and b["referring_doctor_name"] == "Dr. S.K. Halder"
+    assert b["patient_name"] == "Ramen Kumar Dey" and b["patient_age"] == "61 Y" and b["referring_doctor_name"] == "Dr. S.K. Halder"
     xray = next(i for i in b["items"] if i["test_name"] == "Chest X-ray PA")
     assert xray["is_imaging"] and xray["accession_no"].startswith("A")
     assert next(i for i in b["items"] if i["test_name"] == "CBC")["accession_no"] == ""
@@ -176,7 +176,10 @@ def test_worklist_progress(centre):
     tech.login("tech@alpha.in")
     rows = tech.get("/api/worklist").json()
     assert rows["total"] == 2
-    assert centre["front"].post(f"/api/worklist/{xray['id']}/status", json={"status": "scanned"}).status_code == 403
+    make_user(centre["tenant"], "acc@alpha.in", ["accounts"])
+    acc = browser("alpha.localhost")
+    acc.login("acc@alpha.in")
+    assert acc.post(f"/api/worklist/{xray['id']}/status", json={"status": "scanned"}).status_code == 403  # no progress rights
     assert tech.post(f"/api/worklist/{cbc['id']}/status", json={"status": "scanned"}).status_code == 422  # not a scan
     assert tech.post(f"/api/worklist/{xray['id']}/status", json={"status": "scanned"}).status_code == 204
     assert tech.post(f"/api/worklist/{xray['id']}/status", json={"status": "delivered"}).status_code == 204
@@ -190,7 +193,9 @@ def test_the_days_summary_adds_up(centre):
     b = bill(front, t, ["CBC"], payments=[{"mode": "upi", "amount": "200", "reference": "U1"}]).json()
     front.post(f"/api/bills/{b['id']}/payments", json={"mode": "cash", "amount": "50.50"})
     centre["owner"].post(f"/api/bills/{a['id']}/refunds", json={"mode": "cash", "amount": "100", "note": "Overcharged"})
-    s = front.get("/api/summary/day").json()
+    desk = front.get("/api/summary/day").json()
+    assert money(desk["billed"]) == Decimal("750.50")  # the day's totals are for everyone
+    s = centre["owner"].get("/api/summary/day").json()
     assert s["bills"] == 2
     assert money(s["billed"]) == Decimal("750.50") and money(s["discounts"]) == Decimal("100.00")
     assert {k: money(v) for k, v in s["collected"].items()} == {"cash": Decimal("450.50"), "upi": Decimal("200.00")}
@@ -202,7 +207,7 @@ def test_the_days_summary_adds_up(centre):
 def test_bill_search_filters_and_totals(centre):
     t, front = centre["tests"], centre["front"]
     a = bill(front, t, ["CBC"]).json()
-    front.post("/api/bills", json={"patient": {**NEW_PATIENT, "name": "Suman Das", "mobile": "7980003590"},
+    front.post("/api/bills", json={"patient": {**NEW_PATIENT, "name": "Suman Das", "mobile": "7000054321"},
                                    "lines": [{"test_id": t["Lipid profile"]}], "payments": [{"mode": "cash", "amount": "600"}]})
     assert front.get("/api/bills", params={"search": "suman"}).json()["items"][0]["patient_name"] == "Suman Das"
     assert front.get("/api/bills", params={"search": "0003590"}).json()["total"] == 1
@@ -210,16 +215,17 @@ def test_bill_search_filters_and_totals(centre):
     assert front.get("/api/bills", params={"search": "1"}).json()["items"][0]["id"] == a["id"]  # bill 000001
     dues = front.get("/api/bills", params={"due": "true"}).json()
     assert dues["total"] == 1 and money(dues["sums"]["due"]) == Decimal("250.50")
-    assert money(front.get("/api/bills").json()["sums"]["billed"]) == Decimal("850.50")
+    assert money(front.get("/api/bills").json()["sums"]["billed"]) == Decimal("850.50")  # totals for everyone
+    assert money(centre["owner"].get("/api/bills").json()["sums"]["billed"]) == Decimal("850.50")
 
 
 def test_patients_are_numbered_and_family_members_share_a_mobile(centre):
     front = centre["front"]
     p1 = front.post("/api/patients", json=NEW_PATIENT).json()
-    p2 = front.post("/api/patients", json={**NEW_PATIENT, "name": "Pooja Bag", "gender": "female", "age_years": 23}).json()
+    p2 = front.post("/api/patients", json={**NEW_PATIENT, "name": "Pooja Dey", "gender": "female", "age_years": 23}).json()
     assert (p1["patient_no"], p2["patient_no"]) == ("P000001", "P000002")
     same = front.get("/api/patients/same-mobile", params={"mobile": "+91 90511 36089"}).json()
-    assert {p["name"] for p in same} == {"Phoni Bhusan Bag", "Pooja Bag"}
+    assert {p["name"] for p in same} == {"Ramen Kumar Dey", "Pooja Dey"}
     assert front.post("/api/patients", json={**NEW_PATIENT, "age_years": None}).status_code == 422
 
 
@@ -264,3 +270,19 @@ def test_catalogue_changes_need_permission_and_names_are_unique(centre):
     assert front.post("/api/departments", json={"name": "Cardiology"}).status_code == 403
     assert owner.post("/api/departments", json={"name": "radiology"}).status_code == 409
     assert front.get("/api/tests", params={"search": "x-ray"}).json()["items"][0]["name"] == "Chest X-ray PA"
+
+
+def test_cancelling_or_refunding_a_bill_tells_the_owner(centre):
+    make_user(centre["tenant"], "admin@alpha.in", ["admin"])
+    admin = browser("alpha.localhost")
+    admin.login("admin@alpha.in")
+    t = centre["tests"]
+    paid = bill(admin, t, ["Lipid profile"], payments=[{"mode": "cash", "amount": "600"}]).json()
+    assert admin.post(f"/api/bills/{paid['id']}/refunds", json={"mode": "cash", "amount": "100", "note": "Overcharged"}).status_code == 200
+    unpaid = bill(admin, t, ["CBC"]).json()
+    assert admin.post(f"/api/bills/{unpaid['id']}/cancel", json={"reason": "Patient left"}).status_code == 200
+    owner = centre["owner"]
+    kinds = {n["kind"] for n in owner.get("/api/notifications").json()["items"]}
+    assert {"refund.recorded", "bill.cancelled"} <= kinds
+    assert owner.get("/api/notifications/unread-count").json()["count"] >= 2
+    assert not admin.get("/api/notifications").json()["items"]  # not told about what they did themselves

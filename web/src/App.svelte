@@ -6,6 +6,7 @@
   import Toasts from "./components/Toasts.svelte";
   import { reportError } from "./lib/errors";
   import { navigate, router } from "./lib/router.svelte";
+  import { FEATURES } from "./lib/features";
   import { session } from "./lib/session.svelte";
   import BillDetail from "./pages/bills/BillDetail.svelte";
   import BillPrint from "./pages/bills/BillPrint.svelte";
@@ -17,12 +18,17 @@
   import PatientDetail from "./pages/patients/PatientDetail.svelte";
   import Patients from "./pages/patients/Patients.svelte";
   import Worklist from "./pages/Worklist.svelte";
+  import TestReport from "./pages/reports/TestReport.svelte";
+  import Reports from "./pages/reports/Reports.svelte";
   import ChangePassword from "./pages/ChangePassword.svelte";
+  import Analytics from "./pages/Analytics.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
   import ForgotPassword from "./pages/ForgotPassword.svelte";
   import Login from "./pages/Login.svelte";
   import ResetPassword from "./pages/ResetPassword.svelte";
   import Message from "./pages/Message.svelte";
+  import Notifications from "./pages/Notifications.svelte";
+  import Terms from "./pages/Terms.svelte";
   import Clients from "./pages/platform/Clients.svelte";
   import SettingsHub from "./pages/settings/SettingsHub.svelte";
 
@@ -40,6 +46,7 @@
   const CLIENT_ONLY = { platform: null };
   const routes: Route[] = [
     { path: "/", component: Dashboard, title: "Dashboard" },
+    { path: "/analytics", component: Analytics, title: "Analytics", client: "analytics.view", platform: null },
     { path: "/bills", component: Bills, title: "Bills", ...CLIENT_ONLY },
     { path: "/bills/new", component: NewBill, title: "New bill", client: "billing.create", platform: null },
     { path: "/bills/:id", component: BillDetail, title: "Bill", ...CLIENT_ONLY },
@@ -47,7 +54,10 @@
     { path: "/dues", component: Dues, title: "Dues", client: "payments.collect", platform: null },
     { path: "/patients", component: Patients, title: "Patients", ...CLIENT_ONLY },
     { path: "/patients/:id", component: PatientDetail, title: "Patient", ...CLIENT_ONLY },
-    { path: "/worklist", component: Worklist, title: "Worklist", ...CLIENT_ONLY },
+    ...(FEATURES.worklist ? [{ path: "/worklist", component: Worklist, title: "Worklist", ...CLIENT_ONLY }] : []),
+    ...(FEATURES.testReports ? [{ path: "/test-reports/:itemId", component: TestReport, title: "Report", ...CLIENT_ONLY }] : []),
+    { path: "/reports", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
+    { path: "/reports/:name", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/tests", component: Tests, title: "Tests & prices", ...CLIENT_ONLY },
     { path: "/doctors", component: Doctors, title: "Referring doctors", ...CLIENT_ONLY },
     { path: "/settings", component: SettingsHub, title: "Settings" },
@@ -56,6 +66,7 @@
     { path: "/activity", component: SettingsHub, title: "Settings" },
     { path: "/clients", component: Clients, title: "Clients", client: null, platform: "platform.clients.view" },
     { path: "/change-password", component: ChangePassword, title: "Change password" },
+    { path: "/notifications", component: Notifications, title: "Notifications" },
   ];
 
   function match(path: string): { route: Route; params: Record<string, string> } | null {
@@ -81,6 +92,8 @@
 
   // Pages for people who aren't signed in.
   const PUBLIC = ["/login", "/forgot-password", "/reset-password"];
+  // Pages anyone can read, signed in or not.
+  const OPEN = ["/terms"];
 
   let startError = $state("");
 
@@ -104,10 +117,13 @@
   $effect(() => {
     if (!session.ready || session.workspace?.kind === "none") return;
     const path = router.path;
+    if (OPEN.includes(path)) return;
     if (!session.me) {
       if (!PUBLIC.includes(path)) navigate(`/login${path === "/" ? "" : `?next=${encodeURIComponent(path + router.search)}`}`, { replace: true });
     } else if (session.me.must_change_password && path !== "/change-password") {
       navigate("/change-password", { replace: true });
+    } else if (path === "/change-password" && !session.me.must_change_password && !session.me.manage_own_account) {
+      navigate("/", { replace: true }); // staff only choose a password at first sign-in; after that it's their owner's or admin's job
     } else if (PUBLIC.includes(path)) {
       navigate("/", { replace: true });
     }
@@ -115,7 +131,7 @@
 
   $effect(() => {
     const where = session.workspace?.name ? ` · ${session.workspace.name}` : "";
-    const titles: Record<string, string> = { "/login": "Sign in", "/forgot-password": "Forgot password", "/reset-password": "Choose a new password" };
+    const titles: Record<string, string> = { "/login": "Sign in", "/forgot-password": "Forgot password", "/reset-password": "Choose a new password", "/terms": "Terms and conditions" };
     document.title = `${titles[router.path] ?? route?.title ?? "Not found"}${where} · Supreme DMS`;
   });
 </script>
@@ -148,6 +164,8 @@
       {/if}
     </div>
   </div>
+{:else if OPEN.includes(router.path)}
+  {@render guarded(Terms)}
 {:else if !session.me}
   {#if router.path === "/login"}{@render guarded(Login)}
   {:else if router.path === "/forgot-password"}{@render guarded(ForgotPassword)}

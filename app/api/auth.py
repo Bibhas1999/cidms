@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.db import DB
 from app.core.security import CurrentUser, get_current_user, get_user_allowing_password_change
 from app.core.storage import MAX_LOGO_BYTES
-from app.schemas import ForgotPasswordIn, LoginIn, MeOut, PasswordChangeIn, ProfileIn, ResetPasswordIn, WorkspaceOut
+from app.schemas import EmailChangeIn, ForgotPasswordIn, LoginIn, MeOut, PasswordChangeIn, ProfileIn, ResetPasswordIn, WorkspaceOut
 from app.schemas import WorkspaceLink as WorkspaceLinkOut
 from app.services.auth import AuthService, me_from_current, workspace_of
 
@@ -39,24 +39,32 @@ def workspace(request: Request):
     return out
 
 
-@router.get("/workspace/logo", include_in_schema=False)
-def workspace_logo(request: Request):
-    """The centre's logo, for its sign-in page and bills. Needs no sign-in."""
-    from fastapi.responses import FileResponse
-
+def _centre_image(request: Request, kind: str) -> Response:
     from app.core.db import scoped_session
     from app.core.errors import NotFound
-    from app.core.storage import logo_path
+    from app.core.storage import decode
     from app.models import TenantSettings
     tenant = request.state.tenant
     if tenant is None:
         raise NotFound("No logo here.")
     with scoped_session(tenant.id) as db:
         row = db.get(TenantSettings, tenant.id)
-        path = logo_path(tenant.id, row.logo_file) if row else None
-    if path is None:
+        content, mime = (decode(getattr(row, f"{kind}_data")), getattr(row, f"{kind}_mime")) if row else (None, "")
+    if not content:
         raise NotFound("No logo here.")
-    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+    return Response(content, media_type=mime or "image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/workspace/logo", include_in_schema=False)
+def workspace_logo(request: Request):
+    """The centre's square logo, for its sign-in page and bills. Needs no sign-in."""
+    return _centre_image(request, "logo")
+
+
+@router.get("/workspace/wordmark", include_in_schema=False)
+def workspace_wordmark(request: Request):
+    """The centre's wide logo with its name and slogan. Needs no sign-in (it's on the sign-in page)."""
+    return _centre_image(request, "wordmark")
 
 
 @router.post("/auth/login", response_model=MeOut)
@@ -93,7 +101,7 @@ def me(request: Request, current: CurrentUser = Depends(get_user_allowing_passwo
 
 @router.put("/auth/profile", response_model=MeOut)
 def update_profile(data: ProfileIn, request: Request, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
-    """Your own name and mobile. Your email can't be changed here: it's how you sign in."""
+    """Your own name and mobile. The email you sign in with changes at PUT /api/auth/email (owner and admin only)."""
     AuthService(db).update_profile(current, data.full_name, data.mobile)
     return me_from_current(request, current)
 
@@ -114,18 +122,23 @@ def remove_avatar(request: Request, db: Session = DB, current: CurrentUser = Dep
 @router.get("/users/{user_id}/avatar", include_in_schema=False)
 def user_avatar(user_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
     """A colleague's picture. Only people in the same centre (or platform) can see it."""
-    from fastapi.responses import FileResponse
-
     from app.core.errors import NotFound
-    from app.core.storage import avatar_path
+    from app.core.storage import decode
     from app.models import User
     user = db.get(User, user_id)  # row-level security: other centres' people aren't visible
     if user is None or user.tenant_id != current.user.tenant_id:
         raise NotFound("No picture.")
-    path = avatar_path(user.tenant_id, user.avatar_file)
-    if path is None:
+    content = decode(user.avatar_data)
+    if not content:
         raise NotFound("No picture.")
-    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+    return Response(content, media_type=user.avatar_mime or "image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.put("/auth/email", response_model=MeOut)
+def change_email(data: EmailChangeIn, request: Request, db: Session = DB, current: CurrentUser = Depends(get_current_user)):
+    """The owner or centre admin changes the email they sign in with (needs their current password)."""
+    AuthService(db).change_email(current, data.email, data.current_password)
+    return me_from_current(request, current)
 
 
 @router.post("/auth/password", response_model=MeOut)

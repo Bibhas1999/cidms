@@ -1,8 +1,8 @@
 <script lang="ts">
   let { embedded = false }: { embedded?: boolean; params?: Record<string, string> } = $props();
-  import Icon from "../components/Icon.svelte";
+  import DataTable from "../components/DataTable.svelte";
+  import FilterBar from "../components/FilterBar.svelte";
   import PageHeader from "../components/PageHeader.svelte";
-  import Pagination from "../components/Pagination.svelte";
   import { get } from "../lib/api";
   import { actionLabel, dateTime } from "../lib/format";
   import { router, setQuery } from "../lib/router.svelte";
@@ -14,6 +14,8 @@
 
   let data = $state<Page<Activity> | null>(null);
   let loadError = $state("");
+  let loading = $state(false);
+  let reload = $state(0);
 
   const FILTERS = [
     ["", "Everything"], ["user.", "Sign-ins, sign-outs and passwords"], ["user.sign_in_failed", "Failed sign-ins"],
@@ -23,9 +25,13 @@
 
   $effect(() => {
     const ctrl = new AbortController();
-    get<Page<Activity>>("/api/activity", { page, size: SIZE, action }, ctrl.signal)
+    const query = { page, size: SIZE, action };
+    reload;
+    loading = true;
+    get<Page<Activity>>("/api/activity", query, ctrl.signal)
       .then((d) => { data = d; loadError = ""; })
-      .catch((e) => { if (e.name !== "AbortError") loadError = e.message; });
+      .catch((e) => { if (e.name !== "AbortError") loadError = e.message; })
+      .finally(() => { loading = false; });
     return () => ctrl.abort();
   });
 
@@ -36,38 +42,34 @@
   }
 </script>
 
-<PageHeader compact={embedded} eyebrow="Administration" title="Activity log" description="Every sign-in and change, with who did it, when and from where. Nothing here can be edited." />
+{#snippet detailsCell(a: Activity)}<span class="cell-sub details">{summary(a.details)}</span>{/snippet}
 
-<section class="card">
-  <div class="toolbar">
-    <label class="label" for="action">Show</label>
-    <select id="action" class="select" value={action} onchange={(e) => setQuery({ action: e.currentTarget.value, page: null })}>
-      {#each FILTERS as [value, label] (value)}<option {value}>{label}</option>{/each}
-    </select>
-  </div>
-  {#if loadError}
-    <div class="card-content"><div class="alert alert-destructive" role="alert"><Icon name="alert" />{loadError}</div></div>
-  {:else if data}
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th><th>From</th></tr></thead>
-        <tbody>
-          {#each data.items as a (a.id)}
-            <tr>
-              <td class="nowrap text-sm">{dateTime(a.created_at)}</td>
-              <td class="cell-title">{a.user_name ?? "—"}</td>
-              <td>{actionLabel(a.action)}</td>
-              <td class="cell-sub" style="max-width: 420px; overflow-wrap: anywhere">{summary(a.details)}</td>
-              <td class="mono">{a.ip_address ?? ""}</td>
-            </tr>
-          {:else}
-            <tr><td colspan="5"><div class="empty"><Icon name="inbox" />Nothing recorded yet.</div></td></tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    {#if data.total > 0}<Pagination page={data.page} size={data.size} total={data.total} onchange={(p) => setQuery({ page: p }, { replace: false })} />{/if}
-  {:else}
-    <div class="empty" aria-busy="true">Loading…</div>
-  {/if}
+<PageHeader compact={embedded} eyebrow="Administration" title="Activity log" description="Every sign-in and change, with who did it, when and from where. Nothing here can be edited."
+            tip="Kept for audits. Entries can't be changed or deleted by anyone, including the owner." />
+
+<section class="card" aria-label="Activity log">
+  <FilterBar search={false} inlineKeys={["action"]}>
+    {#snippet inline()}
+      <label class="sr-only" for="action">Show</label>
+      <select id="action" class="select activity-filter" value={action} onchange={(e) => setQuery({ action: e.currentTarget.value, page: null })}>
+        {#each FILTERS as [value, label] (value)}<option {value}>{label}</option>{/each}
+      </select>
+    {/snippet}
+  </FilterBar>
+  <DataTable label="Activity" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
+             empty={{ icon: "inbox", title: action ? "Nothing of this kind recorded." : "Nothing recorded yet." }}
+             columns={[
+               { key: "what", label: "What", value: (a) => actionLabel(a.action), class: "cell-title", mobile: "title" },
+               { key: "when", label: "When", value: (a) => dateTime(a.created_at), nowrap: true, class: "text-sm", mobile: "end" },
+               { key: "who", label: "Who", value: (a) => a.user_name ?? "—" },
+               { key: "details", label: "Details", cell: detailsCell, mobile: "sub" },
+               { key: "from", label: "From", value: (a) => a.ip_address ?? "", class: "mono", optional: true,
+                 tip: "The network address the change came from." },
+             ]} />
 </section>
+
+<style>
+  .details { display: block; max-width: 420px; overflow-wrap: anywhere; }
+  .activity-filter { max-width: none !important; min-width: 240px !important; }
+  @media (max-width: 640px) { .details { max-width: none; } .activity-filter { min-width: 0 !important; } }
+</style>

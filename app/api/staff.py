@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import Paging, paging, require_any
 from app.core.db import DB
 from app.core.security import CurrentUser
-from app.repositories.users import RoleRepository
-from app.schemas import Page, PasswordResetIn, RoleOut, StaffCreateIn, StaffOut, StaffUpdateIn
+from app.schemas import Page, PasswordResetIn, StaffCreateIn, StaffOut, StaffUpdateIn
+from app.schemas_roles import StaffRolesIn
 from app.services.staff import StaffService
 
 router = APIRouter(prefix="/api", tags=["staff"])
@@ -40,6 +40,8 @@ def reset_password(user_id: uuid.UUID, data: PasswordResetIn, db: Session = DB, 
     StaffService(db, current).reset_password(user_id, data.temporary_password)
 
 
-@router.get("/roles", response_model=list[RoleOut])
-def list_roles(db: Session = DB, current: CurrentUser = Depends(manage_staff)):
-    return RoleRepository(db).for_scope("platform" if current.is_platform else "client")
+@router.put("/staff/{user_id}/roles", response_model=StaffOut)
+def set_staff_roles(user_id: uuid.UUID, data: StaffRolesIn, db: Session = DB, current: CurrentUser = Depends(manage_staff)):
+    """Give someone exactly these roles (built-in or the centre's own), with the same rules as editing them.
+    The roles list itself (GET /api/roles) lives in app/api/roles.py."""
+    return StaffService(db, current).set_roles(user_id, data.role_ids)

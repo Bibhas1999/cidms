@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "../lib/tooltip";
   import { toasts, type NotifyKind } from "../lib/toast.svelte";
   import Icon from "./Icon.svelte";
 
@@ -19,7 +20,7 @@
       <div>{t.message}</div>
       {#if t.detail}<div class="toast-detail">{t.detail}</div>{/if}
     </div>
-    <button type="button" class="toast-close" aria-label="Dismiss notification" onclick={() => toasts.dismiss(t.id)}><Icon name="x" size="sm" /></button>
+    <button type="button" class="toast-close" aria-label="Dismiss notification" use:tooltip={"Dismiss"} onclick={() => toasts.dismiss(t.id)}><Icon name="x" size="sm" /></button>
   </div>
 {/snippet}
 

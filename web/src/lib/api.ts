@@ -1,4 +1,5 @@
 import * as loader from "./loader";
+import { toasts } from "./toast.svelte";
 
 // The one way the app talks to the server. The session lives in an HttpOnly cookie that JavaScript never
 // sees; every change carries the session's CSRF token. Errors come back as ApiError with a readable message,
@@ -49,16 +50,40 @@ function withQuery(path: string, query?: Query): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Changes that take a moment show a spinner toast ("Saving…") at the top right while they run, so the page never
+// looks stuck and people can carry on. Quick ones (most) finish before it appears. Background chatter is left out.
+const PROGRESS_AFTER_MS = 350;
+const QUIET = [/^\/api\/auth\/(login|logout)/, /^\/api\/notifications/, /^\/api\/client-errors/, /^\/api\/auth\/me/];
+function progressWords(method: string, path: string): string {
+  if (method === "DELETE") return "Removing…";
+  if (/\/cancel$/.test(path)) return "Cancelling…";
+  if (/\/refunds$/.test(path)) return "Recording the refund…";
+  if (/\/payments$/.test(path)) return "Recording the payment…";
+  if (/\/reset-password$/.test(path)) return "Resetting the password…";
+  if (path === "/api/bills" && method === "POST") return "Saving the bill…";
+  return method === "POST" ? "Saving…" : "Saving changes…";
+}
+
 export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string,
-                             options: { body?: unknown; query?: Query; signal?: AbortSignal; headers?: Record<string, string> } = {}): Promise<T> {
+                             options: { body?: unknown; query?: Query; signal?: AbortSignal; headers?: Record<string, string>;
+                                        /** Words for the spinner toast on a slow change; false for none. */
+                                        progress?: string | false } = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json", ...(options.headers ?? {}) };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = hooks.csrf();
+
+  const showProgress = method !== "GET" && options.progress !== false && !QUIET.some((r) => r.test(path));
+  let toastId: number | null = null;
+  const timer = showProgress
+    ? setTimeout(() => { toastId = toasts.show(options.progress || progressWords(method, path), { kind: "progress" }); }, PROGRESS_AFTER_MS)
+    : undefined;
 
   loader.start();
   try {
     return await send<T>(method, path, options, headers);
   } finally {
+    clearTimeout(timer);
+    if (toastId !== null) toasts.dismiss(toastId);
     loader.done();
   }
 }

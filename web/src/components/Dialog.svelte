@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "../lib/tooltip";
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
 
@@ -26,7 +27,7 @@
       <h2 id="{uid}-title">{title}</h2>
       {#if description}<p id="{uid}-desc" class="text-sm text-muted mt-2">{description}</p>{/if}
     </div>
-    <button class="btn btn-ghost btn-icon" type="button" aria-label="Close" onclick={() => (open = false)}><Icon name="x" /></button>
+    <button class="btn btn-ghost btn-icon" type="button" aria-label="Close" use:tooltip={"Close (Esc)"} onclick={() => (open = false)}><Icon name="x" /></button>
   </div>
   {#if children}<div class="dialog-body">{@render children()}</div>{/if}
   {#if footer}<div class="dialog-foot row justify-end">{@render footer()}</div>{/if}

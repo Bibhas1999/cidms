@@ -96,7 +96,7 @@
 
 <style>
   .ts { position: relative; }
-  .ts-pop { position: absolute; z-index: 50; left: 0; right: 0; top: 42px; min-width: 380px; background: var(--popover);
+  .ts-pop { position: absolute; z-index: 50; left: 0; right: 0; top: 42px; min-width: min(380px, calc(100vw - 24px)); background: var(--popover);
     border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); overflow: hidden; }
   .ts-list { list-style: none; margin: 0; padding: 4px; max-height: 216px; overflow-y: auto; }
   .ts-row { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
@@ -108,4 +108,16 @@
   .ts-empty { padding: 10px; font-size: 13px; color: var(--muted-foreground); }
   .ts-foot { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; border-top: 1px solid var(--border);
     font-size: 12px; color: var(--muted-foreground); }
+  /* Phones: the list fits the screen, rows are finger-sized, and the department goes under the name. */
+  @media (max-width: 640px) {
+    .ts-pop { min-width: 0; }
+    .ts-list { max-height: min(320px, 45dvh); }
+    .ts-row { height: auto; min-height: 44px; padding: 6px 8px; flex-wrap: wrap; row-gap: 0; }
+    .ts-name { flex: 1 1 calc(100% - 120px); white-space: normal; }
+    .ts-dept { order: 3; flex: 1 1 100%; padding-left: 24px; }
+    .ts-price { width: auto; }
+    .ts-foot { padding: 6px 10px; }
+    .ts-foot .link-button { min-height: 40px; padding: 0 8px; }
+  }
+  @media (pointer: coarse) { .ts-row { min-height: 44px; } }
 </style>

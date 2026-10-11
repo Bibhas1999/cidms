@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PasswordInput from "../../components/PasswordInput.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import { ApiError, post } from "../../lib/api";
@@ -34,14 +35,14 @@
   <div class="card-header"><div><h2 class="card-title">Password</h2>
     <p class="card-description">You stay signed in here; your other devices are signed out.</p></div></div>
   <div class="card-content stack" style="max-width: 460px">
-    <Field id="pw-current" label="Current password" required error={errors.current_password}>
-      {#snippet children({ invalid, describedby })}<input id="pw-current" class="input" type="password" autocomplete="current-password" bind:value={current} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+    <Field id="pw-current" label="Current password" required error={errors.current_password} tip="The password you signed in with, to confirm it's you.">
+      {#snippet children({ invalid, describedby })}<PasswordInput id="pw-current" autocomplete="current-password" bind:value={current} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
     </Field>
-    <Field id="pw-new" label="New password" required error={errors.new_password} hint="At least 10 characters, mixing letters with numbers or symbols.">
-      {#snippet children({ invalid, describedby })}<input id="pw-new" class="input" type="password" autocomplete="new-password" bind:value={next} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+    <Field id="pw-new" label="New password" required error={errors.new_password} hint="At least 10 characters, mixing letters with numbers or symbols." tip="Choose one you don't use anywhere else. Changing it signs you out on your other devices.">
+      {#snippet children({ invalid, describedby })}<PasswordInput id="pw-new" autocomplete="new-password" bind:value={next} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
     </Field>
-    <Field id="pw-again" label="New password again" required error={errors.again}>
-      {#snippet children({ invalid, describedby })}<input id="pw-again" class="input" type="password" autocomplete="new-password" bind:value={again} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+    <Field id="pw-again" label="New password again" required error={errors.again} tip="Type it once more to catch typing mistakes.">
+      {#snippet children({ invalid, describedby })}<PasswordInput id="pw-again" autocomplete="new-password" bind:value={again} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
     </Field>
   </div>
   <div class="card-footer">

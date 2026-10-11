@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import Forbidden, Invalid, Locked, NotFound, Unauthorized
+from app.core.errors import Conflict, Forbidden, Invalid, Locked, NotFound, Unauthorized
 from app.core.limits import login_limiter, reset_limiter
 from app.core.logging import client_ip
 from app.core.passwords import check_strength, hash_password, verify_password
@@ -26,9 +26,17 @@ from app.core.tenancy import TenantRef
 from app.models import PasswordReset, User, UserSession, utcnow
 from app.repositories.users import UserRepository
 from app.schemas import MeOut, WorkspaceOut
+from app.services import events
 from app.services.audit import AuditService
 
 WRONG = "That email and password don't match. Check them and try again."
+OWN_ACCOUNT = "account.manage_own"
+
+
+def manages_own_account(user: User, permissions: set[str]) -> bool:
+    """Only the owner and the centre admin (and platform staff) change their own sign-in email and password.
+    Other staff get a temporary password from them, and choose their own only at that first sign-in."""
+    return user.tenant_id is None or OWN_ACCOUNT in permissions
 
 
 def workspace_of(request: Request) -> WorkspaceOut:
@@ -49,18 +57,19 @@ def branding(tenant: TenantRef) -> dict:
         row = db.get(TenantSettings, tenant.id)
         if row is None:
             return {}
-        logo = f"/api/workspace/logo?v={row.logo_file.removesuffix('.png')}" if row.logo_file else ""
-        return {"brand_color": row.brand_color, "tagline": row.tagline, "logo_url": logo}
+        logo = f"/api/workspace/logo?v={row.logo_file}" if row.logo_file and row.logo_data else ""
+        wordmark = f"/api/workspace/wordmark?v={row.wordmark_file}" if row.wordmark_file and row.wordmark_data else ""
+        return {"brand_color": row.brand_color, "tagline": row.tagline, "logo_url": logo, "wordmark_url": wordmark}
 
 
 def me_out(request: Request, user: User, sess: UserSession, permissions: set[str], roles: list[str]) -> MeOut:
     return MeOut(id=user.id, email=user.email, full_name=user.full_name, mobile=user.mobile, avatar_url=avatar_url(user),
-                 roles=roles, permissions=sorted(permissions),
+                 roles=roles, permissions=sorted(permissions), manage_own_account=manages_own_account(user, permissions),
                  must_change_password=user.must_change_password, csrf_token=sess.csrf_token, workspace=workspace_of(request))
 
 
 def avatar_url(user: User) -> str:
-    return f"/api/users/{user.id}/avatar?v={user.avatar_file[:8]}" if user.avatar_file else ""
+    return f"/api/users/{user.id}/avatar?v={user.avatar_file}" if user.avatar_file and user.avatar_data else ""
 
 
 def me_from_current(request: Request, current: CurrentUser) -> MeOut:
@@ -120,6 +129,8 @@ class AuthService:
 
     def change_password(self, current: CurrentUser, current_password: str, new_password: str) -> None:
         user = current.user
+        if not user.must_change_password and not manages_own_account(user, current.permissions):
+            raise Forbidden("Only the owner or the centre admin can change passwords here.")
         ok, _ = verify_password(current_password, user.password_hash)
         if not ok:
             raise Invalid("Your current password isn't right.", "current_password")
@@ -145,12 +156,15 @@ class AuthService:
         user = self.users.by_email(tenant.id if tenant else None, email)
         if user is None or not user.is_active or (tenant and not tenant.is_active):
             return None
+        if not manages_own_account(user, load_permissions(self.db, user.id)[0]):
+            return None  # staff don't reset their own password; their owner or admin gives them a temporary one
         s = get_settings()
         token = secrets.token_urlsafe(32)
         now = utcnow()
         self.db.add(PasswordReset(token_hash=token_hash(token), tenant_id=user.tenant_id, user_id=user.id, created_at=now,
                                   expires_at=now + timedelta(minutes=s.password_reset_minutes), ip_address=ip or None))
         self.audit.record(user.tenant_id, user.id, "user.password_reset_requested", "user", user.id)
+        events.password_reset_requested(self.db, user, ip or "")
         link = f"{request.base_url.scheme}://{request.headers.get('host', '')}/reset-password?token={token}"
         where = tenant.name if tenant else "the Supreme DMS platform"
         body = "\n\n".join([
@@ -168,7 +182,8 @@ class AuthService:
         tenant: TenantRef | None = request.state.tenant
         now = utcnow()
         if (row is None or row.used_at is not None or row.expires_at <= now
-                or row.tenant_id != (tenant.id if tenant else None) or not row.user.is_active):
+                or row.tenant_id != (tenant.id if tenant else None) or not row.user.is_active
+                or not manages_own_account(row.user, load_permissions(self.db, row.user_id)[0])):
             raise Invalid("This reset link has expired or was already used. Ask for a new one.", "token")
         check_strength(new_password)
         user = row.user
@@ -194,14 +209,30 @@ class AuthService:
         if changes:
             self.audit.record(user.tenant_id, user.id, "user.profile_updated", "user", user.id, changes)
 
-    def set_avatar(self, current: CurrentUser, data: bytes | None) -> None:
-        from app.core.storage import save_avatar
+    def change_email(self, current: CurrentUser, new_email: str, current_password: str) -> None:
+        """The owner or admin changes the email they sign in with. Needs their password; unique in the centre.
+        The session stays valid (it isn't tied to the email)."""
         user = current.user
-        old = user.avatar_file
-        user.avatar_file = save_avatar(user.tenant_id, data) if data is not None else ""
-        self.audit.record(user.tenant_id, user.id, "user.picture_changed" if data is not None else "user.picture_removed", "user", user.id)
-        if old:
-            from app.core.storage import avatar_path
-            path = avatar_path(user.tenant_id, old)
-            if path:
-                path.unlink(missing_ok=True)
+        if not manages_own_account(user, current.permissions):
+            raise Forbidden("Only the owner or the centre admin can change their sign-in email.")
+        if not verify_password(current_password, user.password_hash)[0]:
+            raise Invalid("Your current password isn't right.", "current_password")
+        email = new_email.strip().lower()
+        if email == user.email:
+            raise Invalid("That's already your email.", "email")
+        if self.users.by_email(user.tenant_id, email) is not None:
+            raise Conflict("Someone here already uses that email.", "email")
+        old, user.email = user.email, email
+        self.db.flush()
+        self.audit.record(user.tenant_id, user.id, "user.email_changed", "user", user.id, {"email": [old, email]})
+
+    def set_avatar(self, current: CurrentUser, data: bytes | None) -> None:
+        from app.core.storage import avatar_image
+        user = current.user
+        if data is None:
+            user.avatar_data = user.avatar_mime = user.avatar_file = ""
+            self.audit.record(user.tenant_id, user.id, "user.picture_removed", "user", user.id)
+            return
+        image = avatar_image(data)
+        user.avatar_data, user.avatar_mime, user.avatar_file = image.data, image.mime, image.version
+        self.audit.record(user.tenant_id, user.id, "user.picture_changed", "user", user.id)

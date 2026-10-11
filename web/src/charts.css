@@ -1,0 +1,64 @@
+/* Analytics charts: the extra categorical colours and the pieces shared by components/charts.
+   --chart-1 / --chart-2 (blue, orange) live in styles/supreme.css. Slots 3–5 extend them in fixed order:
+   aqua, violet, magenta. Validated with the dataviz validate_palette.js:
+     light on #ffffff: all checks pass (adjacent CVD ΔE ≥ 9.9, normal-vision ≥ 24); aqua and magenta are under
+       3:1 contrast, so every chart has visible labels, a legend and a table view.
+     dark on #15181d: all checks pass; worst adjacent CVD ΔE 7.9 (aqua/orange), so stacked segments keep a 2px
+       surface gap and a legend, and the table view is always there. */
+:root {
+  --chart-3: #1baf7a;
+  --chart-4: #4a3aa7;
+  --chart-5: #e87ba4;
+}
+:root[data-theme="dark"] { --chart-3: #199e70; --chart-4: #9085e9; --chart-5: #d55181; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --chart-3: #199e70; --chart-4: #9085e9; --chart-5: #d55181; }
+}
+
+.chart-card { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.chart-card > .card-header { align-items: flex-start; flex-wrap: nowrap !important; }
+.chart-card > .card-header > div:first-child { flex: 1 1 auto; min-width: 0; }
+/* The ⓘ follows the last word of a label that wraps, instead of floating off on its own. */
+.kpi .kpi-label .tip { vertical-align: middle; margin-left: 4px; }
+.kpi:has(> .stat-icon) .kpi-label { padding-right: 36px; }
+.chart-card-actions { display: flex; align-items: center; gap: 8px; flex: none; min-height: 24px; white-space: nowrap; }
+.chart-card > .card-content { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.chart-title-row { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; }
+.chart-title-row .card-title { margin: 0; }
+.chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; min-height: 20px; }
+.chart-toolbar .link-button { margin-left: auto; }
+.chart-legend .swatch.is-block { width: 10px; height: 10px; border-radius: 3px; }
+.chart-legend .swatch.is-dashed { background: none !important; border-top: 2px dashed currentColor; height: 0; width: 14px; }
+.chart svg text { font-family: inherit; }
+.chart-skeleton { height: 220px; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--muted) 0%, var(--accent, var(--muted)) 50%, var(--muted) 100%);
+  background-size: 200% 100%; animation: chart-shimmer 1.4s ease-in-out infinite; opacity: .6; }
+@keyframes chart-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .chart-skeleton { animation: none; } }
+.chart-table { max-height: 340px; overflow: auto; }
+.chart-table .table { min-width: 0; }
+.chart-tooltip .row { display: flex; }
+
+/* KPI tiles */
+.kpi { display: flex; flex-direction: column; gap: 4px; min-width: 0; position: relative; }
+.kpi .kpi-label { display: block; min-height: 20px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+.kpi .kpi-value { font-size: 24px; font-weight: 650; letter-spacing: -0.03em; color: var(--foreground); font-variant-numeric: tabular-nums;
+  line-height: 1.15; overflow-wrap: anywhere; }
+.kpi .kpi-note { font-size: 12.5px; color: var(--muted-foreground); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.kpi.is-link { cursor: pointer; }
+.kpi.is-link:hover { border-color: var(--primary); }
+.kpi .kpi-link { position: absolute; inset: 0; border-radius: inherit; z-index: 0; }
+.kpi .kpi-link:focus-visible { outline: 2px solid var(--ring, var(--primary)); outline-offset: 2px; }
+.kpi.is-link > :not(.kpi-link):not(.stat-icon) { position: relative; z-index: 1; pointer-events: none; }
+.kpi.is-link > .stat-icon { z-index: 1; pointer-events: none; }
+.kpi.is-link .tip, .kpi.is-link .tip * { pointer-events: auto; }
+.kpi-grid { display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; }
+.kpi-grid > .kpi .kpi-note { margin-top: auto; }
+@media (max-width: 1000px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .kpi .kpi-value { font-size: 20px; } }
+
+/* Live indicator */
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; flex: none; }
+.live-dot.is-on { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 60%, transparent); animation: live-pulse 2s infinite; }
+.live-dot.is-paused { background: var(--muted-foreground); }
+@keyframes live-pulse { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .live-dot.is-on { animation: none; } }

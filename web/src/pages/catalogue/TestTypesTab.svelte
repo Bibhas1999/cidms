@@ -1,7 +1,11 @@
 <script lang="ts">
   import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
-  import Icon from "../../components/Icon.svelte";
+  import Button from "../../components/Button.svelte";
+  import DataTable from "../../components/DataTable.svelte";
+  import StatusBadge from "../../components/StatusBadge.svelte";
+  import Toolbar from "../../components/Toolbar.svelte";
+  import type { RowAction } from "../../components/RowMenu.svelte";
   import { ApiError, post, put } from "../../lib/api";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
@@ -47,37 +51,48 @@
       saving = false;
     }
   }
+
+  async function setActive(t: TestType, on: boolean) {
+    try {
+      await put(`/api/test-types/${t.id}`, { name: t.name, is_imaging: t.is_imaging, is_active: on });
+      notify(on ? `${t.name} switched on.` : `${t.name} switched off.`);
+      onchanged();
+    } catch (e) {
+      notifyError(e, { title: "Couldn't change it" });
+    }
+  }
+
+  function actionsFor(t: TestType): RowAction[] {
+    return [
+      { label: "Edit", icon: "edit", onclick: () => openEdit(t) },
+      t.is_active ? { label: "Switch off", icon: "lock", tone: "danger", onclick: () => setActive(t, false), hint: "Can't be chosen for new tests" }
+                  : { label: "Switch on", icon: "check", onclick: () => setActive(t, true) },
+    ];
+  }
 </script>
 
+{#snippet imgCell(t: TestType)}{#if t.is_imaging}<StatusBadge tone="info" label="Has images" help="Tests of this type are marked scanned on the worklist before they're handed over." />{:else}<span class="text-muted">—</span>{/if}{/snippet}
+{#snippet statusCell(t: TestType)}<StatusBadge active={t.is_active} help={t.is_active ? "" : "Can't be chosen for new tests."} />{/snippet}
+
 {#if canManage}
-  <div class="toolbar justify-end"><button class="btn btn-primary btn-sm" onclick={openAdd}><Icon name="plus" size="sm" /> Add a test type</button></div>
+  <Toolbar>
+    <p class="text-sm text-muted">Types such as X-ray, Blood test or ECG. Types with images go through scanning.</p>
+    {#snippet end()}<Button variant="primary" size="sm" icon="plus" onclick={openAdd}>Add a test type</Button>{/snippet}
+  </Toolbar>
 {/if}
-{#if !loaded}
-  <div class="empty" aria-busy="true">Loading…</div>
-{:else}
-  <div class="table-wrap">
-    <table class="table">
-      <thead><tr><th>Test type</th><th>Images</th><th>Status</th>{#if canManage}<th><span class="sr-only">Actions</span></th>{/if}</tr></thead>
-      <tbody>
-        {#each types as t (t.id)}
-          <tr>
-            <td class="cell-title">{t.name}</td>
-            <td>{#if t.is_imaging}<span class="badge badge-info badge-plain">Has images</span>{:else}<span class="text-muted">—</span>{/if}</td>
-            <td>{#if t.is_active}<span class="badge badge-success">Active</span>{:else}<span class="badge badge-destructive">Switched off</span>{/if}</td>
-            {#if canManage}<td class="num"><button class="btn btn-outline btn-sm" onclick={() => openEdit(t)} aria-label="Edit {t.name}"><Icon name="edit" size="sm" /> Edit</button></td>{/if}
-          </tr>
-        {:else}
-          <tr><td colspan={canManage ? 4 : 3}><div class="empty"><Icon name="tag" />No test types yet.</div></td></tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-{/if}
+<DataTable label="Test types" rows={types} loading={!loaded} actions={canManage ? actionsFor : undefined}
+           actionsLabel={(t) => `Actions for ${t.name}`} onrowclick={canManage ? openEdit : undefined}
+           empty={{ icon: "tag", title: "No test types yet." }}
+           columns={[
+             { key: "name", label: "Test type", value: (t) => t.name, class: "cell-title", mobile: "title" },
+             { key: "img", label: "Images", cell: imgCell, tip: "Imaging types (X-ray, CT, MRI, USG) are scanned before the report is handed over." },
+             { key: "status", label: "Status", cell: statusCell, mobile: "end" },
+           ]} />
 
 <Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a test type"} icon={editing ? "edit" : "tag"} tone="info"
         description="Types group tests, such as X-ray, Blood test or ECG. Types with images go through scanning on the worklist.">
   <form id="type-form" class="stack" onsubmit={(e) => { e.preventDefault(); save(); }} novalidate>
-    <Field id="type_name" label="Name" required error={errors.name}>
+    <Field id="type_name" label="Name" required error={errors.name} tip="What kind of test, e.g. X-ray, Blood test or ECG. Tick Has images for scans, so they go through scanning on the worklist.">
       {#snippet children({ invalid, describedby })}
         <input id="type_name" class="input" bind:value={form.name} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
@@ -92,7 +107,7 @@
     </label>
   </form>
   {#snippet footer()}
-    <button class="btn btn-outline" type="button" onclick={() => (dialogOpen = false)}>Cancel</button>
-    <button class="btn btn-primary" type="submit" form="type-form" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add test type"}</button>
+    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
+    <Button variant="primary" type="submit" form="type-form" loading={saving} loadingText="Saving…">{editing ? "Save changes" : "Add test type"}</Button>
   {/snippet}
 </Dialog>

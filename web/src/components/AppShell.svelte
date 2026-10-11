@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "../lib/tooltip";
   import type { Snippet } from "svelte";
   import { confirmDialog } from "../lib/confirm.svelte";
   import { CLIENT_NAV, PLATFORM_NAV } from "../lib/nav";
@@ -6,6 +7,8 @@
   import { session } from "../lib/session.svelte";
   import { applyTheme, getTheme, type Theme } from "../lib/theme";
   import Avatar from "./Avatar.svelte";
+  import NotificationBell from "./NotificationBell.svelte";
+  import Credit from "./Credit.svelte";
   import Icon from "./Icon.svelte";
 
   // The app frame, laid out like the Sandhata Registry: sidebar with grouped sections, a top bar with
@@ -14,11 +17,22 @@
 
   const sections = $derived(
     (session.isPlatform ? PLATFORM_NAV : CLIENT_NAV)
-      .map((s) => ({ ...s, items: s.items.filter((i) => available.has(i.href) && (!i.permission || session.can(i.permission))) }))
+      .map((s) => ({ ...s, items: s.items.filter((i) => available.has(i.href.split("?")[0]) && (!i.permission || session.can(i.permission))) }))
       .filter((s) => s.items.length),
   );
-  const isCurrent = (href: string) =>
-    href === "/" ? router.path === "/" : router.path === href || (router.path.startsWith(href + "/") && !available.has(router.path));
+  // An item with a ?query (e.g. /worklist?tab=scanned) is current only with that query; the plain item for
+  // the same page then isn't. Report screens (/test-reports/…) belong to "Test reports".
+  const queryItems = $derived(sections.flatMap((sec) => sec.items).filter((i) => i.href.includes("?")));
+  const queryMatch = (href: string) => {
+    const [base, q] = href.split("?");
+    const want = new URLSearchParams(q), have = router.query;
+    return router.path === base && [...want].every(([k, v]) => have.get(k) === v);
+  };
+  const isCurrent = (href: string) => {
+    if (href.includes("?")) return queryMatch(href) || (href.startsWith("/worklist") && router.path.startsWith("/test-reports/"));
+    if (queryItems.some((i) => queryMatch(i.href) || (i.href.startsWith(href) && router.path.startsWith("/test-reports/")))) return false;
+    return href === "/" ? router.path === "/" : router.path === href || (router.path.startsWith(href + "/") && !available.has(router.path));
+  };
 
   const ws = $derived(session.workspace);
   const local = location.hostname.endsWith(".localhost");
@@ -49,6 +63,15 @@
     return () => { document.removeEventListener("click", onClick); document.removeEventListener("keydown", onKey); };
   });
 
+  // Phones and tablets: the sidebar is a drawer. Esc closes it; the page behind doesn't scroll while it's open.
+  $effect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") navOpen = false; };
+    document.addEventListener("keydown", onKey);
+    document.documentElement.classList.add("nav-locked");
+    return () => { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("nav-locked"); };
+  });
+
   /** Hand the computer to a colleague: sign out at once and show the accounts used here. */
   async function switchAccount() {
     menuOpen = false;
@@ -66,6 +89,11 @@
 <div class="app" class:nav-open={navOpen}>
   <aside class="sidebar" aria-label="Main navigation">
     <div class="sidebar-brand">
+      {#if !session.isPlatform && ws?.wordmark_url}
+        <a href="/" class="link-reset brand-link wordmark-link" aria-label="{ws.name}: dashboard">
+          <img class="centre-wordmark" src={ws.wordmark_url} alt={ws.name} />
+        </a>
+      {:else}
       <a href="/" class="link-reset row brand-link" style="gap: 10px">
         {#if ws?.logo_url}
           <img class="centre-logo" src={ws.logo_url} alt="" width="34" height="34" />
@@ -77,6 +105,7 @@
           <span class="centre-sub">{session.isPlatform ? "Platform" : "DMS"}</span>
         </span>
       </a>
+      {/if}
     </div>
     <nav class="sidebar-nav" aria-label="Sections">
       {#each sections as section (section.heading)}
@@ -88,21 +117,22 @@
         {/each}
       {/each}
     </nav>
-    {#if !session.isPlatform}<div class="sidebar-footer"><span class="powered">Powered by Supreme DMS</span></div>{/if}
+    <div class="sidebar-footer"><Credit /><a class="terms-link" href="/terms">Terms</a></div>
   </aside>
-  {#if navOpen}<button class="sr-only" onclick={() => (navOpen = false)}>Close menu</button>{/if}
+  {#if navOpen}<button class="nav-backdrop" type="button" aria-label="Close menu" onclick={() => (navOpen = false)}></button>{/if}
 
   <div class="main">
     <header class="topbar">
-      <button class="btn btn-ghost btn-icon menu-toggle" type="button" aria-label={navOpen ? "Close menu" : "Open menu"}
+      <button class="btn btn-ghost btn-icon menu-toggle" type="button" aria-label={navOpen ? "Close menu" : "Open menu"} use:tooltip={navOpen ? "Close menu" : "Open menu"}
               aria-expanded={navOpen} onclick={() => (navOpen = !navOpen)}><Icon name="menu" /></button>
       <nav class="breadcrumbs grow" aria-label="Breadcrumb">
         <a href="/" class="text-muted">{session.isPlatform ? "Platform" : ws?.name}</a>
         <Icon name="chevronRight" size="sm" />
         <strong aria-current="page">{title}</strong>
       </nav>
-      {#if local}<span class="badge badge-info badge-plain hide-sm" title="Running on this computer">Local</span>{/if}
+      {#if local}<span class="badge badge-info badge-plain hide-sm" use:tooltip={"Running on this computer"}>Local</span>{/if}
       <div class="topbar-actions">
+        <NotificationBell />
         <div class="popover-anchor">
           <button class="profile-button" type="button" bind:this={menuButton} aria-haspopup="true" aria-expanded={menuOpen}
                   onclick={() => (menuOpen = !menuOpen)}>
@@ -116,8 +146,8 @@
               <div class="profile-head">
                 <Avatar name={session.me?.full_name ?? ""} url={session.me?.avatar_url} />
                 <div class="grow">
-                  <div class="font-semibold truncate" title={session.me?.full_name}>{session.me?.full_name}</div>
-                  <div class="text-xs text-muted truncate" title={session.me?.email}>{session.me?.email}</div>
+                  <div class="font-semibold truncate" use:tooltip={session.me?.full_name ?? ""}>{session.me?.full_name}</div>
+                  <div class="text-xs text-muted truncate" use:tooltip={session.me?.email ?? ""}>{session.me?.email}</div>
                   {#each session.me?.roles ?? [] as role}<span class="badge badge-info badge-plain mt-2">{role}</span>{/each}
                 </div>
               </div>
@@ -126,7 +156,7 @@
                 <span class="theme-label" aria-hidden="true">Theme</span>
                 <div class="theme-icons">
                   {#each [["light", "Light", "sun"], ["dark", "Dark", "moon"], ["system", "Match system", "monitor"]] as [value, label, ic] (value)}
-                    <label class="theme-option" title={label}>
+                    <label class="theme-option" use:tooltip={label}>
                       <input type="radio" name="theme" class="sr-only" {value} checked={theme === value}
                              onchange={() => { theme = value as Theme; applyTheme(theme); }} />
                       <span><Icon name={ic} size="sm" /><span class="sr-only">{label}</span></span>
@@ -147,3 +177,13 @@
     <main id="main" class="page" tabindex="-1">{@render children()}</main>
   </div>
 </div>
+
+<style>
+  .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; }
+  .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 48px; object-fit: contain; object-position: left center; }
+  :global(:root[data-theme="dark"]) .centre-wordmark { background: #fff; border-radius: 6px; padding: 3px 6px; }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme="light"])) .centre-wordmark { background: #fff; border-radius: 6px; padding: 3px 6px; } }
+  .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
+  .terms-link:hover { color: var(--foreground); text-decoration: underline; }
+</style>

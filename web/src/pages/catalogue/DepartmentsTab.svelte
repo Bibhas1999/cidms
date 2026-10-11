@@ -1,7 +1,11 @@
 <script lang="ts">
   import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
-  import Icon from "../../components/Icon.svelte";
+  import Button from "../../components/Button.svelte";
+  import DataTable from "../../components/DataTable.svelte";
+  import StatusBadge from "../../components/StatusBadge.svelte";
+  import Toolbar from "../../components/Toolbar.svelte";
+  import type { RowAction } from "../../components/RowMenu.svelte";
   import { ApiError, post, put } from "../../lib/api";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
@@ -47,35 +51,46 @@
       saving = false;
     }
   }
+
+  async function setActive(d: Department, on: boolean) {
+    try {
+      await put(`/api/departments/${d.id}`, { name: d.name, is_active: on });
+      notify(on ? `${d.name} switched on.` : `${d.name} switched off.`);
+      onchanged();
+    } catch (e) {
+      notifyError(e, { title: "Couldn't change it" });
+    }
+  }
+
+  function actionsFor(d: Department): RowAction[] {
+    return [
+      { label: "Rename", icon: "edit", onclick: () => openEdit(d) },
+      d.is_active ? { label: "Switch off", icon: "lock", tone: "danger", onclick: () => setActive(d, false), hint: "Can't be chosen for new tests; existing tests keep it" }
+                  : { label: "Switch on", icon: "check", onclick: () => setActive(d, true) },
+      { label: "Its tests", icon: "flask", href: `/tests?department=${d.id}` },
+    ];
+  }
 </script>
 
+{#snippet statusCell(d: Department)}<StatusBadge active={d.is_active} help={d.is_active ? "" : "Can't be chosen for new tests."} />{/snippet}
+
 {#if canManage}
-  <div class="toolbar justify-end"><button class="btn btn-primary btn-sm" onclick={openAdd}><Icon name="plus" size="sm" /> Add a department</button></div>
+  <Toolbar>
+    <p class="text-sm text-muted">Departments group the tests: Pathology, Radiology, Cardiology…</p>
+    {#snippet end()}<Button variant="primary" size="sm" icon="plus" onclick={openAdd}>Add a department</Button>{/snippet}
+  </Toolbar>
 {/if}
-{#if !loaded}
-  <div class="empty" aria-busy="true">Loading…</div>
-{:else}
-  <div class="table-wrap">
-    <table class="table">
-      <thead><tr><th>Department</th><th>Status</th>{#if canManage}<th><span class="sr-only">Actions</span></th>{/if}</tr></thead>
-      <tbody>
-        {#each departments as d (d.id)}
-          <tr>
-            <td class="cell-title">{d.name}</td>
-            <td>{#if d.is_active}<span class="badge badge-success">Active</span>{:else}<span class="badge badge-destructive">Switched off</span>{/if}</td>
-            {#if canManage}<td class="num"><button class="btn btn-outline btn-sm" onclick={() => openEdit(d)} aria-label="Edit {d.name}"><Icon name="edit" size="sm" /> Edit</button></td>{/if}
-          </tr>
-        {:else}
-          <tr><td colspan={canManage ? 3 : 2}><div class="empty"><Icon name="layers" />No departments yet.</div></td></tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-{/if}
+<DataTable label="Departments" rows={departments} loading={!loaded} actions={canManage ? actionsFor : undefined}
+           actionsLabel={(d) => `Actions for ${d.name}`} onrowclick={canManage ? openEdit : undefined}
+           empty={{ icon: "layers", title: "No departments yet." }}
+           columns={[
+             { key: "name", label: "Department", value: (d) => d.name, class: "cell-title", mobile: "title" },
+             { key: "status", label: "Status", cell: statusCell, mobile: "end" },
+           ]} />
 
 <Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a department"} icon={editing ? "edit" : "layers"} tone="info">
   <form id="department-form" class="stack" onsubmit={(e) => { e.preventDefault(); save(); }} novalidate>
-    <Field id="dept_name" label="Name" required error={errors.name}>
+    <Field id="dept_name" label="Name" required error={errors.name} tip="A section of the centre, e.g. Pathology or Radiology. Tests, bills and reports can be grouped and filtered by it.">
       {#snippet children({ invalid, describedby })}
         <input id="dept_name" class="input" bind:value={form.name} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
@@ -86,7 +101,7 @@
     </label>
   </form>
   {#snippet footer()}
-    <button class="btn btn-outline" type="button" onclick={() => (dialogOpen = false)}>Cancel</button>
-    <button class="btn btn-primary" type="submit" form="department-form" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add department"}</button>
+    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
+    <Button variant="primary" type="submit" form="department-form" loading={saving} loadingText="Saving…">{editing ? "Save changes" : "Add department"}</Button>
   {/snippet}
 </Dialog>

@@ -54,7 +54,8 @@ export interface BillPage {
   total: number;
   page: number;
   size: number;
-  sums: { billed: string; due: string };
+  /** Across every matching bill. billed is null for people who may not see turnover (no analytics.view). */
+  sums: { billed: string | null; paid: string; due: string };
 }
 
 export interface Patient {
@@ -96,9 +97,9 @@ export const BILL_STATUS: Record<string, [string, string]> = {
 };
 
 export const LINE_STATUS: Record<string, [string, string]> = {
-  billed: ["badge-info", "Waiting"],
-  scanned: ["badge-warning", "Scanned"],
-  reported: ["badge-navy", "Reported"],
+  billed: ["badge-warning", "Pending"],
+  scanned: ["badge-warning", "In progress"],
+  reported: ["badge-info", "Ready"],
   delivered: ["badge-success", "Delivered"],
   cancelled: ["badge-destructive", "Taken off"],
 };
@@ -109,3 +110,18 @@ export function paymentState(b: { total: string; paid: string; due: string; stat
   if (Number(b.paid) > 0) return ["badge-warning", "Part paid"];
   return ["badge-destructive", "Unpaid"];
 }
+
+/** The one badge a bill shows in lists: its status when not confirmed (on hold, cancelled), else how much is paid. */
+export function billBadge(b: { total: string; paid: string; due: string; status: string }): [string, string] {
+  return b.status !== "confirmed" ? (BILL_STATUS[b.status] ?? ["badge-info", b.status]) : paymentState(b);
+}
+
+/** What each payment state means, for tooltips. */
+export const PAYMENT_HELP: Record<string, string> = {
+  Paid: "Everything on this bill has been paid.",
+  "Part paid": "Some money has been taken; the rest is still due.",
+  Unpaid: "Nothing has been paid on this bill yet.",
+  Cancelled: "The bill was cancelled; it isn't counted in totals.",
+  "On hold": "Saved but put on hold: tests aren't sent to the worklist until it's confirmed.",
+  Confirmed: "The bill is confirmed.",
+};

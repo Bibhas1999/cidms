@@ -10,10 +10,11 @@
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import Date, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound
@@ -23,16 +24,17 @@ from app.models import Counter, Invoice, InvoiceItem, LabTest, Patient, Payment,
 from app.repositories.common import contains
 from app.repositories.counters import next_number
 from app.schemas_billing import BillIn, BillLineIn, BillUpdateIn, PaymentIn, RefundIn
+from app.services import events
 from app.services.audit import AuditService
 from app.services.catalogue import CatalogueService
 from app.services.patients import PatientService, age_text
 
 CANCELLED = "cancelled"  # a line taken off the bill; every other status counts towards it
-ITEM_FLOW = {  # which progress changes the worklist may make in phase 2 (reports add "reported" in phase 4)
-    "billed": {"scanned", "delivered"},
-    "scanned": {"billed", "delivered"},
-    "reported": {"delivered"},
-    "delivered": {"scanned", "billed"},
+ITEM_FLOW = {  # which progress changes staff may make by hand (signing a test report also marks it "reported")
+    "billed": {"scanned", "reported", "delivered"},
+    "scanned": {"billed", "reported", "delivered"},
+    "reported": {"billed", "scanned", "delivered"},   # back to pending only while no signed report exists
+    "delivered": {"billed", "scanned", "reported"},
 }
 
 
@@ -46,6 +48,28 @@ def compute_discount(subtotal: Decimal, discount_type: str, value: Decimal) -> D
     if amount > subtotal:
         raise Invalid(f"The discount can't be more than the bill ({rupees(subtotal)}).", "discount_value")
     return amount
+
+
+@dataclass
+class BillFilters:
+    """Every way the bills list can be narrowed. Empty values mean "any"."""
+    search: str = ""
+    date_from: date | None = None
+    date_to: date | None = None
+    status: str | None = None
+    payment: str = ""                    # due | paid | part | unpaid
+    mode: str = ""                       # cash | upi | card | bank | other: paid at least partly this way
+    doctor_id: uuid.UUID | None = None
+    self_referred: bool = False
+    patient_id: uuid.UUID | None = None
+    department_id: uuid.UUID | None = None
+    test_id: uuid.UUID | None = None
+    created_by: uuid.UUID | None = None
+    min_total: Decimal | None = None
+    max_total: Decimal | None = None
+    discount: str = ""                   # yes | no
+    report: str = ""                     # pending (a test not ready yet) | ready (one to hand over) | delivered (all handed over)
+    oldest_first: bool = False
 
 
 class BillingService:
@@ -65,11 +89,10 @@ class BillingService:
             raise NotFound("We couldn't find that bill.")
         return row
 
-    def page(self, search: str, date_from: date | None, date_to: date | None, status: str | None, due_only: bool,
-             doctor_id: uuid.UUID | None, patient_id: uuid.UUID | None, page: int, size: int, oldest_first: bool = False,
-             paid_only: bool = False):
+    def query(self, f: "BillFilters"):
+        """Bills matching the filters (a SELECT, not run): shared by the bills list, the dashboard and exports."""
         q = select(Invoice).where(Invoice.tenant_id == self.tenant_id)
-        s = search.strip()
+        s = f.search.strip()
         if s:
             digits = "".join(ch for ch in s if ch.isdigit())
             conditions = [func.lower(Invoice.patient_name).like(contains(s), escape="\\"),
@@ -81,27 +104,67 @@ class BillingService:
             if digits.isdigit() and len(digits) <= 7 and digits == s:
                 conditions.append(Invoice.legacy_no == int(digits))
             q = q.where(or_(*conditions))
-        if date_from:
-            q = q.where(Invoice.bill_date >= date_from)
-        if date_to:
-            q = q.where(Invoice.bill_date <= date_to)
-        if status:
-            q = q.where(Invoice.status == status)
-        if due_only:
-            q = q.where(Invoice.due > 0, Invoice.status != "cancelled")
-        if paid_only:
-            q = q.where(Invoice.due <= 0, Invoice.status != "cancelled")
-        if doctor_id:
-            q = q.where(Invoice.referring_doctor_id == doctor_id)
-        if patient_id:
-            q = q.where(Invoice.patient_id == patient_id)
-        counted = q.where(Invoice.status != "cancelled").subquery()
+        if f.date_from:
+            q = q.where(Invoice.bill_date >= f.date_from)
+        if f.date_to:
+            q = q.where(Invoice.bill_date <= f.date_to)
+        if f.status:
+            q = q.where(Invoice.status == f.status)
+        live = Invoice.status != "cancelled"
+        if f.payment == "due":          # anything still owed
+            q = q.where(Invoice.due > 0, live)
+        elif f.payment == "paid":       # nothing owed
+            q = q.where(Invoice.due <= 0, live)
+        elif f.payment == "part":       # some paid, some owed
+            q = q.where(Invoice.due > 0, Invoice.paid > 0, live)
+        elif f.payment == "unpaid":     # nothing paid yet
+            q = q.where(Invoice.due > 0, Invoice.paid <= 0, live)
+        if f.mode:
+            q = q.where(select(Payment.id).where(Payment.invoice_id == Invoice.id, Payment.kind == "payment",
+                                                 Payment.mode == f.mode).exists())
+        if f.doctor_id:
+            q = q.where(Invoice.referring_doctor_id == f.doctor_id)
+        if f.self_referred:
+            q = q.where(Invoice.referring_doctor_id.is_(None))
+        if f.patient_id:
+            q = q.where(Invoice.patient_id == f.patient_id)
+        if f.department_id or f.test_id:
+            item = select(InvoiceItem.id).where(InvoiceItem.invoice_id == Invoice.id, InvoiceItem.status != CANCELLED)
+            if f.department_id:
+                item = item.where(InvoiceItem.department_id == f.department_id)
+            if f.test_id:
+                item = item.where(InvoiceItem.test_id == f.test_id)
+            q = q.where(item.exists())
+        if f.created_by:
+            q = q.where(Invoice.created_by == f.created_by)
+        if f.min_total is not None:
+            q = q.where(Invoice.total >= f.min_total)
+        if f.max_total is not None:
+            q = q.where(Invoice.total <= f.max_total)
+        if f.discount == "yes":
+            q = q.where(Invoice.discount_amount > 0)
+        elif f.discount == "no":
+            q = q.where(Invoice.discount_amount == 0)
+        if f.report:
+            def lines(*where):
+                return select(InvoiceItem.id).where(InvoiceItem.invoice_id == Invoice.id, InvoiceItem.status != CANCELLED, *where).exists()
+            if f.report == "pending":
+                q = q.where(lines(InvoiceItem.status.in_(("billed", "scanned"))))
+            elif f.report == "ready":
+                q = q.where(lines(InvoiceItem.status == "reported"))
+            elif f.report == "delivered":
+                q = q.where(lines(), ~lines(InvoiceItem.status != "delivered"))
+        order = (Invoice.bill_date, Invoice.created_at) if f.oldest_first else (Invoice.bill_date.desc(), Invoice.created_at.desc())
+        return q.order_by(*order)
+
+    def page(self, f: "BillFilters", page: int, size: int):
+        q = self.query(f)
+        counted = q.order_by(None).where(Invoice.status != "cancelled").subquery()
         totals = self.db.execute(select(func.count(), func.coalesce(func.sum(counted.c.total), 0),
-                                        func.coalesce(func.sum(counted.c.due), 0))).one()
-        total_rows = self.db.scalar(select(func.count()).select_from(q.subquery())) or 0
-        order = (Invoice.bill_date, Invoice.created_at) if oldest_first else (Invoice.bill_date.desc(), Invoice.created_at.desc())
-        rows = self.db.scalars(q.order_by(*order).offset((page - 1) * size).limit(size)).all()
-        return list(rows), total_rows, {"billed": q2(totals[1]), "due": q2(totals[2])}
+                                        func.coalesce(func.sum(counted.c.paid), 0), func.coalesce(func.sum(counted.c.due), 0))).one()
+        total_rows = self.db.scalar(select(func.count()).select_from(q.order_by(None).subquery())) or 0
+        rows = self.db.scalars(q.offset((page - 1) * size).limit(size)).all()
+        return list(rows), total_rows, {"billed": q2(totals[1]), "paid": q2(totals[2]), "due": q2(totals[3])}
 
     # ---------- helpers ----------
     def _settings(self) -> TenantSettings:
@@ -150,6 +213,8 @@ class BillingService:
         limit = self._settings().max_discount_percent
         if amount > 0 and subtotal > 0 and amount * 100 > subtotal * limit and not self.current.can("billing.discount_over_limit"):
             raise Forbidden(f"Discounts above {limit.normalize()}% need an admin. Ask them, or lower the discount.", "discount_value")
+        # Above the limit but allowed (an owner or admin): tell the others once the bill is saved.
+        self._over_limit = limit if amount > 0 and subtotal > 0 and amount * 100 > subtotal * limit else None
         invoice.subtotal = subtotal
         invoice.discount_type = discount_type
         invoice.discount_value = q2(discount_value)
@@ -224,6 +289,8 @@ class BillingService:
         self.audit.record(self.tenant_id, self.current.id, "bill.created", "invoice", invoice.id, {
             "invoice_no": invoice.invoice_no, "patient": patient.patient_no, "total": str(invoice.total), "paid": str(invoice.paid),
             "discount": str(invoice.discount_amount), "status": invoice.status})
+        if getattr(self, "_over_limit", None):
+            events.discount_over_limit(self.db, invoice, self.current, self._over_limit)
         return invoice
 
     def update(self, invoice_id: uuid.UUID, data: BillUpdateIn) -> Invoice:
@@ -266,6 +333,8 @@ class BillingService:
         self.audit.record(self.tenant_id, self.current.id, "bill.updated", "invoice", invoice.id, {
             "reason": data.reason, "total": [before["total"], str(invoice.total)],
             "tests": [before["tests"], [i.test_name for i in invoice.items if i.status != CANCELLED]]})
+        if getattr(self, "_over_limit", None):
+            events.discount_over_limit(self.db, invoice, self.current, self._over_limit)
         return invoice
 
     def hold(self, invoice_id: uuid.UUID, reason: str) -> Invoice:
@@ -299,6 +368,7 @@ class BillingService:
                 item.status = CANCELLED
                 item.status_changed_at = utcnow()
         self.audit.record(self.tenant_id, self.current.id, "bill.cancelled", "invoice", invoice.id, {"reason": reason, "total": str(invoice.total)})
+        events.bill_cancelled(self.db, invoice, self.current, reason)
         return invoice
 
     # ---------- money ----------
@@ -323,6 +393,7 @@ class BillingService:
         self.db.flush()
         self.audit.record(self.tenant_id, self.current.id, "payment.refunded", "invoice", invoice.id, {
             "amount": str(p.amount), "mode": p.mode, "reason": data.note})
+        events.refund_recorded(self.db, invoice, self.current, p.amount, p.mode, data.note)
         return invoice
 
     # ---------- worklist ----------
@@ -338,12 +409,30 @@ class BillingService:
             raise Conflict(f"{item.test_name} is {item.status}; it can't be marked {status}.")
         if status == "scanned" and not item.is_imaging:
             raise Invalid(f"{item.test_name} isn't a scan.", "status")
+        if status in ("billed", "scanned") and self._has_signed_report(item.id):
+            raise Conflict(f"{item.test_name} has a signed report, so it can't go back to pending.")
         old = item.status
         item.status = status
         item.status_changed_at = utcnow()
         self.audit.record(self.tenant_id, self.current.id, f"test.{status}", "invoice_item", item.id, {
             "invoice_no": invoice.invoice_no, "test": item.test_name, "from": old, "due": str(invoice.due)})
         return item
+
+    def _has_signed_report(self, item_id: uuid.UUID) -> bool:
+        from app.models import TestReport  # the reports module (on hold in the app) may sign tests off
+
+        return bool(self.db.scalar(select(func.count()).select_from(TestReport)
+                                   .where(TestReport.invoice_item_id == item_id, TestReport.status.in_(("signed", "amended")))))
+
+    def set_bill_items_status(self, invoice_id: uuid.UUID, status: str, item_ids: list[uuid.UUID] | None = None) -> list[InvoiceItem]:
+        """Mark every (or the given) live test on one bill: e.g. all reports handed over at once. Tests already
+        there are left alone; one that can't move (a signed report going back to pending) stops the lot."""
+        invoice = self.get(invoice_id, lock=True)
+        self._not_cancelled(invoice)
+        lines = [i for i in invoice.items if i.status != CANCELLED and (item_ids is None or i.id in item_ids)]
+        if item_ids is not None and len(lines) != len(set(item_ids)):
+            raise NotFound("Some of those tests aren't on this bill.")
+        return [self.set_item_status(i.id, status) for i in lines if i.status != status]
 
     def worklist(self, department_id: uuid.UUID | None, statuses: list[str], date_from: date | None, date_to: date | None,
                  search: str, page: int, size: int):
@@ -393,6 +482,38 @@ class BillingService:
         }
 
 
+    def desk_summary(self, today: date, date_from: date | None = None, date_to: date | None = None) -> dict:
+        """Bills, total amount, collected and dues for a period (no start date: since the first bill)."""
+        t = self.tenant_id
+        live = and_(Invoice.tenant_id == t, Invoice.status != "cancelled")
+        to = min(date_to or today, today)
+        all_time = date_from is None
+        frm = min(date_from or self.db.scalar(select(func.min(Invoice.bill_date)).where(Invoice.tenant_id == t)) or to, to)
+        signed = case((Payment.kind == "payment", Payment.amount), else_=-Payment.amount)
+        received = (Payment.tenant_id == t, Payment.received_on >= frm, Payment.received_on <= to)
+        by_mode = {mode: q2(v) for mode, v in self.db.execute(
+            select(Payment.mode, func.sum(signed)).where(*received).group_by(Payment.mode)).all()}
+        refunds = self.db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(*received, Payment.kind == "refund")) or 0
+        dues_collected = self.db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), 0)).join(Invoice, Invoice.id == Payment.invoice_id)
+            .where(*received, Payment.kind == "payment", Invoice.bill_date < frm)) or 0
+        in_period = (live, Invoice.bill_date >= frm, Invoice.bill_date <= to)
+        bills = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.due), 0), func.count().filter(Invoice.due > 0),
+                                       func.coalesce(func.sum(Invoice.total), 0))
+                                .where(*in_period)).one()
+        outstanding = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.due), 0)).where(live, Invoice.due > 0)).one()
+        pending = dict(self.db.execute(
+            select(InvoiceItem.status, func.count()).join(Invoice, Invoice.id == InvoiceItem.invoice_id)
+            .where(*in_period, InvoiceItem.status.in_(("billed", "scanned"))).group_by(InvoiceItem.status)).all())
+        return {
+            "date_from": frm, "date_to": to, "all_time": all_time, "bills": bills[0], "billed": q2(bills[3]),
+            "collected": by_mode, "collected_total": q2(sum(by_mode.values(), ZERO)), "dues_collected": q2(dues_collected),
+            "refunds": q2(refunds), "due_on_bills": q2(bills[1]), "due_bills": bills[2],
+            "outstanding_dues": q2(outstanding[1]), "dues_count": outstanding[0],
+            "pending_tests": {"billed": pending.get("billed", 0), "scanned": pending.get("scanned", 0)},
+        }
+
+
 def default_worklist_window() -> tuple[date, date]:
     today = local_today()
     return today - timedelta(days=6), today
@@ -400,50 +521,92 @@ def default_worklist_window() -> tuple[date, date]:
 
 
 class OverviewService(BillingService):
-    """The owner's dashboard: today against yesterday, the month, a 30-day trend and what needs chasing."""
+    """The owner's dashboard for any period: what was billed and collected, against the period before it,
+    the trend, departments and doctors, plus what needs doing now (tests waiting, dues to chase)."""
 
-    def overview(self, today: date) -> dict:
+    def overview(self, today: date, date_from: date | None = None, date_to: date | None = None) -> dict:
         t = self.tenant_id
         live = and_(Invoice.tenant_id == t, Invoice.status != "cancelled")
-        yesterday = today - timedelta(days=1)
-        first = today.replace(day=1)
-        start = today - timedelta(days=29)
-
-        y = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.total), 0)).where(live, Invoice.bill_date == yesterday)).one()
-        m = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.total), 0), func.coalesce(func.sum(Invoice.discount_amount), 0))
-                            .where(live, Invoice.bill_date >= first, Invoice.bill_date <= today)).one()
+        to = min(date_to or today, today)
+        all_time = date_from is None
+        if date_from is None:  # the default, "all time": from the first bill
+            date_from = self.db.scalar(select(func.min(Invoice.bill_date)).where(Invoice.tenant_id == t)) or to
+        frm = min(date_from, to)
+        days = (to - frm).days + 1
+        prev_to = frm - timedelta(days=1)
+        prev_from = prev_to - timedelta(days=days - 1)
         signed = case((Payment.kind == "payment", Payment.amount), else_=-Payment.amount)
-        month_collected = self.db.scalar(select(func.coalesce(func.sum(signed), 0))
-                                         .where(Payment.tenant_id == t, Payment.received_on >= first, Payment.received_on <= today)) or 0
-        dues_count = self.db.scalar(select(func.count()).where(live, Invoice.due > 0)) or 0
 
-        billed_by_day = dict(self.db.execute(select(Invoice.bill_date, func.sum(Invoice.total))
-                                             .where(live, Invoice.bill_date >= start, Invoice.bill_date <= today).group_by(Invoice.bill_date)).all())
-        paid_by_day = dict(self.db.execute(select(Payment.received_on, func.sum(signed))
-                                           .where(Payment.tenant_id == t, Payment.received_on >= start, Payment.received_on <= today)
-                                           .group_by(Payment.received_on)).all())
-        trend = [{"day": start + timedelta(days=i), "billed": q2(billed_by_day.get(start + timedelta(days=i), 0)),
-                  "collected": q2(paid_by_day.get(start + timedelta(days=i), 0))} for i in range(30)]
+        def billed(a: date, b: date):
+            return self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.total), 0), func.coalesce(func.sum(Invoice.discount_amount), 0),
+                                          func.coalesce(func.sum(Invoice.due), 0), func.count(func.distinct(Invoice.patient_id)))
+                                   .where(live, Invoice.bill_date >= a, Invoice.bill_date <= b)).one()
 
+        def collected(a: date, b: date) -> Decimal:
+            return self.db.scalar(select(func.coalesce(func.sum(signed), 0))
+                                  .where(Payment.tenant_id == t, Payment.received_on >= a, Payment.received_on <= b)) or ZERO
+
+        now, before = billed(frm, to), billed(prev_from, prev_to)
+        by_mode = {mode: q2(v) for mode, v in self.db.execute(
+            select(Payment.mode, func.sum(signed)).where(Payment.tenant_id == t, Payment.received_on >= frm, Payment.received_on <= to)
+            .group_by(Payment.mode)).all()}
+        refunds = self.db.scalar(select(func.coalesce(func.sum(Payment.amount), 0))
+                                 .where(Payment.tenant_id == t, Payment.received_on >= frm, Payment.received_on <= to, Payment.kind == "refund")) or 0
+        dues_collected = self.db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), 0)).join(Invoice, Invoice.id == Payment.invoice_id)
+            .where(Payment.tenant_id == t, Payment.received_on >= frm, Payment.received_on <= to, Payment.kind == "payment",
+                   Invoice.bill_date < frm)) or 0
+        outstanding = self.db.execute(select(func.count(), func.coalesce(func.sum(Invoice.due), 0)).where(live, Invoice.due > 0)).one()
+
+        # The trend: day by day up to about three months, then month by month. A short period shows the
+        # fortnight leading up to its end, so a single day still has something to compare with.
+        monthly = days > 92
+        t_from = frm if days >= 14 else to - timedelta(days=13)
+        if monthly:
+            t_from = t_from.replace(day=1)
+            bucket_i = func.date_trunc("month", Invoice.bill_date).cast(Date)
+            bucket_p = func.date_trunc("month", Payment.received_on).cast(Date)
+        else:
+            bucket_i, bucket_p = Invoice.bill_date, Payment.received_on
+        billed_by = dict(self.db.execute(
+            select(bucket_i, func.sum(Invoice.total)).where(live, Invoice.bill_date >= t_from, Invoice.bill_date <= to).group_by(bucket_i)).all())
+        paid_by = dict(self.db.execute(
+            select(bucket_p, func.sum(signed)).where(Payment.tenant_id == t, Payment.received_on >= t_from, Payment.received_on <= to)
+            .group_by(bucket_p)).all())
+        if monthly:
+            keys, d = [], t_from
+            while d <= to:
+                keys.append(d)
+                d = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+        else:
+            keys = [t_from + timedelta(days=i) for i in range((to - t_from).days + 1)]
+        trend = [{"day": k, "billed": q2(billed_by.get(k, 0)), "collected": q2(paid_by.get(k, 0))} for k in keys]
+
+        in_period = (Invoice.bill_date >= frm, Invoice.bill_date <= to)
         departments = [{"name": name or "Other", "bills": bills, "amount": q2(amount)} for name, bills, amount in self.db.execute(
             select(InvoiceItem.department_name, func.count(func.distinct(InvoiceItem.invoice_id)), func.sum(InvoiceItem.amount))
             .join(Invoice, Invoice.id == InvoiceItem.invoice_id)
-            .where(live, InvoiceItem.status != CANCELLED, Invoice.bill_date >= first, Invoice.bill_date <= today)
+            .where(live, InvoiceItem.status != CANCELLED, *in_period)
             .group_by(InvoiceItem.department_name).order_by(func.sum(InvoiceItem.amount).desc())).all()]
         doctors = [{"name": name, "bills": bills, "amount": q2(amount)} for name, bills, amount in self.db.execute(
             select(Invoice.referring_doctor_name, func.count(), func.sum(Invoice.total))
-            .where(live, Invoice.referring_doctor_id.is_not(None), Invoice.bill_date >= first, Invoice.bill_date <= today)
+            .where(live, Invoice.referring_doctor_id.is_not(None), *in_period)
             .group_by(Invoice.referring_doctor_name).order_by(func.count().desc(), func.sum(Invoice.total).desc()).limit(8)).all()]
         pending = dict(self.db.execute(
             select(InvoiceItem.status, func.count()).join(Invoice, Invoice.id == InvoiceItem.invoice_id)
-            .where(live, InvoiceItem.status.in_(("billed", "scanned")), Invoice.bill_date >= today - timedelta(days=6))
+            .where(live, InvoiceItem.status.in_(("billed", "scanned")), *in_period)
             .group_by(InvoiceItem.status)).all())
         oldest_dues = list(self.db.scalars(select(Invoice).where(live, Invoice.due > 0).order_by(Invoice.bill_date, Invoice.created_at).limit(6)))
-        recent = list(self.db.scalars(select(Invoice).where(Invoice.tenant_id == t).order_by(Invoice.created_at.desc()).limit(8)))
         return {
-            "today": self.day_summary(today), "yesterday_bills": y[0], "yesterday_billed": q2(y[1]),
-            "month_bills": m[0], "month_billed": q2(m[1]), "month_discounts": q2(m[2]), "month_collected": q2(month_collected),
-            "dues_count": dues_count, "trend": trend, "departments": departments, "doctors": doctors,
+            "date_from": frm, "date_to": to, "days": days, "all_time": all_time,
+            "period": {"bills": now[0], "billed": q2(now[1]), "discounts": q2(now[2]), "due_on_bills": q2(now[3]), "patients": now[4],
+                       "collected": by_mode, "collected_total": q2(sum(by_mode.values(), ZERO)), "dues_collected": q2(dues_collected),
+                       "refunds": q2(refunds)},
+            "previous": {"date_from": prev_from, "date_to": prev_to, "bills": before[0], "billed": q2(before[1]),
+                         "collected_total": q2(collected(prev_from, prev_to))},
+            "dues_count": outstanding[0], "outstanding_dues": q2(outstanding[1]),
+            "trend": trend, "trend_unit": "month" if monthly else "day",
+            "departments": departments, "doctors": doctors,
             "pending_tests": {"billed": pending.get("billed", 0), "scanned": pending.get("scanned", 0)},
-            "oldest_dues": oldest_dues, "recent_bills": recent,
+            "oldest_dues": oldest_dues,
         }
