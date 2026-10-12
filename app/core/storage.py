@@ -38,7 +38,7 @@ def _clean_png(data: bytes, field: str, what: str, fit_square: int | None = None
             if fit_square:
                 out = ImageOps.fit(im.convert("RGB"), (fit_square, fit_square))
             else:
-                out = im.convert("RGBA")
+                out = clear_white_background(im.convert("RGBA"))
                 out.thumbnail((max_side, max_side))
     except UnidentifiedImageError as exc:
         raise Invalid("That file isn't a picture. Upload a PNG, JPG or WebP.", field) from exc
@@ -46,6 +46,31 @@ def _clean_png(data: bytes, field: str, what: str, fit_square: int | None = None
     out.save(buf, "PNG", optimize=True)
     png = buf.getvalue()
     return StoredImage(base64.b64encode(png).decode("ascii"), "image/png", hashlib.sha1(png, usedforsecurity=False).hexdigest()[:12])
+
+
+def clear_white_background(im):
+    """A logo saved on a plain white square looks like a white box on the dark theme. Make the white around it
+    see-through: only white that touches the picture's edge (white inside the logo stays), with soft edges so
+    the outline has no white fringe. A logo with no white border comes back unchanged."""
+    from PIL import ImageChops, ImageDraw, ImageFilter
+    rgba = im.convert("RGBA")
+    w, h = rgba.size
+    r, g, b, a = rgba.split()
+    lightest = ImageChops.darker(ImageChops.darker(r, g), b)  # a pixel's lowest channel: high only when near white
+    white = ImageChops.multiply(lightest.point(lambda v: 255 if v >= 235 else 0), a.point(lambda v: 255 if v > 200 else 0))
+    edge = [(x, 0) for x in range(w)] + [(x, h - 1) for x in range(w)] + [(0, y) for y in range(h)] + [(w - 1, y) for y in range(h)]
+    if sum(white.getpixel(p) == 255 for p in edge) < len(edge) * 0.6:
+        return rgba  # not a logo on a white square
+    for p in edge:
+        if white.getpixel(p) == 255:
+            ImageDraw.floodfill(white, p, 128)
+    background = white.point(lambda v: 255 if v == 128 else 0)
+    # Just outside the logo, fade pixels by how white they are, so blended edge pixels don't leave a halo.
+    near = ImageChops.subtract(background.filter(ImageFilter.MaxFilter(5)), background)
+    fade = lightest.point(lambda v: 255 if v >= 235 else max(0, (v - 175) * 255 // 60))
+    alpha = ImageChops.subtract(ImageChops.subtract(a, background), ImageChops.multiply(near, fade))
+    rgba.putalpha(alpha)
+    return rgba
 
 
 def logo_image(data: bytes) -> StoredImage:

@@ -115,6 +115,9 @@ jobs:
             test -f .env.production || { echo "no .env.production on the server"; exit 1; }
             tar -xzf /tmp/supreme-dms.tgz && rm /tmp/supreme-dms.tgz && chmod +x deploy/*.sh
             sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
+            sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env.production exec -T app python -m app.seed --roles-only
+            sed "s/@USER@/$(whoami)/" deploy/backup.cron | sudo tee /etc/cron.d/supreme-dms-backup > /dev/null
+            sudo chmod 644 /etc/cron.d/supreme-dms-backup
             sudo docker image prune -f > /dev/null
             sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env.production ps'
       - name: Check it answers over HTTPS

@@ -647,3 +647,33 @@ class NotificationPreference(Base):
     muted_kinds: Mapped[list] = mapped_column(JSONB, default=list)
     browser_popups: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+
+class BackupSettings(Base):
+    """When the whole database is copied (one row): set in Settings > Backups, carried out by the server's cron
+    (deploy/backup.sh). Platform only."""
+    __tablename__ = "backup_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    every_days: Mapped[int] = mapped_column(Integer, default=1)
+    at_time: Mapped[str] = mapped_column(String(5), default="23:00")     # HH:MM, India time
+    keep_days: Mapped[int] = mapped_column(Integer, default=30)
+    next_run_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    requested_at: Mapped[datetime | None] = mapped_column(Timestamp)    # "Back up now", until the server picks it up
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+
+class BackupRun(Base):
+    """One backup: when, why (scheduled or asked for), and how it went. Platform only."""
+    __tablename__ = "backup_runs"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    trigger: Mapped[str] = mapped_column(String(10))                    # scheduled | manual
+    scheduled_for: Mapped[datetime | None] = mapped_column(Timestamp)
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    started_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    status: Mapped[str] = mapped_column(String(10), default="running")  # running | ok | failed
+    file: Mapped[str] = mapped_column(String(200), default="")
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    message: Mapped[str] = mapped_column(String(500), default="")

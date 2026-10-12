@@ -6,6 +6,7 @@ PLATFORM_PERMISSIONS = {
     "platform.subscriptions.manage": "Record subscription payments and renewals",
     "platform.staff.manage": "Add and remove platform staff",
     "platform.activity.view": "See the platform activity log",
+    "platform.backups.manage": "Choose when the database is backed up, and back it up now",
 }
 
 CLIENT_PERMISSIONS = {
