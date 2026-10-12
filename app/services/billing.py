@@ -293,9 +293,17 @@ class BillingService:
             events.discount_over_limit(self.db, invoice, self.current, self._over_limit)
         return invoice
 
+    def _fully_paid(self, invoice: Invoice) -> bool:
+        return invoice.total > 0 and invoice.due <= 0
+
     def update(self, invoice_id: uuid.UUID, data: BillUpdateIn) -> Invoice:
+        """Change a bill's tests or discount. Only while it's on hold, and never once it's fully paid."""
         invoice = self.get(invoice_id, lock=True)
         self._not_cancelled(invoice)
+        if self._fully_paid(invoice):
+            raise Conflict("This bill is fully paid, so it can't be changed.")
+        if invoice.status != "on_hold":
+            raise Conflict("Put the bill on hold first, then change it.")
         before = {"total": str(invoice.total), "tests": [i.test_name for i in invoice.items if i.status != CANCELLED]}
         existing = {i.id: i for i in invoice.items}
         kept: set[uuid.UUID] = set()
@@ -338,8 +346,11 @@ class BillingService:
         return invoice
 
     def hold(self, invoice_id: uuid.UUID, reason: str) -> Invoice:
+        """Put a bill on hold (so it can be changed). Only bills with money still due: a paid bill stays as it is."""
         invoice = self.get(invoice_id, lock=True)
         self._not_cancelled(invoice)
+        if self._fully_paid(invoice):
+            raise Conflict("This bill is fully paid, so it can't be put on hold or changed.")
         if invoice.status != "on_hold":
             invoice.status = "on_hold"
             self.audit.record(self.tenant_id, self.current.id, "bill.held", "invoice", invoice.id, {"reason": reason})
