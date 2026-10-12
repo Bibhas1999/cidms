@@ -86,7 +86,27 @@ def main() -> None:
     cu.add_argument("--name", required=True)
     cu.add_argument("--role", required=True, help=", ".join(ROLES))
     sub.add_parser("move-images-to-db", help="copy logos and profile pictures saved as files into the database")
+    bs = sub.add_parser("backup-start", help="(deploy/backup.sh) print '<run id> <keep days>' if a backup is due, else nothing")
+    bs.add_argument("--now", action="store_true", help="a backup asked for by hand, due or not")
+    bf = sub.add_parser("backup-finish", help="(deploy/backup.sh) record how a backup went")
+    bf.add_argument("run_id")
+    bf.add_argument("result", choices=["ok", "failed"])
+    bf.add_argument("--file", default="")
+    bf.add_argument("--bytes", type=int, default=0)
+    bf.add_argument("--message", default="")
     args = parser.parse_args()
+    if args.command in ("backup-start", "backup-finish"):
+        import uuid
+
+        from app.services import backups
+        with scoped_session(platform=True) as db, db.begin():
+            if args.command == "backup-start":
+                due = backups.start(db, force=args.now)
+                if due:
+                    print(f"{due[0].id} {due[1]}")
+            else:
+                backups.finish(db, uuid.UUID(args.run_id), args.result == "ok", args.file, args.bytes, args.message)
+        return
     if args.command == "move-images-to-db":
         move_images_to_database()
         return

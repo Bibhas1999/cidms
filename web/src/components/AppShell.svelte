@@ -196,8 +196,6 @@
 <style>
   .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; }
   .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 48px; object-fit: contain; object-position: left center; }
-  :global(:root[data-theme="dark"]) .centre-wordmark { background: #fff; border-radius: 6px; padding: 3px 6px; }
-  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme="light"])) .centre-wordmark { background: #fff; border-radius: 6px; padding: 3px 6px; } }
   .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
   .terms-link:hover { color: var(--foreground); text-decoration: underline; }

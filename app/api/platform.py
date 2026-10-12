@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import Paging, paging, platform_permission
 from app.core.db import DB
 from app.core.security import CurrentUser
-from app.schemas import ClientCreateIn, ClientOut, ClientUpdateIn, Page, PlanOut
+from app.schemas import BackupSettingsIn, ClientCreateIn, ClientOut, ClientUpdateIn, Page, PlanOut
+from app.services import backups
 from app.services.clients import ClientService, platform_overview
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -37,6 +38,23 @@ def update_client(tenant_id: uuid.UUID, data: ClientUpdateIn, db: Session = DB,
 def overview(db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.clients.view"))):
     """The platform's home page: centres, people, use this month and renewals due (counts, not centres' money)."""
     return platform_overview(db)
+
+
+@router.get("/backups")
+def backup_overview(db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
+    """The backup schedule, when the next one runs, and the last 30 backups."""
+    return backups.overview(db)
+
+
+@router.put("/backups")
+def backup_schedule(data: BackupSettingsIn, db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
+    return backups.update(db, current.id, data.enabled, data.every_days, data.at_time, data.keep_days)
+
+
+@router.post("/backups/run")
+def backup_now(db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
+    """Ask for a backup now: the server starts it within 5 minutes."""
+    return backups.request_now(db, current.id)
 
 
 @router.get("/plans", response_model=list[PlanOut])

@@ -1,0 +1,3 @@
+# Installed as /etc/cron.d/supreme-dms-backup (by server-setup.sh and every deploy). Every 5 minutes the
+# script asks the app whether a backup is due; the schedule itself is set in the app (Settings > Backups).
+*/5 * * * * @USER@ /opt/supreme-dms/deploy/backup.sh --if-due >> /opt/supreme-dms/backups/backup.log 2>&1

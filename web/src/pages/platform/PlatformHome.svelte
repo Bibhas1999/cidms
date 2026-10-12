@@ -96,6 +96,7 @@
 <div class="quick-actions">
   {#if session.can("platform.clients.view")}<a class="quick-action" href="/clients"><span class="qa-icon"><Icon name="building" /></span><span>Centres<small>Add a centre, change plans and status</small></span></a>{/if}
   <a class="quick-action" href="/settings/staff"><span class="qa-icon"><Icon name="users" /></span><span>Platform staff<small>Who runs the platform</small></span></a>
+  {#if session.can("platform.backups.manage")}<a class="quick-action" href="/settings/backups"><span class="qa-icon"><Icon name="download" /></span><span>Backups<small>When the database is copied</small></span></a>{/if}
   <a class="quick-action" href="/settings/activity"><span class="qa-icon"><Icon name="activity" /></span><span>Activity log<small>Sign-ins and changes</small></span></a>
   <a class="quick-action" href="/settings"><span class="qa-icon"><Icon name="settings" /></span><span>Settings<small>Your account and preferences</small></span></a>
 </div>

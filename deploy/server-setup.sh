@@ -53,12 +53,12 @@ if ! swapon --show | grep -q /swapfile; then
   echo "/swapfile none swap sw 0 0" >> /etc/fstab
 fi
 
-echo "== app folder and nightly backup (02:30 India time)"
+echo "== app folder and backups (the schedule is set in the app: Settings > Backups)"
 mkdir -p /opt/supreme-dms/backups
 chown -R "$APP_USER":"$APP_USER" /opt/supreme-dms
 timedatectl set-timezone Asia/Kolkata || true
 cat > /etc/cron.d/supreme-dms-backup <<CRON
-30 2 * * * $APP_USER /opt/supreme-dms/deploy/backup.sh >> /opt/supreme-dms/backups/backup.log 2>&1
+*/5 * * * * $APP_USER /opt/supreme-dms/deploy/backup.sh --if-due >> /opt/supreme-dms/backups/backup.log 2>&1
 CRON
 chmod 644 /etc/cron.d/supreme-dms-backup
 
