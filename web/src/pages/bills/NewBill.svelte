@@ -120,8 +120,10 @@
   }
 
   // ---------- money ----------
-  let discountType = $state<"none" | "percent" | "amount">("none");
+  // Discount: % or ₹ (radio), and the amount; an empty or zero amount means no discount.
+  let discountKind = $state<"percent" | "amount">("percent");
   let discountValue = $state("");
+  const discountType = $derived<"none" | "percent" | "amount">(Number(discountValue) > 0 ? discountKind : "none");
   let payNow = $state("");
   let payMode = $state<PaymentMode>("cash");
   let payRef = $state("");
@@ -368,13 +370,13 @@
       <div class="field">
         <div class="label-row"><span class="label" id="disc-label">Discount</span><InfoTip about="Discount" text={discountTip} /></div>
         <div class="row" role="group" aria-labelledby="disc-label">
-          <select class="select disc-type" aria-label="Discount type" bind:value={discountType}>
-            <option value="none">None</option><option value="percent">Percent</option><option value="amount">Amount ₹</option>
-          </select>
-          {#if discountType !== "none"}
-            <input class="input money" type="number" min="0" step={discountType === "percent" ? "1" : "0.01"} max={discountType === "percent" ? 100 : subtotal}
-                   inputmode="decimal" aria-label={discountType === "percent" ? "Discount percent" : "Discount amount"} bind:value={discountValue} aria-invalid={!!errors.discount_value} />
-          {/if}
+          <div class="disc-kind" role="radiogroup" aria-label="Discount in">
+            <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} /> % Percent</label>
+            <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} /> ₹ Rupees</label>
+          </div>
+          <input class="input money disc-value" type="number" min="0" step={discountKind === "percent" ? "1" : "0.01"} max={discountKind === "percent" ? 100 : subtotal}
+                 inputmode="decimal" placeholder={discountKind === "percent" ? "0 %" : "₹ 0"}
+                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value} />
         </div>
         {#if overLimit && !overLimitOk}<p class="field-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
         {#if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
@@ -455,7 +457,13 @@
   .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .family, .family-note { margin-top: 6px; }
   .notes { min-height: 64px; }
-  .disc-type { flex: none; width: 128px; }
+  .disc-kind { display: inline-flex; flex: none; height: 38px; padding: 3px; gap: 2px; border: 1px solid var(--input); border-radius: 9px; background: var(--background); }
+  .disc-kind label { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .disc-kind label:hover { background: var(--muted); }
+  .disc-kind label.is-on { background: var(--primary); color: #fff; }
+  .disc-kind input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .disc-kind label:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+  .disc-value { flex: 1 1 0; min-width: 0; }
   .pay-row { gap: 8px; }
   .pay-mode { flex: none; width: 140px; }
   .qty { width: 72px; margin-left: auto; text-align: right; }
