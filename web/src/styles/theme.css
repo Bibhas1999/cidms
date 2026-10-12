@@ -1,4 +1,4 @@
-/* Supreme DMS: "Clean SaaS" theme. Loaded after globals.css and supreme.css and wins over them.
+/* CIDMS: "Clean SaaS" theme. Loaded after globals.css and supreme.css and wins over them.
    Calm and compact, in the spirit of Linear and Stripe: neutral greys, hairline borders, one blue accent
    (the logo's) and its orange used sparingly, sentence-case buttons, Inter everywhere. */
 
@@ -150,7 +150,7 @@ a.card.stat:hover { border-color: var(--input); box-shadow: var(--shadow); }
 .toast { border-radius: 12px !important; }
 .avatar { background: linear-gradient(135deg, #0b55c4, #004aad); font-weight: 600; }
 
-/* ---------- Bits specific to Supreme DMS ---------- */
+/* ---------- Bits specific to CIDMS ---------- */
 .quick-action { border-radius: var(--radius-lg); }
 .quick-action:hover { background: var(--card); border-color: var(--input); box-shadow: var(--shadow); }
 .bill-title { background: var(--card) !important; color: var(--foreground) !important; border-bottom: 1px solid var(--border); }

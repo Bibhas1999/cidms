@@ -143,7 +143,7 @@
                help={c.status === "active" ? "" : "Nobody there can sign in."} />
 {/snippet}
 
-<PageHeader eyebrow="Clients" title="Clients" description="Every centre on Supreme DMS: its address, plan and whether it's active.">
+<PageHeader eyebrow="Clients" title="Clients" description="Every centre on CIDMS: its address, plan and whether it's active.">
   {#snippet actions()}{#if canManage}<Button variant="primary" icon="plus" onclick={openAdd}>Add a client</Button>{/if}{/snippet}
 </PageHeader>
 

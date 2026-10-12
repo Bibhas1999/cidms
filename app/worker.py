@@ -248,7 +248,7 @@ def configure(level: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="python -m app.worker", description="Supreme DMS background worker")
+    p = argparse.ArgumentParser(prog="python -m app.worker", description="CIDMS background worker")
     p.add_argument("--concurrency", type=int, default=int(os.environ.get("WORKER_CONCURRENCY", "2")))
     p.add_argument("--poll", type=float, default=1.0, help="seconds between looks at an empty queue")
     p.add_argument("--kinds", default="", help="only these job kinds (comma separated)")

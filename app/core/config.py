@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Safe by default: anything not explicitly marked development or test runs as production.
     environment: Literal["development", "test", "production"] = "production"
-    app_name: str = "Supreme DMS"
+    app_name: str = "CIDMS"
 
     # The app connects as a role that can't bypass row-level security; migrations run as the tables' owner.
     database_url: str = "postgresql+psycopg://supreme_app:local-app-only@localhost:5433/supreme"
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
-    mail_from: str = "Supreme DMS <no-reply@localhost>"
+    mail_from: str = "CIDMS <no-reply@localhost>"
 
     # Sign-in protection: lock an account for a while after repeated wrong passwords.
     max_failed_logins: int = 5

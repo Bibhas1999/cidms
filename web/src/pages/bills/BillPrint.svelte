@@ -27,7 +27,7 @@
         centre = c;
         document.title = `${b.invoice_no} · ${b.patient_name}`;
         get<Patient>(`/api/patients/${b.patient_id}`).then((p) => (patientNo = p.patient_no)).catch(() => {});
-        // The QR opens this bill in Supreme DMS (sign-in needed), instead of the old public download link.
+        // The QR opens this bill in CIDMS (sign-in needed), instead of the old public download link.
         qr = await QRCode.toDataURL(`${location.origin}/bills/${b.id}`, { margin: 0, width: 140 });
         setTimeout(() => window.print(), 500);
       })

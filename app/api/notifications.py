@@ -119,7 +119,7 @@ def quiet_viewer(request: Request) -> Viewer:
         viewer = None
         if current is not None:
             if current.tenant and not current.tenant.is_active:
-                raise Forbidden("This workspace is suspended. Please contact Supreme DMS support.")
+                raise Forbidden("This workspace is suspended. Please contact CIDMS support.")
             if current.user.must_change_password:
                 raise Forbidden("Set a new password to continue.", "must_change_password")
             viewer = Viewer(current.user.id, current.user.tenant_id, current.is_platform, current.session.id_hash)
