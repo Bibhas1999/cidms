@@ -19,6 +19,9 @@
       {#if t.title}<div class="toast-title">{t.title}</div>{/if}
       <div>{t.message}</div>
       {#if t.detail}<div class="toast-detail">{t.detail}</div>{/if}
+      {#if t.action}{@const act = t.action}
+        <button type="button" class="btn btn-sm toast-action" onclick={() => { toasts.dismiss(t.id); act.run(); }}>{act.label}</button>
+      {/if}
     </div>
     <button type="button" class="toast-close" aria-label="Dismiss notification" use:tooltip={"Dismiss"} onclick={() => toasts.dismiss(t.id)}><Icon name="x" size="sm" /></button>
   </div>
@@ -29,3 +32,7 @@
   <div class="toast-stack" role="alert" aria-live="assertive">{#each errors as t (t.id)}{@render card(t)}{/each}</div>
   <div class="toast-stack" role="status" aria-live="polite">{#each others as t (t.id)}{@render card(t)}{/each}</div>
 </div>
+
+<style>
+  .toast-action { margin-top: 8px; height: 30px; padding: 0 12px; font-weight: 600; }
+</style>
