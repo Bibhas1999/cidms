@@ -80,7 +80,7 @@
 
   async function signOut() {
     menuOpen = false;
-    if (await confirmDialog({ title: "Sign out of Supreme DMS?", message: "You'll need your email and password to come back.",
+    if (await confirmDialog({ title: "Sign out of CIDMS?", message: "You'll need your email and password to come back.",
                               confirmLabel: "Sign out", tone: "danger" })) await session.logout();
   }
 </script>
@@ -101,7 +101,7 @@
           <span class="centre-mark"><Icon name="activity" /></span>
         {/if}
         <span class="grow">
-          <span class="centre-name truncate" style="display:block">{session.isPlatform ? "Supreme DMS" : ws?.name}</span>
+          <span class="centre-name truncate" style="display:block">{session.isPlatform ? "CIDMS" : ws?.name}</span>
           <span class="centre-sub">{session.isPlatform ? "Platform" : "DMS"}</span>
         </span>
       </a>

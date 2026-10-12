@@ -1,4 +1,4 @@
-# CI/CD for Supreme DMS.
+# CI/CD for CIDMS.
 #   Every push and pull request: lint, the server tests (against a real Postgres), the screens' type-check and build.
 #   A push to main that passes: deploys to the Oracle server (same steps as deploy/deploy.ps1, without moving data).
 #
@@ -6,7 +6,7 @@
 #   DEPLOY_HOST      the server's IP, e.g. 137.23.42.178
 #   DEPLOY_USER      opc
 #   DEPLOY_SSH_KEY   the whole private key file (the one used with ssh -i), pasted as is
-#   DEPLOY_DOMAIN    supreme-dms.duckdns.org (for the check after deploying)
+#   DEPLOY_DOMAIN    cidms.duckdns.org (for the check after deploying)
 # The server keeps its own /opt/supreme-dms/.env.production; it is never in git or in GitHub.
 name: CI/CD
 

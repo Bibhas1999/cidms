@@ -1,5 +1,5 @@
 # Writes .env.production with fresh random secrets. Run once, from the project folder:
-#   powershell -File deploy\make-env.ps1 -Domain supreme-dms.duckdns.org -Email you@gmail.com
+#   powershell -File deploy\make-env.ps1 -Domain cidms.duckdns.org -Email you@gmail.com
 # Keep .env.production private: it holds the database passwords. It is never committed (see .gitignore).
 param(
   [Parameter(Mandatory = $true)][string]$Domain,
@@ -19,7 +19,7 @@ function New-Secret([int]$bytes = 32) {
 $owner = New-Secret; $app = New-Secret; $session = New-Secret 48
 
 $text = Get-Content (Join-Path $PSScriptRoot "env.production.example") -Raw
-$text = $text.Replace("BASE_DOMAIN=supreme-dms.duckdns.org", "BASE_DOMAIN=$Domain")
+$text = $text.Replace("BASE_DOMAIN=cidms.duckdns.org", "BASE_DOMAIN=$Domain")
 $text = $text.Replace("ACME_EMAIL=you@example.com", "ACME_EMAIL=$Email")
 $text = $text.Replace("POSTGRES_OWNER_PASSWORD=__RANDOM__", "POSTGRES_OWNER_PASSWORD=$owner")
 $text = $text.Replace("POSTGRES_APP_PASSWORD=__RANDOM__", "POSTGRES_APP_PASSWORD=$app")

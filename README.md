@@ -1,10 +1,10 @@
-# Supreme DMS
+# CIDMS
 
 Billing, reports and imaging for diagnostic centres, OPDs and clinics. One app serves many clients. Each client
 has its own address (`<client>.<domain>`), staff, settings and data. Platform staff run the product from
 `admin.<domain>`.
 
-The plan, including the database design, the data move and the phases, is in the Supreme DMS rebuild plan document.
+The plan, including the database design, the data move and the phases, is in the CIDMS rebuild plan document.
 
 ## What's built (phase 1: foundation)
 

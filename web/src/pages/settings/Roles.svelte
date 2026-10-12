@@ -240,7 +240,7 @@
 
   const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const countLabel = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
-  const PAGE_TIP = "A role is a set of permissions. Give people one or more roles in Staff. Built-in roles are kept up to date by Supreme DMS; copy one to make your own version.";
+  const PAGE_TIP = "A role is a set of permissions. Give people one or more roles in Staff. Built-in roles are kept up to date by CIDMS; copy one to make your own version.";
 </script>
 
 {#snippet roleItem(r: RoleRow)}

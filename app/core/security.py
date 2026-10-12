@@ -158,7 +158,7 @@ def _signed_in(request: Request, db: Session, allow_password_change: bool) -> Cu
         raise Unauthorized("Sign in to continue.")
     check_csrf(request, current)
     if current.tenant and not current.tenant.is_active:
-        raise Forbidden("This workspace is suspended. Please contact Supreme DMS support.")
+        raise Forbidden("This workspace is suspended. Please contact CIDMS support.")
     if current.user.must_change_password and not allow_password_change:
         raise Forbidden("Set a new password to continue.", "must_change_password")
     return current

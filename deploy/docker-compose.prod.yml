@@ -1,4 +1,4 @@
-# Supreme DMS on one server (Oracle Cloud Always Free, ARM): the database, the app, the background worker and
+# CIDMS on one server (Oracle Cloud Always Free, ARM): the database, the app, the background worker and
 # Caddy (HTTPS) in front. Run from /opt/supreme-dms with the production settings in .env.production:
 #
 #   docker compose -f deploy/docker-compose.prod.yml --env-file .env.production up -d --build

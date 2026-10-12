@@ -243,7 +243,7 @@ class BillingService:
         count = self.db.scalar(select(func.count()).where(Invoice.tenant_id == self.tenant_id, Invoice.bill_date >= first)) or 0
         if count >= tenant.plan.max_bills_per_month:
             raise Conflict(f"Your plan allows {tenant.plan.max_bills_per_month} bills a month and this month's are used up. "
-                           "Please contact Supreme DMS to change your plan.")
+                           "Please contact CIDMS to change your plan.")
 
     def _not_cancelled(self, invoice: Invoice) -> None:
         if invoice.status == "cancelled":

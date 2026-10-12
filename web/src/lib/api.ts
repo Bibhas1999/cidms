@@ -100,7 +100,7 @@ async function send<T>(method: string, path: string, options: { body?: unknown; 
       });
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
-      throw new ApiError(0, "Can't reach Supreme DMS. Check your internet connection and try again.");
+      throw new ApiError(0, "Can't reach CIDMS. Check your internet connection and try again.");
     }
     if (response.status !== 503 || method !== "GET") break;
     await sleep(Number(response.headers.get("Retry-After") ?? 1) * 1000);

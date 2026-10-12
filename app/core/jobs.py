@@ -206,7 +206,7 @@ class JobContext:
 class _SystemUser:
     tenant_id: uuid.UUID | None
     id: None = None
-    full_name: str = "Supreme DMS"
+    full_name: str = "CIDMS"
     is_active: bool = True
 
 

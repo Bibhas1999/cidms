@@ -230,7 +230,7 @@ export function uploadWithProgress<T>(url: string, body: FormData, csrf: string,
       if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
       else reject(Object.assign(new Error(data?.message ?? `Upload failed (${xhr.status}).`), { status: xhr.status, requestId: data?.request_id ?? null }));
     };
-    xhr.onerror = () => reject(Object.assign(new Error("Can't reach Supreme DMS. Check your connection and try again."), { status: 0 }));
+    xhr.onerror = () => reject(Object.assign(new Error("Can't reach CIDMS. Check your connection and try again."), { status: 0 }));
     xhr.send(body);
   });
 }

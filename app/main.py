@@ -107,7 +107,7 @@ def install_error_handlers(app: FastAPI) -> None:
         if not is_transient(exc):
             return await unexpected(request, exc)
         log.warning("Temporary database problem: %s", type(exc.orig).__name__ if exc.orig else exc)
-        return _error(503, "Supreme DMS is busy for a moment. Please try again.", headers={"Retry-After": "2"})
+        return _error(503, "CIDMS is busy for a moment. Please try again.", headers={"Retry-After": "2"})
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception):
