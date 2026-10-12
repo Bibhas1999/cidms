@@ -230,3 +230,10 @@ class ClientErrorIn(BaseModel):
     stack: str = Field(default="", max_length=8000)
     url: str = Field(default="", max_length=500)
     kind: Literal["boundary", "error", "unhandledrejection", "api"] = "error"
+
+
+class BackupSettingsIn(BaseModel):
+    enabled: bool = True
+    every_days: int = Field(1, ge=1, le=365)
+    at_time: str = Field("23:00", max_length=5)
+    keep_days: int = Field(30, ge=1, le=3650)
