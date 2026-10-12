@@ -1,5 +1,6 @@
 # CI/CD for CIDMS.
-#   Every push and pull request: lint, the server tests (against a real Postgres), the screens' type-check and build.
+#   Only for main: the release pull request (dev -> main) and every push to main run lint, the server tests
+#   (against a real Postgres), the screens' type-check and build. Feature -> dev pull requests run nothing.
 #   A push to main that passes: deploys to the Oracle server (same steps as deploy/deploy.ps1, without moving data).
 #
 # Repository secrets (Settings > Secrets and variables > Actions):
@@ -14,6 +15,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

@@ -28,6 +28,7 @@
   import Login from "./pages/Login.svelte";
   import ResetPassword from "./pages/ResetPassword.svelte";
   import Landing from "./pages/Landing.svelte";
+  import OfflineBills from "./pages/bills/OfflineBills.svelte";
   import Message from "./pages/Message.svelte";
   import Notifications from "./pages/Notifications.svelte";
   import Terms from "./pages/Terms.svelte";
@@ -51,6 +52,8 @@
     { path: "/analytics", component: Analytics, title: "Analytics", client: "analytics.view", platform: null },
     { path: "/bills", component: Bills, title: "Bills", ...CLIENT_ONLY },
     { path: "/bills/new", component: NewBill, title: "New bill", client: "billing.create", platform: null },
+    { path: "/bills/offline", component: OfflineBills, title: "Offline bills", client: "billing.create", platform: null },
+    { path: "/bills/offline/:offlineId/print", component: BillPrint, title: "Print bill", bare: true, client: "billing.create", platform: null },
     { path: "/bills/:id", component: BillDetail, title: "Bill", ...CLIENT_ONLY },
     { path: "/bills/:id/print", component: BillPrint, title: "Print bill", bare: true, ...CLIENT_ONLY },
     { path: "/dues", component: Dues, title: "Dues", client: "payments.collect", platform: null },

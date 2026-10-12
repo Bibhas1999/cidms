@@ -36,6 +36,11 @@ def local_today() -> date:
     return local_now().date()
 
 
+def local_date(moment: datetime) -> date:
+    """The day a moment fell on, in the centre's time zone (India)."""
+    return moment.astimezone(ZoneInfo(get_settings().display_timezone)).date()
+
+
 def financial_year(d: date) -> str:
     """Indian financial year, April to March: 9 Oct 2026 -> "2026-27"."""
     start = d.year if d.month >= 4 else d.year - 1

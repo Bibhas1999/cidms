@@ -331,6 +331,9 @@ class Invoice(Base):
     created_by_name: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+    # Made while the internet was down (on the desk computer) and sent later: its provisional number and when.
+    offline_no: Mapped[str] = mapped_column(String(40), default="")
+    made_offline_at: Mapped[datetime | None] = mapped_column(Timestamp)
 
     items: Mapped[list["InvoiceItem"]] = relationship(back_populates="invoice", order_by="InvoiceItem.position", lazy="selectin")
     payments: Mapped[list["Payment"]] = relationship(back_populates="invoice", order_by="Payment.received_at", lazy="selectin")

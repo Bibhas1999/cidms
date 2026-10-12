@@ -160,6 +160,14 @@ class Discount(BaseModel):
         return self
 
 
+class OfflineIn(BaseModel):
+    """A bill made offline on the desk computer, arriving now that the connection is back."""
+    made_at: datetime                                    # when it was really made (and paid)
+    offline_no: str = Field(min_length=3, max_length=40, pattern=r"^OFF-[A-Z0-9-]+$")
+    printed_total: Money = Field(ge=0, le=100_000_000)   # what the printed bill said
+    accept_new_total: bool = False                       # prices changed since: save at today's prices anyway
+
+
 class BillIn(Discount):
     patient_id: uuid.UUID | None = None
     patient: PatientIn | None = None
@@ -169,6 +177,7 @@ class BillIn(Discount):
     payments: list[PaymentIn] = Field(default_factory=list, max_length=5)
     notes: str = Field(default="", max_length=1000)
     hold: bool = False
+    offline: OfflineIn | None = None
 
     @model_validator(mode="after")
     def _patient(self) -> "BillIn":
@@ -242,6 +251,8 @@ class BillSummaryOut(Out):
     due: Money
     created_by_name: str
     created_at: datetime
+    offline_no: str = ""
+    made_offline_at: datetime | None = None
 
 
 class BillPage(Page[BillSummaryOut]):
