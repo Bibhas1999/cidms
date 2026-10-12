@@ -1,5 +1,6 @@
 // Fonts are self-hosted so the strict Content-Security-Policy (font-src 'self') holds: Inter everywhere.
 import "@fontsource/inter/400.css";
+import { pruneDrafts } from "./lib/drafts.svelte";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
@@ -18,6 +19,7 @@ import { applyTheme, getTheme } from "./lib/theme";
 applyTheme(getTheme());
 installGlobalErrorHandlers();
 installRouter();
+pruneDrafts();
 install.start();
 
 export default mount(App, { target: document.getElementById("app")! });

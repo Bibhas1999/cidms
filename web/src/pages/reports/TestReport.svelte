@@ -12,6 +12,8 @@
     REPORT_STATUS, fileSize, uploadWithProgress,
     type ReportVersionFull, type ReportWorkspace, type Template, type UploadResult,
   } from "../../lib/report-types";
+  import { confirmDialog } from "../../lib/confirm.svelte";
+  import { confirmLeave } from "../../lib/leave";
   import { setBeforeLeave } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
@@ -111,11 +113,12 @@
     }
   }
 
-  function applyTemplate() {
+  async function applyTemplate() {
     const t = templates.find((x) => x.id === templateId);
     if (!t) return;
     const hasWords = form.values.findings.replace(/<[^>]+>/g, "").trim() || form.values.impression.replace(/<[^>]+>/g, "").trim();
-    if (hasWords && !confirm(`Replace what's written with the "${t.name}" template?`)) return;
+    if (hasWords && !(await confirmDialog({ title: `Use the "${t.name}" template?`, message: "What's written in the findings and impression is replaced.",
+                                            confirmLabel: "Replace", tone: "danger" }))) return;
     form.values.title = t.title || form.values.title;
     form.values.technique = t.technique || form.values.technique;
     form.values.findings = t.findings;
@@ -152,7 +155,7 @@
     return () => clearInterval(timer);
   });
   $effect(() => {
-    setBeforeLeave(dirty ? () => confirm("This report has unsaved changes. Leave without saving?") : null);
+    setBeforeLeave(dirty ? confirmLeave({ message: "This report has changes that aren't saved. If you leave now, they're lost." }) : null);
     return () => setBeforeLeave(null);
   });
   $effect(() => {
