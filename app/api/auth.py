@@ -22,6 +22,9 @@ def workspace(request: Request):
     """Which centre this address belongs to, for the sign-in page. Needs no sign-in."""
     out = workspace_of(request)
     s = get_settings()
+    if out.kind == "none":
+        out.base_domain = s.base_domain
+        out.platform_subdomain = s.platform_subdomain
     if out.kind == "none" and not s.is_production:
         # On a developer's machine, plain localhost lists the workspaces to open. Never in production:
         # the list of clients isn't public.

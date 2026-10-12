@@ -94,3 +94,44 @@ class ClientService:
         self.db.flush()
         self.db.refresh(tenant)
         return tenant
+
+
+def platform_overview(db: Session) -> dict:
+    """The platform's home page: centres, their people and use this month, and renewals coming up. Counts only:
+    a centre's money is its own business (the platform sees plan values, not what centres bill)."""
+    from datetime import timedelta
+
+    from app.core.money import local_today
+    from app.models import Invoice
+
+    now = utcnow()
+    month_start = local_today().replace(day=1)
+    tenants = list(db.scalars(select(Tenant).where(Tenant.kind != "platform").order_by(Tenant.created_at.desc())))
+    active = [t for t in tenants if t.status == "active"]
+    staff = dict(db.execute(select(User.tenant_id, func.count()).where(User.tenant_id.is_not(None), User.is_active.is_(True))
+                            .group_by(User.tenant_id)).all())
+    platform_staff = db.scalar(select(func.count()).select_from(User).where(User.tenant_id.is_(None), User.is_active.is_(True))) or 0
+    bills = dict(db.execute(select(Invoice.tenant_id, func.count()).where(Invoice.bill_date >= month_start, Invoice.status != "cancelled")
+                            .group_by(Invoice.tenant_id)).all())
+
+    def row(t: Tenant) -> dict:
+        limit = t.plan.max_bills_per_month if t.plan else None
+        used = bills.get(t.id, 0)
+        return {"id": t.id, "slug": t.slug, "name": t.name, "kind": t.kind, "status": t.status,
+                "plan": t.plan.name if t.plan else None, "paid_until": t.paid_until, "created_at": t.created_at,
+                "staff": staff.get(t.id, 0), "bills_this_month": used, "bill_limit": limit,
+                "usage_pct": round(used * 100 / limit) if limit else None}
+
+    soon = now + timedelta(days=30)
+    renewals = sorted((row(t) for t in active if t.paid_until is None or t.paid_until <= soon),
+                      key=lambda r: (r["paid_until"] is not None, r["paid_until"] or now))
+    return {
+        "centres": len(tenants), "active": len(active), "suspended": sum(t.status == "suspended" for t in tenants),
+        "by_kind": {k: sum(t.kind == k for t in tenants) for k in ("diagnostic", "opd", "clinic")},
+        "staff": sum(staff.values()), "platform_staff": platform_staff,
+        "bills_this_month": sum(bills.values()),
+        "plan_value_monthly": sum((t.plan.price_monthly for t in active if t.plan), start=0),
+        "renewals": renewals[:8],
+        "overdue": sum(1 for r in renewals if r["paid_until"] is not None and r["paid_until"] < now),
+        "centres_list": [row(t) for t in tenants[:10]],
+    }
