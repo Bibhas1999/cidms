@@ -17,6 +17,7 @@
   import { confirmDialog } from "../../lib/confirm.svelte";
   import { Form } from "../../lib/form.svelte";
   import { dateTime } from "../../lib/format";
+  import { confirmLeave } from "../../lib/leave";
   import { router, setBeforeLeave, setQuery } from "../../lib/router.svelte";
   import { optionalText, submitting, text } from "../../lib/schemas";
   import { session } from "../../lib/session.svelte";
@@ -124,7 +125,7 @@
 
   // Ask before leaving with unsaved changes (moving inside the app, or closing the tab).
   $effect(() => {
-    setBeforeLeave(dirty ? () => confirm("You have unsaved changes to this role. Leave without saving?") : null);
+    setBeforeLeave(dirty ? confirmLeave({ message: "Your changes to this role aren't saved. If you leave now, they're lost." }) : null);
     const onUnload = (e: BeforeUnloadEvent) => { if (dirty) e.preventDefault(); };
     window.addEventListener("beforeunload", onUnload);
     return () => { window.removeEventListener("beforeunload", onUnload); setBeforeLeave(null); };

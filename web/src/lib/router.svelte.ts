@@ -17,21 +17,29 @@ class RouterState {
 
 export const router = new RouterState();
 
-let beforeLeave: (() => boolean) | null = null;
+type LeaveCheck = () => boolean | Promise<boolean>;
+let beforeLeave: LeaveCheck | null = null;
+let here = location.pathname + location.search;   // where we are, to come back to if a Back press is cancelled
 
-/** A page with unsaved changes can ask before the person moves away. Return false to stay. */
-export function setBeforeLeave(check: (() => boolean) | null): void {
+/** A page with unsaved changes can ask before the person moves away (a link, or the browser's Back button).
+ *  Return (or resolve to) false to stay. Use confirmLeave() for the app's own "Leave this page?" dialog. */
+export function setBeforeLeave(check: LeaveCheck | null): void {
   beforeLeave = check;
+}
+
+function go(url: URL, replace: boolean): void {
+  beforeLeave = null;
+  history[replace ? "replaceState" : "pushState"]({}, "", url.pathname + url.search);
+  here = url.pathname + url.search;
+  router.sync();
+  window.scrollTo(0, 0);
 }
 
 export function navigate(to: string, { replace = false } = {}): void {
   const url = new URL(to, location.origin);
   if (url.pathname + url.search === location.pathname + location.search) return;
-  if (beforeLeave && !beforeLeave()) return;
-  beforeLeave = null;
-  history[replace ? "replaceState" : "pushState"]({}, "", url.pathname + url.search);
-  router.sync();
-  window.scrollTo(0, 0);
+  if (!beforeLeave) { go(url, replace); return; }
+  void Promise.resolve(beforeLeave()).then((ok) => { if (ok) go(url, replace); });
 }
 
 /** Change the query string of the current page (filters, paging) without adding a history entry per keystroke. */
@@ -43,11 +51,19 @@ export function setQuery(values: Record<string, string | number | null | undefin
   }
   const s = q.toString();
   history[replace ? "replaceState" : "pushState"]({}, "", location.pathname + (s ? `?${s}` : ""));
+  here = location.pathname + location.search;
   router.sync();
 }
 
 export function installRouter(): void {
-  window.addEventListener("popstate", () => router.sync());
+  window.addEventListener("popstate", () => {
+    const check = beforeLeave;
+    if (!check) { here = location.pathname + location.search; router.sync(); return; }
+    // Back (or Forward) with unsaved work: put this page back for now, and go only if they say so.
+    const wanted = location.pathname + location.search;
+    history.pushState({}, "", here);
+    void Promise.resolve(check()).then((ok) => { if (ok) go(new URL(wanted, location.origin), true); });
+  });
   document.addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = (e.target as Element).closest?.("a");
