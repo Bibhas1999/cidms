@@ -1,6 +1,7 @@
 <script lang="ts">
   import { get } from "../lib/api";
   import { InfiniteList } from "../lib/infinite.svelte";
+  import { searchCachedTests, withOffline } from "../lib/offline.svelte";
   import type { LabTest } from "../lib/bill-types";
   import { rupees } from "../lib/format";
   import type { Page } from "../lib/types";
@@ -17,8 +18,10 @@
   let query = $state("");
   let open = $state(false);
   // The list loads 30 tests at a time and fetches more as you scroll to its bottom.
-  const list = new InfiniteList<LabTest>((page, size, signal) =>
-    get<Page<LabTest>>("/api/tests", { search: query.trim(), active: true, page, size }, signal), 30);
+  // Offline (lib/offline), from this computer's copy of the catalogue.
+  const search = withOffline<LabTest>((q, page, size, signal) => get<Page<LabTest>>("/api/tests", { search: q, active: true, page, size }, signal),
+                                      searchCachedTests);
+  const list = new InfiniteList<LabTest>((page, size, signal) => search(query.trim(), page, size, signal), 30);
   const tests = $derived(list.items);
   const loading = $derived(list.loading);
   let active = $state(0);

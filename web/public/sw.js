@@ -1,7 +1,7 @@
 // CIDMS service worker: makes the app installable and quick to open. It keeps only the app itself
 // (the page, scripts, styles, fonts, icons). Patient data never goes in its cache: /api, /viewer and
 // /dicom-web always go to the network, and so does anything that isn't a plain GET.
-const CACHE = "sdms-shell-v1";
+const CACHE = "sdms-shell-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/icons/favicon.png", "/icons/icon-192.png"];
 const NEVER = ["/api/", "/viewer", "/dicom-web", "/healthz"];
 
@@ -41,6 +41,15 @@ self.addEventListener("fetch", (event) => {
       })),
     );
   }
+});
+
+// The app lists the files it loaded (scripts, styles, fonts) right after it starts, so the very first visit
+// already leaves everything needed to open without the internet (and bill offline).
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type !== "keep" || !Array.isArray(data.files)) return;
+  const files = data.files.filter((u) => { try { const p = new URL(u).pathname; return new URL(u).origin === self.location.origin && (p.startsWith("/assets/") || p.startsWith("/icons/")); } catch { return false; } });
+  event.waitUntil(caches.open(CACHE).then((c) => Promise.all(files.map((u) => c.match(u).then((hit) => hit || c.add(u).catch(() => {}))))));
 });
 
 // A notification pop-up (shown by the app with registration.showNotification) was clicked: bring an open

@@ -301,3 +301,34 @@ def test_cancelling_or_refunding_a_bill_tells_the_owner(centre):
     assert {"refund.recorded", "bill.cancelled"} <= kinds
     assert owner.get("/api/notifications/unread-count").json()["count"] >= 2
     assert not admin.get("/api/notifications").json()["items"]  # not told about what they did themselves
+
+
+def test_a_bill_made_offline_keeps_its_day_and_number(centre):
+    from datetime import UTC, datetime, timedelta
+    made = datetime.now(UTC) - timedelta(days=2)
+    offline = {"made_at": made.isoformat(), "offline_no": "OFF-K7Q-0001", "printed_total": "250.50"}
+    r = bill(centre["front"], centre["tests"], ["CBC"], payments=[{"mode": "cash", "amount": "250.50"}], offline=offline)
+    assert r.status_code == 201, r.text
+    b = r.json()
+    from app.core.money import local_date
+    assert b["bill_date"] == local_date(made).isoformat() and b["offline_no"] == "OFF-K7Q-0001" and b["made_offline_at"]
+    assert b["payments"][0]["received_at"][:16] == made.isoformat()[:16]
+    # the same offline bill again (a new request, after its key was forgotten) is turned away, naming the saved one
+    again = bill(centre["front"], centre["tests"], ["CBC"], offline=offline)
+    assert again.status_code == 409 and again.json()["field"] == "offline_duplicate" and b["invoice_no"] in again.json()["message"]
+
+
+def test_an_offline_bill_whose_prices_changed_waits_for_a_person(centre):
+    from datetime import UTC, datetime
+    offline = {"made_at": datetime.now(UTC).isoformat(), "offline_no": "OFF-K7Q-0002", "printed_total": "200"}
+    r = bill(centre["front"], centre["tests"], ["CBC"], offline=offline)
+    assert r.status_code == 409 and r.json()["field"] == "offline_total"
+    ok = bill(centre["front"], centre["tests"], ["CBC"], offline={**offline, "accept_new_total": True})
+    assert ok.status_code == 201 and money(ok.json()["total"]) == Decimal("250.50")
+
+
+def test_offline_bills_must_have_a_believable_time(centre):
+    from datetime import UTC, datetime, timedelta
+    for when in (datetime.now(UTC) + timedelta(hours=2), datetime.now(UTC) - timedelta(days=40)):
+        r = bill(centre["front"], centre["tests"], ["CBC"], offline={"made_at": when.isoformat(), "offline_no": "OFF-K7Q-0003", "printed_total": "250.50"})
+        assert r.status_code == 422 and r.json()["field"] == "offline"

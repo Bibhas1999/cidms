@@ -15,6 +15,8 @@
   import { PAYMENT_MODES, type Bill, type Doctor, type LabTest, type Patient, type PaymentMode } from "../../lib/bill-types";
   import { autosaveDraft, clearDraft, readDraft, savedAgo, type Draft } from "../../lib/drafts.svelte";
   import { confirmLeave } from "../../lib/leave";
+  import { connection } from "../../lib/connection.svelte";
+  import { cachedSettings, offline, saveOfflineBill, searchCachedDoctors, searchCachedPatients, withOffline } from "../../lib/offline.svelte";
   import { Form } from "../../lib/form.svelte";
   import { rupees } from "../../lib/format";
   import { formatPhone, splitPhone } from "../../lib/phone";
@@ -55,7 +57,8 @@
     if (preset) get<Patient>(`/api/patients/${preset}`).then((p) => (patient = p)).catch(() => {});
   });
 
-  const searchPatients = (q: string, page: number, size: number, signal: AbortSignal) => get<Page<Patient>>("/api/patients", { search: q, page, size }, signal);
+  // Offline, searches use this computer's copy (lib/offline): the most recent patients, all tests and doctors.
+  const searchPatients = withOffline<Patient>((q, page, size, signal) => get<Page<Patient>>("/api/patients", { search: q, page, size }, signal), searchCachedPatients);
 
   let familyTimer: ReturnType<typeof setTimeout>;
   function onMobile() {
@@ -79,7 +82,7 @@
   // ---------- doctor ----------
   let doctorText = $state("");
   let doctor = $state<Doctor | null>(null);
-  const searchDoctors = (q: string, page: number, size: number, signal: AbortSignal) => get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal);
+  const searchDoctors = withOffline<Doctor>((q, page, size, signal) => get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal), searchCachedDoctors);
 
   // A doctor not in the list yet: add them in a dialog (saved to the list at once) and they're chosen for this bill.
   let addingDoctor = $state(false);
@@ -133,8 +136,8 @@
   let hold = $state(false);
   let maxDiscount = $state<number | null>(null);
   $effect(() => {
-    get<CentreSettings & { max_discount_percent?: string }>("/api/settings")
-      .then((s) => { if (s.max_discount_percent !== undefined) maxDiscount = Number(s.max_discount_percent); }).catch(() => {});
+    get<CentreSettings & { max_discount_percent?: string }>("/api/settings").catch(() => cachedSettings())
+      .then((s) => { if (s?.max_discount_percent !== undefined) maxDiscount = Number(s.max_discount_percent); }).catch(() => {});
   });
   const overLimitOk = $derived(session.can("billing.discount_over_limit"));
 
@@ -237,6 +240,7 @@
       payments: paying > 0 ? [{ mode: payMode, amount: paying.toFixed(2), reference: payRef }] : [],
       notes, hold,
     };
+    if (!connection.usable) { await saveOffline(print, body, newPatient); return; }
     try {
       const bill = await post<Bill>("/api/bills", body, { "Idempotency-Key": requestKey });
       finished = true;
@@ -246,6 +250,9 @@
       if (print) window.open(`/bills/${bill.id}/print`, "_blank", "noopener");
       navigate(`/bills/${bill.id}`, { replace: true });
     } catch (e) {
+      // CIDMS couldn't be reached: keep the bill on this computer instead (same key, so if the save did get
+      // through, sending it later finds that bill instead of making another).
+      if (e instanceof ApiError && e.transient) { await saveOffline(print, body, newPatient); return; }
       requestKey = newRequestKey();
       if (e instanceof ApiError && Object.keys(e.fieldErrors).length) {
         const own: Record<string, string> = {}, theirs: Record<string, string> = {};
@@ -256,6 +263,43 @@
         errors = own;
         notifyError(e, { title: "Check the bill" });
       } else notifyError(e, { title: "Couldn't save the bill" });
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function saveOffline(print: boolean, body: Record<string, unknown>, newPatient: z.output<typeof patientSchema> | null) {
+    saving = true;
+    try {
+      const now = new Date().toISOString();
+      const who = session.me?.full_name ?? "";
+      const p = patient ?? null;
+      const record = await saveOfflineBill(requestKey, body, {
+        legacy_no: null, patient_id: p?.id ?? "", patient_name: (p?.name ?? newPatient?.name ?? "").replace(/\s+/g, " ").trim(),
+        patient_mobile: p?.mobile ?? newPatient?.mobile ?? "", patient_age: `${p?.age_years ?? newPatient?.age_years ?? ""} Y`,
+        patient_gender: p?.gender ?? newPatient?.gender ?? "other", patient_address: p?.address ?? newPatient?.address ?? "",
+        guardian_name: p?.guardian_name ?? newPatient?.guardian_name ?? "",
+        referring_doctor_id: doctor && doctor.name === doctorText ? doctor.id : null, referring_doctor_name: doctorText.trim(),
+        status: hold ? "on_hold" : "confirmed", subtotal: subtotal.toFixed(2), discount_type: discountType,
+        discount_value: discountType === "none" ? "0" : String(Number(discountValue) || 0), discount_amount: discount.toFixed(2),
+        total: total.toFixed(2), paid: paying.toFixed(2), due: dueAfter.toFixed(2), notes, cancel_reason: "", created_by_name: who,
+        items: lines.map((l, i) => ({
+          id: `line-${i + 1}`, position: i + 1, test_id: l.test.id, test_name: l.test.name, department_name: l.test.department.name,
+          is_imaging: !!l.test.test_type?.is_imaging, unit_price: Number(l.test.price).toFixed(2), quantity: l.quantity,
+          amount: (Number(l.test.price) * l.quantity).toFixed(2), status: "billed" as const, accession_no: "", status_changed_at: null,
+        })),
+        payments: paying > 0 ? [{ id: "pay-1", kind: "payment" as const, amount: paying.toFixed(2), mode: payMode, reference: payRef, note: "",
+                                  received_at: now, received_by_name: who }] : [],
+      }, p?.patient_no ?? "");
+      finished = true;
+      clearDraft(DRAFT);
+      setBeforeLeave(null);
+      notify(`Kept on this computer as ${record.offline_no}. It goes to CIDMS by itself when the connection is back, and gets its bill number then.`,
+             { title: "Bill saved offline", kind: "warning" });
+      if (print) window.open(`/bills/offline/${record.id}/print`, "_blank", "noopener");
+      navigate(`/bills/offline?made=${record.id}`, { replace: true });
+    } catch (e) {
+      notifyError(e, { title: "Couldn't keep the bill on this computer" });
     } finally {
       saving = false;
     }
@@ -280,6 +324,14 @@
   {#snippet actions()}<span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
 </PageHeader>
 
+{#if !connection.usable}
+  <div class="alert alert-warning draft-note" role="status"><Icon name="alert" />
+    <div class="grow"><div class="alert-title">You're offline: billing carries on</div>
+      {#if offline.readyAt}Bills are kept on this computer with a provisional number and printed; they go to CIDMS by themselves when the connection is back.
+        Tests, prices and doctors are as of {new Date(offline.readyAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}; existing patients are the {300} most recent.
+      {:else}This computer has no copy of the tests and prices yet. Open CIDMS once while online, and it can bill offline from then on.{/if}</div>
+  </div>
+{/if}
 {#if restored}
   <div class="alert alert-info draft-note" role="status"><Icon name="info" />
     <div class="grow"><div class="alert-title">Your unsaved bill is back</div>From {savedAgo(restored.saved_at)}. It's kept on this computer until you save it.</div>

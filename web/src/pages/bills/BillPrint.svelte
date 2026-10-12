@@ -2,12 +2,15 @@
   import QRCode from "qrcode";
   import { get } from "../../lib/api";
   import type { Bill, Patient } from "../../lib/bill-types";
+  import { cachedSettings, getOfflineBill } from "../../lib/offline.svelte";
   import type { CentreSettings } from "../../lib/types";
 
   // The printed bill, laid out exactly like Supreme's old "Bill / Receipt" (Verdana, black on white, the
   // centre's name and phones centred on top, a QR code, the patient block, the tests table, then sub total,
   // due, discount, paid, received by, total, the notes and the signatory). Opens the print dialog by itself.
+  // /bills/offline/<id>/print: a bill made offline, from this computer (provisional number, no QR yet).
   let { params }: { params: Record<string, string> } = $props();
+  const offlineId = $derived(params.offlineId ?? "");
 
   let bill = $state<Bill | null>(null);
   let centre = $state<CentreSettings | null>(null);
@@ -21,6 +24,21 @@
   });
 
   $effect(() => {
+    if (!offlineId) return;
+    Promise.all([getOfflineBill(offlineId), get<CentreSettings>("/api/settings").catch(() => cachedSettings())])
+      .then(([o, c]) => {
+        if (!o || !c) { failed = "This offline bill isn't on this computer."; return; }
+        bill = o.bill;
+        centre = c;
+        patientNo = o.patient_no;
+        document.title = `${o.offline_no} · ${o.bill.patient_name}`;
+        setTimeout(() => window.print(), 500);
+      })
+      .catch((e) => (failed = e.message));
+  });
+
+  $effect(() => {
+    if (offlineId) return;
     Promise.all([get<Bill>(`/api/bills/${params.id}`), get<CentreSettings>("/api/settings")])
       .then(async ([b, c]) => {
         bill = b;
@@ -47,7 +65,7 @@
 {:else if bill && centre}
   <div class="screen-only bar">
     <button class="btn btn-primary" onclick={() => window.print()}>Print</button>
-    <a class="btn btn-outline" href="/bills/{bill.id}">Back to the bill</a>
+    <a class="btn btn-outline" href={offlineId ? "/bills/offline" : `/bills/${bill.id}`}>Back to the bill</a>
   </div>
 
   <div class="receipt">
@@ -65,6 +83,7 @@
       </tr></tbody>
     </table>
     <hr />
+    {#if offlineId}<p class="provisional">Provisional bill, made offline. The final bill number is given when it reaches CIDMS.</p>{/if}
 
     <table class="patient">
       <tbody>
@@ -123,6 +142,7 @@
   .top th { font-family: Verdana, Geneva, Tahoma, sans-serif; padding: 6px 0 2px; color: #000; background: none; font-size: 13px; }
   .top .l { text-align: left; width: 30%; } .top .c { text-align: center; font-size: 18px; width: 40%; } .top .r { text-align: right; font-size: 12px; width: 30%; }
   hr { margin: 0; border: 0; border-top: 1px solid #000; }
+  .provisional { margin: 4px 0 0; font-size: 11px; font-style: italic; text-align: center; }
   .patient td { padding: 3px 0; font-size: 13px; vertical-align: top; }
   .patient .k { font-weight: bold; }
   .up { text-transform: uppercase; }
