@@ -7,6 +7,7 @@
   import PageHeader from "../components/PageHeader.svelte";
   import PlatformHome from "./platform/PlatformHome.svelte";
   import TrendChart from "../components/TrendChart.svelte";
+  import { untrack } from "svelte";
   import { get } from "../lib/api";
   import { confirmDialog } from "../lib/confirm.svelte";
   import { BILL_STATUS, paymentState, type BillPage } from "../lib/bill-types";
@@ -23,7 +24,10 @@
 
   // Everyone sees the totals (bills, total amount, collected, dues). Only the owner and the centre admin
   // (analytics.view) get the analytics: the trend, departments, doctors and the comparison with the period before.
-  const business = !session.isPlatform && session.can("analytics.view");
+  // Read once: who you are doesn't change while the page is open, and the loads below must not re-run when the
+  // session object is refreshed by a reply (that made them repeat without end).
+  const platform = session.isPlatform;
+  const business = !platform && session.can("analytics.view");
 
   // ---------- one period for the whole page, kept in the address (?from=&to=) ----------
   // Nothing in the address = this month (the 1st to today); ?from=all = all time.
@@ -46,26 +50,32 @@
   $effect(() => {
     if (!business) return;
     const ctrl = new AbortController();
-    loading = true;
-    failed = "";
-    get<Overview>("/api/summary/overview", { from: from || undefined, to: to || undefined }, ctrl.signal)
-      .then((d) => (data = d))
-      .catch((e) => { if (e.name !== "AbortError") failed = e.message; })
-      .finally(() => { if (!ctrl.signal.aborted) loading = false; });
+    const q = { from: from || undefined, to: to || undefined };
+    untrack(() => {
+      loading = true;
+      failed = "";
+      get<Overview>("/api/summary/overview", q, ctrl.signal)
+        .then((d) => (data = d))
+        .catch((e) => { if (e.name !== "AbortError") failed = e.message; })
+        .finally(() => { if (!ctrl.signal.aborted) loading = false; });
+    });
     return () => ctrl.abort();
   });
 
   // ---------- everyone else: collected and dues for the period ----------
   let desk = $state<DeskSummary | null>(null);
   $effect(() => {
-    if (business || session.isPlatform) return;
+    if (business || platform) return;
     const ctrl = new AbortController();
-    loading = true;
-    failed = "";
-    get<DeskSummary>("/api/summary/desk", { from: from || undefined, to: to || undefined }, ctrl.signal)
-      .then((d) => (desk = d))
-      .catch((e) => { if (e.name !== "AbortError") failed = e.message; })
-      .finally(() => { if (!ctrl.signal.aborted) loading = false; });
+    const q = { from: from || undefined, to: to || undefined };
+    untrack(() => {
+      loading = true;
+      failed = "";
+      get<DeskSummary>("/api/summary/desk", q, ctrl.signal)
+        .then((d) => (desk = d))
+        .catch((e) => { if (e.name !== "AbortError") failed = e.message; })
+        .finally(() => { if (!ctrl.signal.aborted) loading = false; });
+    });
     return () => ctrl.abort();
   });
 
@@ -77,11 +87,14 @@
   let billsLoading = $state(false);
 
   $effect(() => {
-    if (session.isPlatform) return;
+    if (platform) return;
     const ctrl = new AbortController();
-    billsLoading = true;
-    get<BillPage>("/api/bills", { from: from || undefined, to: to || undefined, search, size: 10, payment: payment || undefined }, ctrl.signal)
-      .then((d) => (bills = d)).catch(() => {}).finally(() => { if (!ctrl.signal.aborted) billsLoading = false; });
+    const q = { from: from || undefined, to: to || undefined, search, size: 10, payment: payment || undefined };
+    untrack(() => {
+      billsLoading = true;
+      get<BillPage>("/api/bills", q, ctrl.signal)
+        .then((d) => (bills = d)).catch(() => {}).finally(() => { if (!ctrl.signal.aborted) billsLoading = false; });
+    });
     return () => ctrl.abort();
   });
 

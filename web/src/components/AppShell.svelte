@@ -194,8 +194,9 @@
 </div>
 
 <style>
-  .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; }
-  .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 48px; object-fit: contain; object-position: left center; }
+  /* Room above and below the wordmark, so it doesn't sit on the top edge of the window. */
+  .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; padding: 10px 0; box-sizing: border-box; }
+  .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 40px; object-fit: contain; object-position: left center; }
   .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
   .terms-link:hover { color: var(--foreground); text-decoration: underline; }
