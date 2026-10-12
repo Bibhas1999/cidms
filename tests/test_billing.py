@@ -149,6 +149,11 @@ def test_editing_a_bill_adds_and_removes_tests_with_a_reason(centre):
     owner = centre["owner"]
     url = f"/api/bills/{b['id']}"
 
+    # A bill with money due is put on hold before any change.
+    not_held = owner.put(url, json={"lines": [{"id": xray["id"]}, {"id": cbc["id"]}], "reason": "Fix"})
+    assert not_held.status_code == 409 and "on hold" in not_held.json()["message"]
+    assert owner.post(f"{url}/hold", json={"reason": "Doctor is changing the tests"}).status_code == 200
+
     no_reason = owner.put(url, json={"lines": [{"id": xray["id"]}]})
     assert no_reason.status_code == 422
     # Dropping the X-ray would leave less than was paid.
@@ -166,6 +171,16 @@ def test_editing_a_bill_adds_and_removes_tests_with_a_reason(centre):
     lipid = next(i for i in swapped["items"] if i["test_name"] == "Lipid profile")
     r = owner.put(url, json={"lines": [{"id": lipid["id"]}], "reason": "Remove x-ray"})
     assert r.status_code == 422 and "scanned" in r.json()["message"]
+
+
+def test_a_fully_paid_bill_cannot_be_held_or_changed(centre):
+    t, owner = centre["tests"], centre["owner"]
+    b = bill(centre["front"], t, ["CBC"], payments=[{"mode": "cash", "amount": "250.50"}]).json()
+    url = f"/api/bills/{b['id']}"
+    held = owner.post(f"{url}/hold", json={"reason": "Change tests"})
+    assert held.status_code == 409 and "fully paid" in held.json()["message"]
+    changed = owner.put(url, json={"lines": [{"test_id": t["Lipid profile"]}], "reason": "Change"})
+    assert changed.status_code == 409 and "fully paid" in changed.json()["message"]
 
 
 def test_worklist_progress(centre):

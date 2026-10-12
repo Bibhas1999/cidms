@@ -9,6 +9,7 @@
   import { date, dateTime, rupees } from "../../lib/format";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
+  import { tooltip } from "../../lib/tooltip";
 
   let { params }: { params: Record<string, string> } = $props();
 
@@ -32,12 +33,15 @@
     autoOpened = true;
     const q = new URLSearchParams(location.search);
     if (q.get("collect") && Number(bill.due) > 0 && bill.status !== "cancelled" && session.can("payments.collect")) openPay();
-    else if (q.get("edit") && bill.status !== "cancelled" && session.can("billing.edit")) editOpen = true;
+    else if (q.get("edit") && bill.status === "on_hold" && Number(bill.due) > 0 && session.can("billing.edit")) editOpen = true;
   });
 
   const live = $derived(bill?.status !== "cancelled");
   const due = $derived(Number(bill?.due ?? 0));
   const paid = $derived(Number(bill?.paid ?? 0));
+  // A bill with money due is put on hold before any change; a fully paid bill can't be held or changed.
+  const fullyPaid = $derived(!!bill && Number(bill.total) > 0 && due <= 0);
+  const editable = $derived(live && bill?.status === "on_hold" && !fullyPaid);
   const pay = $derived(bill ? paymentState(bill) : null);
 
   // ---------- collect a payment / refund ----------
@@ -165,7 +169,11 @@
               {#if notAll("reported") && notAll("delivered")}<button class="btn btn-outline btn-sm" disabled={progressBusy} onclick={() => setAll("reported")}><Icon name="check" size="sm" /> All ready</button>{/if}
               {#if notAll("delivered")}<button class="btn btn-outline btn-sm" disabled={progressBusy} onclick={() => setAll("delivered")}><Icon name="inbox" size="sm" /> All delivered</button>{/if}
             {/if}
-            {#if live && session.can("billing.edit")}<button class="btn btn-outline btn-sm" onclick={() => (editOpen = true)}><Icon name="plus" size="sm" /> Change tests</button>{/if}
+            {#if live && session.can("billing.edit")}
+              <span use:tooltip={editable ? "" : fullyPaid ? "A fully paid bill can't be changed" : "Put the bill on hold first, then change it"}>
+                <button class="btn btn-outline btn-sm" disabled={!editable} onclick={() => (editOpen = true)}><Icon name="plus" size="sm" /> Change tests</button>
+              </span>
+            {/if}
           </div>
         </div>
         <div class="card-flush">
@@ -266,8 +274,11 @@
           <div class="card-footer card-footer-stack">
             {#if bill.status === "on_hold"}
               <button class="btn btn-outline btn-block" disabled={busy} onclick={() => setStatus("confirm")}><Icon name="check" /> Confirm bill</button>
+            {:else if fullyPaid}
+              <p class="text-sm text-muted locked-note"><Icon name="lock" size="sm" /> Fully paid: this bill can't be put on hold or changed.</p>
             {:else}
-              <button class="btn btn-outline btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "hold"; }}><Icon name="clock" /> Put on hold</button>
+              <button class="btn btn-outline btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "hold"; }}
+                      use:tooltip={"Needed before changing the tests or the discount"}><Icon name="clock" /> Put on hold</button>
             {/if}
             <button class="btn btn-ghost-destructive btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "cancel"; }}><Icon name="x" /> Cancel bill</button>
           </div>
@@ -349,4 +360,5 @@
   .progress-select.is-billed, .progress-select.is-scanned { color: var(--warning-text, #b45309); }
   .progress-select.is-reported { color: var(--primary-text); }
   .progress-select.is-delivered { color: var(--success); }
+  .locked-note { display: flex; align-items: center; gap: 6px; margin: 0; }
 </style>
