@@ -10,6 +10,8 @@
   const isPlatform = $derived(ws?.kind === "platform");
   // Each centre's own colour; the platform uses the product's.
   const brand = $derived(ws?.brand_color || "#004aad");
+  // admin.cidms.example -> supreme.cidms.example, for the "centre staff sign in elsewhere" hint
+  const centreExample = $derived(typeof location === "undefined" ? "" : `yourcentre.${location.host.replace(/^admin\./, "")}`);
 </script>
 
 <div class="auth-page" style="--brand: {brand}">
@@ -41,7 +43,7 @@
         {/if}
         <div>
           <h1 class="centre">{isPlatform ? "CIDMS" : ws?.name}</h1>
-          <p class="tagline">{isPlatform ? "Platform administration" : ws?.tagline || "Diagnostics, reports and billing in one place"}</p>
+          <p class="tagline">{isPlatform ? "Cloud Integrated Diagnostic Management System" : ws?.tagline || "Diagnostics, reports and billing in one place"}</p>
         </div>
         {/if}
       </div>
@@ -49,14 +51,34 @@
       <div class="pitch">
         {#if isPlatform}
           <p class="headline">Every centre, one platform.</p>
-          <p class="sub">Clients, plans and support for every diagnostic centre on CIDMS.</p>
+          <p class="sub">The CIDMS administration: add diagnostic centres, clinics and OPDs, manage their plans and subscriptions,
+            and look after their accounts. Each centre works in its own private workspace.</p>
         {:else}
           <p class="headline">Bills, reports and scans, together for every patient.</p>
           <p class="sub">From the front desk to the reporting room: register, bill, scan, report and deliver without paper.</p>
         {/if}
       </div>
 
-      {#if !isPlatform}
+      {#if isPlatform}
+        <ul class="services" aria-label="What the platform does">
+          <li>
+            <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="9" width="28" height="24" rx="3" /><path d="M6 16h28M13 9V5M27 9V5M12 23h6M12 28h10" /></svg>
+            <span>Centres and plans</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="10" width="30" height="20" rx="3" /><path d="M5 16h30M10 25h7" /></svg>
+            <span>Subscriptions</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="15" cy="15" r="5" /><circle cx="27" cy="17" r="4" /><path d="M6 32c0-5 4-9 9-9s9 4 9 9M24 32c0-3 1.5-6 5-7 3 0 5 3 5 7" /></svg>
+            <span>Platform staff</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 5 8 10v9c0 7 5 12 12 15 7-3 12-8 12-15v-9z" /><path d="m15 20 4 4 7-8" /></svg>
+            <span>Security and activity</span>
+          </li>
+        </ul>
+      {:else}
         <ul class="services" aria-label="Services">
           <li>
             <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="5" width="26" height="30" rx="4" /><path d="M20 10v20M14 14c4 1 8 1 12 0M13 19c5 1.5 9 1.5 14 0M14 24c4 1 8 1 12 0" /></svg>
@@ -91,6 +113,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6z" /><path d="m9 12 2 2 4-4" /></svg>
       Patient information is kept private and every sign-in is recorded.
     </p>
+    {#if isPlatform}
+      <p class="terms muted">This is the platform administration. Centre staff sign in at their centre's own address,
+        e.g. <span class="mono">{centreExample}</span>.</p>
+    {/if}
     <p class="terms muted">By signing in you agree to the <a href="/terms">Terms and conditions</a>.</p>
   </section>
 </div>

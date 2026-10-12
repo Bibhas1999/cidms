@@ -9,7 +9,7 @@ from app.api.deps import Paging, paging, platform_permission
 from app.core.db import DB
 from app.core.security import CurrentUser
 from app.schemas import ClientCreateIn, ClientOut, ClientUpdateIn, Page, PlanOut
-from app.services.clients import ClientService
+from app.services.clients import ClientService, platform_overview
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
 
@@ -31,6 +31,12 @@ def create_client(data: ClientCreateIn, db: Session = DB, current: CurrentUser =
 def update_client(tenant_id: uuid.UUID, data: ClientUpdateIn, db: Session = DB,
                   current: CurrentUser = Depends(platform_permission("platform.clients.manage"))):
     return ClientService(db, current).update(tenant_id, data)
+
+
+@router.get("/overview")
+def overview(db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.clients.view"))):
+    """The platform's home page: centres, people, use this month and renewals due (counts, not centres' money)."""
+    return platform_overview(db)
 
 
 @router.get("/plans", response_model=list[PlanOut])

@@ -169,3 +169,22 @@ def test_unknown_addresses_have_no_workspace():
     c = browser("nowhere.localhost")
     assert c.get("/api/workspace").json()["kind"] == "none"
     assert c.login("a@b.in", PASSWORD).status_code == 404
+
+
+def test_platform_overview_counts_centres_and_renewals(alpha):
+    from datetime import timedelta
+
+    from app.models import Tenant, utcnow
+    make_user(alpha, "owner@alpha.in", ["owner"])
+    with scoped_session(platform=True) as db, db.begin():
+        db.get(Tenant, alpha.id).paid_until = utcnow() + timedelta(days=5)
+    make_user(None, "boss@platform.in", ["platform_owner"])
+    c = browser("admin.localhost")
+    c.login("boss@platform.in")
+    o = c.get("/api/platform/overview").json()
+    assert o["centres"] >= 1 and o["active"] >= 1 and o["staff"] >= 1 and o["platform_staff"] >= 1
+    assert any(r["slug"] == alpha.slug for r in o["renewals"])
+    assert "billed" not in o and all("total" not in r for r in o["centres_list"])  # counts, never centres' money
+    front = browser("alpha.localhost")
+    front.login("owner@alpha.in")
+    assert front.get("/api/platform/overview").status_code in (403, 404)

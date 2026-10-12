@@ -38,6 +38,9 @@ class WorkspaceOut(BaseModel):
     tagline: str = ""
     logo_url: str = ""
     wordmark_url: str = ""   # the wide logo with name and slogan, when the centre has one
+    # Only when no centre is at this address: the product's own address, for its landing page.
+    base_domain: str = ""
+    platform_subdomain: str = ""
     # Development only, at an address with no workspace: where the workspaces are.
     links: list[WorkspaceLink] = []
 

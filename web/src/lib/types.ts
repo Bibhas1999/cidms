@@ -10,6 +10,9 @@ export interface Workspace {
   logo_url?: string;
   /** The wide logo with the centre's name and slogan, when it has one. */
   wordmark_url?: string;
+  /** Only when no centre is at this address: the product's base address (cidms.duckdns.org) and the platform's. */
+  base_domain?: string;
+  platform_subdomain?: string;
   /** Development only: the workspaces to open when this address has none. */
   links?: { name: string; url: string }[];
 }
