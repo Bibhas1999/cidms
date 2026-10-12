@@ -1,4 +1,5 @@
 import * as loader from "./loader";
+import { connection } from "./connection.svelte";
 import { toasts } from "./toast.svelte";
 
 // The one way the app talks to the server. The session lives in an HttpOnly cookie that JavaScript never
@@ -122,11 +123,15 @@ async function send<T>(method: string, path: string, options: { body?: unknown; 
       });
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
-      if (last || !navigator.onLine) throw new ApiError(0, "Can't reach CIDMS. Check your internet connection and try again.");
+      if (last || !navigator.onLine) {
+        connection.markDown();
+        throw new ApiError(0, "Can't reach CIDMS. Check your internet connection and try again.");
+      }
       await sleep(backoff(attempt), options.signal);
       continue;
     }
-    if (last || ![502, 503, 504].includes(response.status)) break;
+    if (![502, 503, 504].includes(response.status)) { connection.markUp(); break; }
+    if (last) { connection.markDown(); break; }
     await sleep(Math.min(8000, Number(response.headers.get("Retry-After") ?? 0) * 1000) || backoff(attempt), options.signal);
   }
   const res = response!;

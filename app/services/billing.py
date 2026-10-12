@@ -11,14 +11,14 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import Date, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound
-from app.core.money import ZERO, financial_year, local_today, q2, rupees
+from app.core.money import ZERO, financial_year, local_date, local_today, q2, rupees
 from app.core.security import CurrentUser
 from app.models import Counter, Invoice, InvoiceItem, LabTest, Patient, Payment, ReferringDoctor, Tenant, TenantSettings, utcnow
 from app.repositories.common import contains
@@ -227,9 +227,10 @@ class BillingService:
         invoice.paid = q2(paid)
         invoice.due = invoice.total - invoice.paid
 
-    def _take(self, invoice: Invoice, kind: str, mode: str, amount: Decimal, reference: str = "", note: str = "") -> Payment:
+    def _take(self, invoice: Invoice, kind: str, mode: str, amount: Decimal, reference: str = "", note: str = "",
+              at: datetime | None = None) -> Payment:
         p = Payment(tenant_id=self.tenant_id, kind=kind, amount=q2(amount), mode=mode, reference=reference.strip(), note=note.strip(),
-                    received_at=utcnow(), received_on=local_today(), received_by=self.current.id,
+                    received_at=at or utcnow(), received_on=local_date(at) if at else local_today(), received_by=self.current.id,
                     received_by_name=self.current.user.full_name)
         invoice.payments.append(p)
         self._settle(invoice)
@@ -257,14 +258,32 @@ class BillingService:
         return f"{self._settings().invoice_prefix}/{fy}/{current + 1:06d}"
 
     # ---------- creating and changing bills ----------
+    def _offline_time(self, data: BillIn) -> datetime | None:
+        """When an offline bill was really made: within the last 30 days, and not in the future."""
+        if data.offline is None:
+            return None
+        made = data.offline.made_at
+        if made.tzinfo is None:
+            raise Invalid("The time the bill was made must include its time zone.", "offline")
+        now = utcnow()
+        if made > now + timedelta(minutes=10):
+            raise Invalid("This offline bill's time is in the future. Check the computer's clock.", "offline")
+        if made < now - timedelta(days=30):
+            raise Invalid("This offline bill is more than 30 days old, so it can't be added. Make it again as a new bill.", "offline")
+        dup = self.db.scalar(select(Invoice.invoice_no).where(Invoice.tenant_id == self.tenant_id, Invoice.offline_no == data.offline.offline_no))
+        if dup:
+            raise Conflict(f"This offline bill is already saved, as {dup}.", "offline_duplicate")
+        return made
+
     def create(self, data: BillIn) -> Invoice:
+        made_offline = self._offline_time(data)
         self._check_bill_limit()
         patients = PatientService(self.db, self.current)
         patient: Patient = patients.get(data.patient_id) if data.patient_id else patients.create(data.patient)
         tests = self._tests(data.lines)
         doctor = self._doctor(data.referring_doctor_id, data.referring_doctor_name)
         settings = self._settings()
-        today = local_today()
+        today = local_date(made_offline) if made_offline else local_today()
         fy = financial_year(today)
         number = next_number(self.db, self.tenant_id, f"invoice:{fy}")
         invoice = Invoice(
@@ -275,20 +294,25 @@ class BillingService:
             status="on_hold" if data.hold else "confirmed", notes=data.notes.strip(),
             created_by=self.current.id, created_by_name=self.current.user.full_name,
             subtotal=ZERO, total=ZERO, due=ZERO, items=[], payments=[],
+            offline_no=data.offline.offline_no if data.offline else "", made_offline_at=made_offline,
         )
         for position, line in enumerate(data.lines, start=1):
             self._new_line(invoice, position, tests[line.test_id], line.quantity)
         self._price(invoice, data.discount_type, data.discount_value)
+        if data.offline and not data.offline.accept_new_total and invoice.total != q2(data.offline.printed_total):
+            raise Conflict(f"Prices have changed since this bill was made offline: it was printed for {rupees(data.offline.printed_total)}, "
+                           f"and today's prices make it {rupees(invoice.total)}.", "offline_total")
         taking = q2(sum((p.amount for p in data.payments), ZERO))
         if taking > invoice.total:
             raise Invalid(f"The payment ({rupees(taking)}) is more than the bill ({rupees(invoice.total)}).", "payments")
         for p in data.payments:
-            self._take(invoice, "payment", p.mode, p.amount, p.reference, p.note)
+            self._take(invoice, "payment", p.mode, p.amount, p.reference, p.note, at=made_offline)
         self.db.add(invoice)
         self.db.flush()
         self.audit.record(self.tenant_id, self.current.id, "bill.created", "invoice", invoice.id, {
             "invoice_no": invoice.invoice_no, "patient": patient.patient_no, "total": str(invoice.total), "paid": str(invoice.paid),
-            "discount": str(invoice.discount_amount), "status": invoice.status})
+            "discount": str(invoice.discount_amount), "status": invoice.status,
+            **({"offline_no": invoice.offline_no, "made_offline_at": made_offline.isoformat()} if made_offline else {})})
         if getattr(self, "_over_limit", None):
             events.discount_over_limit(self.db, invoice, self.current, self._over_limit)
         return invoice
