@@ -97,7 +97,8 @@
       { label: "View bill", icon: "eye", href: `/bills/${b.id}` },
       { label: "Print", icon: "printer", href: `/bills/${b.id}/print`, newTab: true, hint: "Opens the printable bill in a new tab" },
       ...(live && Number(b.due) > 0 && session.can("payments.collect") ? [{ label: "Collect due", icon: "wallet", href: `/bills/${b.id}?collect=1`, hint: `${rupees(b.due)} still to pay` }] : []),
-      ...(live && session.can("billing.edit") ? [{ label: "Change tests", icon: "edit", href: `/bills/${b.id}?edit=1` }] : []),
+      ...(live && b.status === "on_hold" && Number(b.due) > 0 && session.can("billing.edit")
+        ? [{ label: "Change tests", icon: "edit", href: `/bills/${b.id}?edit=1` }] : []),
       { label: "Patient's details", icon: "user", href: `/patients/${b.patient_id}` },
     ];
   }
