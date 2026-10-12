@@ -77,7 +77,7 @@
     <form class="form" onsubmit={submit} novalidate>
       <div class="heading">
         <h2>{chosen ? `Hello, ${chosen.name.split(" ")[0]}` : router.query.get("switch") ? "Switch account" : "Welcome back"}</h2>
-        <p class="muted">Sign in to {isPlatform ? "the platform" : ws?.name}</p>
+        <p class="muted">Sign in to {isPlatform ? "the CIDMS platform" : ws?.name}</p>
       </div>
 
       {#if !useOther && !chosen}

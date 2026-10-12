@@ -5,6 +5,7 @@
   import Icon from "../components/Icon.svelte";
   import InfoTip from "../components/InfoTip.svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import PlatformHome from "./platform/PlatformHome.svelte";
   import TrendChart from "../components/TrendChart.svelte";
   import { get } from "../lib/api";
   import { confirmDialog } from "../lib/confirm.svelte";
@@ -128,7 +129,7 @@
 </script>
 
 <PageHeader eyebrow="Overview" title="{greeting}, {first}"
-            description="{session.workspace?.name ?? ''}{session.isPlatform ? '' : ` · ${dates}`}">
+            description={session.isPlatform ? "Cloud Integrated Diagnostic Management System · platform administration" : `${session.workspace?.name ?? ""} · ${dates}`}>
   {#snippet actions()}
     <DigitalClock />
     {#if !session.isPlatform}<DateRange id="dash" {from} {to} anyLabel="All time" compact onchange={setRange} />{/if}
@@ -137,10 +138,7 @@
 </PageHeader>
 
 {#if session.isPlatform}
-  <div class="quick-actions">
-    {#if session.can("platform.clients.view")}<a class="quick-action" href="/clients"><span class="qa-icon"><Icon name="building" /></span><span>Clients<small>Centres, plans and status</small></span></a>{/if}
-    <a class="quick-action" href="/settings"><span class="qa-icon"><Icon name="settings" /></span><span>Settings<small>Platform staff and activity</small></span></a>
-  </div>
+  <PlatformHome />
 {:else}
   {#if failed}
     <div class="alert alert-destructive" role="alert"><Icon name="alert" /><div><div class="alert-title">Couldn't load the figures</div>{failed}</div></div>

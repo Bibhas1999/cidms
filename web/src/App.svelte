@@ -27,6 +27,7 @@
   import ForgotPassword from "./pages/ForgotPassword.svelte";
   import Login from "./pages/Login.svelte";
   import ResetPassword from "./pages/ResetPassword.svelte";
+  import Landing from "./pages/Landing.svelte";
   import Message from "./pages/Message.svelte";
   import Notifications from "./pages/Notifications.svelte";
   import Terms from "./pages/Terms.svelte";
@@ -154,19 +155,7 @@
 {:else if !session.ready}
   <div class="splash" aria-busy="true"><span class="text-muted">Loading…</span></div>
 {:else if session.workspace?.kind === "none"}
-  <div class="nows">
-    <div class="card card-content stack">
-      <span class="eyebrow">CIDMS</span>
-      <h1 class="page-title">There's no workspace at this address</h1>
-      <p class="text-muted">Each centre has its own address, with the centre's name at the front. Use the address your centre gave you.</p>
-      {#if session.workspace.links?.length}
-        <p>On this computer, open one of these:</p>
-        <ul>
-          {#each session.workspace.links as link (link.url)}<li><a href={link.url}>{link.name}</a> <span class="text-muted mono">{link.url}</span></li>{/each}
-        </ul>
-      {/if}
-    </div>
-  </div>
+  <Landing ws={session.workspace} />
 {:else if OPEN.includes(router.path)}
   {@render guarded(Terms)}
 {:else if !session.me}
@@ -194,8 +183,4 @@
 
 <style>
   .splash { min-height: 100vh; display: grid; place-items: center; }
-  .nows { display: grid; place-items: center; min-height: 80vh; padding: 16px; }
-  .nows .card { max-width: 560px; }
-  .nows ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
-  .nows p { margin: 0; }
 </style>
