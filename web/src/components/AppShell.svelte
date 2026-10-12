@@ -2,6 +2,8 @@
   import { tooltip } from "../lib/tooltip";
   import type { Snippet } from "svelte";
   import { confirmDialog } from "../lib/confirm.svelte";
+  import { install } from "../lib/install.svelte";
+  import { notify } from "../lib/toast.svelte";
   import { CLIENT_NAV, PLATFORM_NAV } from "../lib/nav";
   import { router } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
@@ -76,6 +78,16 @@
   async function switchAccount() {
     menuOpen = false;
     await session.logout({ switching: true });
+  }
+
+  // Install Supreme DMS as an app (its own window and icon). iPhones: Share → Add to Home Screen.
+  async function installApp() {
+    menuOpen = false;
+    if (install.prompt) {
+      if (await install.run()) notify("Supreme DMS is installed. Open it from your desktop, Start menu or home screen.", { kind: "success" });
+    } else if (install.ios) {
+      notify("Tap the Share button in Safari, then “Add to Home Screen”.", { kind: "info", title: "Install on iPhone or iPad", duration: 15000 });
+    }
   }
 
   async function signOut() {
@@ -166,6 +178,9 @@
               </fieldset>
               <div class="profile-signout">
                 <a class="btn btn-ghost btn-block menu-item" href="/settings"><Icon name="settings" /> Settings</a>
+                {#if install.available}
+                  <button class="btn btn-ghost btn-block menu-item" type="button" onclick={installApp}><Icon name="download" /> Install app</button>
+                {/if}
                 <button class="btn btn-ghost btn-block menu-item" type="button" onclick={switchAccount}><Icon name="users" /> Switch account</button>
                 <button class="btn btn-ghost btn-block menu-item" type="button" onclick={signOut}><Icon name="logout" /> Sign out</button>
               </div>
