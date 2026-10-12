@@ -13,6 +13,8 @@
   import TestSelect from "../../components/TestSelect.svelte";
   import { ApiError, get, newRequestKey, post } from "../../lib/api";
   import { PAYMENT_MODES, type Bill, type Doctor, type LabTest, type Patient, type PaymentMode } from "../../lib/bill-types";
+  import { autosaveDraft, clearDraft, readDraft, savedAgo, type Draft } from "../../lib/drafts.svelte";
+  import { confirmLeave } from "../../lib/leave";
   import { Form } from "../../lib/form.svelte";
   import { rupees } from "../../lib/format";
   import { formatPhone, splitPhone } from "../../lib/phone";
@@ -155,11 +157,62 @@
   // ---------- save ----------
   let errors = $state<Record<string, string>>({});
   let saving = $state(false);
-  let requestKey = newRequestKey();
-  const dirty = $derived(!!(patient || addingPatient || lines.length));
+  let requestKey: string = newRequestKey();
+  const dirty = $derived(!!(patient || addingPatient || lines.length || doctorText.trim() || notes.trim() || discountValue || payNow));
+
+  // ---------- draft ----------
+  // Everything typed is kept on this computer as it's typed (lib/drafts), so leaving the page, closing the tab
+  // or a power cut loses nothing: New bill opens with it again. The request key goes with it, so a bill whose
+  // save was already on its way is never made twice.
+  const DRAFT = "new-bill";
+  interface BillDraft {
+    patient: Patient | null; addingPatient: boolean; patientQuery: string; np: typeof np.values;
+    doctorText: string; doctor: Doctor | null; lines: Line[];
+    discountKind: "percent" | "amount"; discountValue: string; payNow: string; payMode: PaymentMode; payRef: string;
+    notes: string; hold: boolean; requestKey: string;
+  }
+  let finished = false;                                  // saved or thrown away: stop keeping a draft
+  let restored = $state<Draft<BillDraft> | null>(null);  // the draft this page opened with
+  let waiting = $state<Draft<BillDraft> | null>(null);   // a draft not opened (the page came for another patient)
+
+  function applyDraft(d: BillDraft) {
+    patient = d.patient; addingPatient = d.addingPatient; patientQuery = d.patientQuery;
+    if (d.addingPatient) np.reset(d.np);
+    doctorText = d.doctorText; doctor = d.doctor; lines = d.lines;
+    discountKind = d.discountKind; discountValue = d.discountValue; payNow = d.payNow; payMode = d.payMode; payRef = d.payRef;
+    notes = d.notes; hold = d.hold; requestKey = d.requestKey || requestKey;
+  }
+  {
+    const d = readDraft<BillDraft>(DRAFT);
+    if (d && !preset) { applyDraft(d.value); restored = d; }
+    else if (d) waiting = d;
+  }
+  function openWaiting() {
+    if (!waiting) return;
+    applyDraft(waiting.value);
+    restored = waiting;
+    waiting = null;
+  }
+  function startAfresh() {
+    clearDraft(DRAFT);
+    patient = null; addingPatient = false; patientQuery = ""; np.reset();
+    doctorText = ""; doctor = null; lines = [];
+    discountKind = "percent"; discountValue = ""; payNow = ""; payMode = "cash"; payRef = ""; notes = ""; hold = false;
+    requestKey = newRequestKey(); errors = {}; restored = null; waiting = null;
+  }
+  autosaveDraft<BillDraft>(DRAFT, () => ({
+    patient, addingPatient, patientQuery, np: np.values, doctorText, doctor, lines,
+    discountKind, discountValue, payNow, payMode, payRef, notes, hold, requestKey,
+  }), (v) => !v.patient && !v.addingPatient && !v.lines.length && !v.doctorText.trim() && !v.notes.trim() && !v.discountValue && !v.payNow,
+  { paused: () => finished || !!waiting });
 
   $effect(() => {
-    setBeforeLeave(dirty && !saving ? () => confirm("This bill isn't saved. Leave without saving?") : null);
+    setBeforeLeave(dirty && !saving ? confirmLeave({
+      title: "Leave this bill?",
+      message: "It isn't saved yet. It's kept as a draft on this computer: open New bill again to finish it.",
+      leaveLabel: "Leave, keep the draft", stayLabel: "Stay",
+      discard: { label: "Discard the bill", run: () => { finished = true; clearDraft(DRAFT); } },
+    }) : null);
     return () => setBeforeLeave(null);
   });
 
@@ -186,6 +239,8 @@
     };
     try {
       const bill = await post<Bill>("/api/bills", body, { "Idempotency-Key": requestKey });
+      finished = true;
+      clearDraft(DRAFT);
       setBeforeLeave(null);
       notify(`${bill.invoice_no} for ${bill.patient_name}: ${rupees(bill.total)}${Number(bill.due) > 0 ? `, ${rupees(bill.due)} due` : ", fully paid"}.`, { title: "Bill saved" });
       if (print) window.open(`/bills/${bill.id}/print`, "_blank", "noopener");
@@ -224,6 +279,19 @@
 <PageHeader eyebrow="Front desk" title="New bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
   {#snippet actions()}<span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
 </PageHeader>
+
+{#if restored}
+  <div class="alert alert-info draft-note" role="status"><Icon name="info" />
+    <div class="grow"><div class="alert-title">Your unsaved bill is back</div>From {savedAgo(restored.saved_at)}. It's kept on this computer until you save it.</div>
+    <Button variant="ghost" size="sm" onclick={() => (restored = null)}>OK</Button>
+    <Button variant="outline" size="sm" onclick={startAfresh}>Start a new bill</Button>
+  </div>
+{:else if waiting}
+  <div class="alert alert-warning draft-note" role="status"><Icon name="alert" />
+    <div class="grow"><div class="alert-title">You have an unsaved bill</div>Started {savedAgo(waiting.saved_at)}{waiting.value.patient ? ` for ${waiting.value.patient.name}` : ""}. Open it, or carry on with this one (the unsaved bill is kept).</div>
+    <Button variant="outline" size="sm" onclick={openWaiting}>Open the unsaved bill</Button>
+  </div>
+{/if}
 
 <div class="nb-grid">
   <div class="stack nb-main">
@@ -490,4 +558,6 @@
   @media (max-width: 380px) {
     .savebar :global(.btn-outline) { padding: 0 12px; }
   }
+  .draft-note { margin-bottom: 16px; align-items: center; }
+  @media (max-width: 600px) { .draft-note { flex-wrap: wrap; } }
 </style>

@@ -16,9 +16,16 @@
   <Dialog bind:open title={c.title} description={c.message} icon={c.tone === "danger" ? "alert" : "info"}
           tone={c.tone === "danger" ? "destructive" : "info"} onclose={() => confirmState.answer(false)}>
     {#snippet footer()}
+      {#if c.extraLabel}
+        <button class="btn btn-ghost extra" type="button" onclick={() => confirmState.answer("extra")}>{c.extraLabel}</button>
+      {/if}
       <button class="btn btn-outline" type="button" onclick={() => confirmState.answer(false)}>{c.cancelLabel}</button>
       <button class="btn {c.tone === 'danger' ? 'btn-destructive' : 'btn-primary'}" type="button" bind:this={confirmButton}
               onclick={() => confirmState.answer(true)}>{c.confirmLabel}</button>
     {/snippet}
   </Dialog>
 {/if}
+
+<style>
+  .extra { margin-right: auto; color: var(--destructive); }
+</style>
