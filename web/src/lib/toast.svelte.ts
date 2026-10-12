@@ -18,6 +18,8 @@ export interface NotifyOptions {
   detail?: string;
   /** Milliseconds before it hides by itself; 0 keeps it until dismissed. Default depends on the kind. */
   duration?: number;
+  /** A button on the toast, e.g. "Try again". */
+  action?: { label: string; run: () => void | Promise<void> };
 }
 
 export interface Toast {
@@ -27,6 +29,7 @@ export interface Toast {
   message: string;
   detail: string;
   leaving: boolean;
+  action?: { label: string; run: () => void | Promise<void> };
 }
 
 let next = 1;
@@ -37,15 +40,15 @@ const durations = new Map<number, number>();
 class Toasts {
   items = $state<Toast[]>([]);
 
-  show(message: string, { kind = "success", title = "", detail = "", duration }: NotifyOptions = {}): number | null {
+  show(message: string, { kind = "success", title = "", detail = "", duration, action }: NotifyOptions = {}): number | null {
     const key = `${kind}:${title}:${message}`;
     // The same message twice in a row is shown once; a progress spinner always shows (each is its own request).
-    if (kind !== "progress") {
+    if (kind !== "progress" && !action) {
       if (Date.now() - (recent.get(key) ?? 0) < 4000) return null;
       recent.set(key, Date.now());
     }
     const id = next++;
-    this.items.push({ id, kind, title, message, detail, leaving: false });
+    this.items.push({ id, kind, title, message, detail, leaving: false, action });
     const ms = duration ?? (kind === "error" || kind === "progress" ? 0 : kind === "warning" ? 9000 : 5000);
     if (ms) {
       durations.set(id, ms);
@@ -83,12 +86,27 @@ export const notify = (message: string, options: NotifyOptions = {}) => toasts.s
 
 /** An error from the server or the network, with its reference so support can find it in the logs. */
 export function notifyError(error: unknown, { title = "", fallback = "That didn't work. Please try again." } = {}): void {
-  const e = error as { message?: string; requestId?: string | null; status?: number };
+  const e = error as { message?: string; requestId?: string | null; status?: number; retry?: () => Promise<unknown> };
   const offline = e?.status === 0;
+  // A change lost to the network or a busy server: offer to send it again. When that works, the page may be out
+  // of date (it never saw the answer), so the success toast offers a refresh.
+  const action = e?.retry ? {
+    label: "Try again",
+    run: async () => {
+      try {
+        await e.retry!();
+        notify("Done. It went through this time.", { kind: "success", duration: 8000,
+          action: { label: "Refresh", run: () => location.reload() } });
+      } catch (again) {
+        notifyError(again, { title, fallback });
+      }
+    },
+  } : undefined;
   notify(e?.message || fallback, {
     kind: "error",
     title: title || (offline ? "No connection" : ""),
     detail: e?.requestId ? `Reference: ${e.requestId.slice(0, 12)}` : "",
+    action,
   });
 }
 

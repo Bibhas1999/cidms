@@ -17,6 +17,14 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 
+  /** For a change that failed on the network or a busy server: send the very same request again. */
+  retry?: () => Promise<unknown>;
+
+  /** The connection dropped or the server was briefly unavailable (worth trying again). */
+  get transient(): boolean {
+    return this.status === 0 || this.status === 502 || this.status === 503 || this.status === 504;
+  }
+
   /** field name -> message, for showing under each form field. */
   get fieldErrors(): Record<string, string> {
     const out: Record<string, string> = {};
@@ -48,7 +56,12 @@ function withQuery(path: string, query?: Query): string {
   return s ? `${path}?${s}` : path;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Waits that grow: 1 s, then 2 s, then 4 s (a little jitter so many browsers don't retry at the same moment). */
+const backoff = (attempt: number) => 1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250);
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const t = setTimeout(resolve, ms);
+  signal?.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+});
 
 // Changes that take a moment show a spinner toast ("Saving…") at the top right while they run, so the page never
 // looks stuck and people can carry on. Quick ones (most) finish before it appears. Background chatter is left out.
@@ -81,6 +94,10 @@ export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
   loader.start();
   try {
     return await send<T>(method, path, options, headers);
+  } catch (e) {
+    // A change that failed on the network or a busy server can be sent again from the error toast ("Try again").
+    if (e instanceof ApiError && method !== "GET" && e.transient) e.retry = () => api<T>(method, path, options);
+    throw e;
   } finally {
     clearTimeout(timer);
     if (toastId !== null) toasts.dismiss(toastId);
@@ -91,8 +108,13 @@ export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 async function send<T>(method: string, path: string, options: { body?: unknown; query?: Query; signal?: AbortSignal },
                        headers: Record<string, string>): Promise<T> {
   let response: Response | null = null;
-  // A read is retried once when the server says it's busy for a moment (503); changes never are.
-  for (let attempt = 0; attempt < (method === "GET" ? 2 : 1); attempt++) {
+  // Retries, when repeating can't do anything twice:
+  //   reads (GET): up to 3 tries on a dropped connection or a busy/restarting server (502, 503, 504);
+  //   changes with an Idempotency-Key (bills, payments): 2 tries; the server does the change only once;
+  //   other changes: never automatically (the error toast offers "Try again").
+  const tries = method === "GET" ? 3 : headers["Idempotency-Key"] ? 2 : 1;
+  for (let attempt = 1; ; attempt++) {
+    const last = attempt >= tries;
     try {
       response = await fetch(withQuery(path, options.query), {
         method, headers, credentials: "same-origin", signal: options.signal,
@@ -100,10 +122,12 @@ async function send<T>(method: string, path: string, options: { body?: unknown; 
       });
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
-      throw new ApiError(0, "Can't reach CIDMS. Check your internet connection and try again.");
+      if (last || !navigator.onLine) throw new ApiError(0, "Can't reach CIDMS. Check your internet connection and try again.");
+      await sleep(backoff(attempt), options.signal);
+      continue;
     }
-    if (response.status !== 503 || method !== "GET") break;
-    await sleep(Number(response.headers.get("Retry-After") ?? 1) * 1000);
+    if (last || ![502, 503, 504].includes(response.status)) break;
+    await sleep(Math.min(8000, Number(response.headers.get("Retry-After") ?? 0) * 1000) || backoff(attempt), options.signal);
   }
   const res = response!;
   if (res.status === 204) return undefined as T;
