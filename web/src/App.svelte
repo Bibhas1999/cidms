@@ -3,6 +3,7 @@
   import AppShell from "./components/AppShell.svelte";
   import ConfirmHost from "./components/ConfirmHost.svelte";
   import ErrorFallback from "./components/ErrorFallback.svelte";
+  import OfflineBanner from "./components/OfflineBanner.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { reportError } from "./lib/errors";
   import { navigate, router } from "./lib/router.svelte";
@@ -145,6 +146,8 @@
     </svelte:boundary>
   {/key}
 {/snippet}
+
+<OfflineBanner />
 
 {#if startError}
   <Message title="CIDMS couldn't start" text="{startError} Refresh the page to try again." action={false} />
