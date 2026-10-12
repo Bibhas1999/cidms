@@ -8,7 +8,7 @@
 
   const sections: { id: string; title: string; body: string[] }[] = [
     { id: "about", title: "1. About these terms", body: [
-      "Supreme DMS is software for diagnostic centres, clinics and OPDs to bill patients, track tests, write reports and view medical images. These terms apply to every centre that uses it and to every person who signs in.",
+      "CIDMS is software for diagnostic centres, clinics and OPDs to bill patients, track tests, write reports and view medical images. These terms apply to every centre that uses it and to every person who signs in.",
       "By signing in you agree to these terms on behalf of yourself and the centre you work for. If you don't agree, don't use the service.",
     ] },
     { id: "accounts", title: "2. Accounts and access", body: [
@@ -23,7 +23,7 @@
       "Use patient information only for the patient's care and the centre's work. Looking up records without a reason is not allowed and is visible in the activity log.",
     ] },
     { id: "reports", title: "4. Reports, images and messages", body: [
-      "Medical reports are written and signed by the centre's qualified staff. Supreme DMS stores and prints them but does not check their medical content; the signing doctor is responsible for it.",
+      "Medical reports are written and signed by the centre's qualified staff. CIDMS stores and prints them but does not check their medical content; the signing doctor is responsible for it.",
       "Images viewed in the DICOM viewer are for review alongside the report. Diagnostic decisions should be made on equipment and displays suited to that purpose.",
       "When a report is sent to a patient on WhatsApp or by email, it goes to the number or address the centre has on record. The centre is responsible for checking it is correct.",
     ] },
@@ -32,7 +32,7 @@
       "The centre is responsible for its prices, discounts and taxes, and for the bills it issues to patients.",
     ] },
     { id: "subscription", title: "6. Subscription", body: [
-      "Centres pay for Supreme DMS on the plan agreed with us. Payments are collected directly (bank transfer, UPI or cheque) and recorded against the centre's account.",
+      "Centres pay for CIDMS on the plan agreed with us. Payments are collected directly (bank transfer, UPI or cheque) and recorded against the centre's account.",
       "If payment is overdue we'll remind the centre first. A workspace may be suspended after the notice period in the agreement; its data is kept and returned on request.",
     ] },
     { id: "use", title: "7. Acceptable use", body: [
@@ -47,7 +47,7 @@
       "The service is provided as described in the centre's agreement. To the extent the law allows, we aren't liable for indirect losses, or for decisions made using information entered by the centre.",
     ] },
     { id: "end", title: "10. Ending the service", body: [
-      "A centre can stop using Supreme DMS at any time. On request we'll provide an export of its bills, patients and reports, then delete its data after the period the law requires records to be kept.",
+      "A centre can stop using CIDMS at any time. On request we'll provide an export of its bills, patients and reports, then delete its data after the period the law requires records to be kept.",
     ] },
     { id: "changes", title: "11. Changes to these terms", body: [
       "We may update these terms. The date at the top shows the latest version, and important changes are announced in the app before they apply.",
@@ -61,7 +61,7 @@
 <div class="terms-page">
   <header class="terms-head">
     <a class="btn btn-ghost btn-sm" href={back}>← {session.me ? "Back to the app" : "Back to sign in"}</a>
-    <span class="eyebrow">{session.workspace?.name ?? "Supreme DMS"}</span>
+    <span class="eyebrow">{session.workspace?.name ?? "CIDMS"}</span>
     <h1 class="page-title">Terms and conditions</h1>
     <p class="text-muted">Last updated {UPDATED}</p>
   </header>

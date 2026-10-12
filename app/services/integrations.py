@@ -228,7 +228,7 @@ def authenticate(db: Session, tenant: TenantRef | None, raw: str, ip: str) -> Ap
     if key.expires_at is not None and key.expires_at <= now:
         raise Unauthorized("That API key has expired.")
     if not tenant.is_active:
-        raise Forbidden("This workspace is suspended. Please contact Supreme DMS support.")
+        raise Forbidden("This workspace is suspended. Please contact CIDMS support.")
     if key.allowed_ips:
         try:
             addr = ipaddress.ip_address(ip)

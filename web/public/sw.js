@@ -1,4 +1,4 @@
-// Supreme DMS service worker: makes the app installable and quick to open. It keeps only the app itself
+// CIDMS service worker: makes the app installable and quick to open. It keeps only the app itself
 // (the page, scripts, styles, fonts, icons). Patient data never goes in its cache: /api, /viewer and
 // /dicom-web always go to the network, and so does anything that isn't a plain GET.
 const CACHE = "sdms-shell-v1";
@@ -44,7 +44,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 // A notification pop-up (shown by the app with registration.showNotification) was clicked: bring an open
-// Supreme DMS tab to the front and take it to the notification's page, or open a new tab there. Only addresses
+// CIDMS tab to the front and take it to the notification's page, or open a new tab there. Only addresses
 // inside this site are followed.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

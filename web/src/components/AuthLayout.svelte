@@ -40,7 +40,7 @@
             <path d="M8 17h4.5l2-6 3 11 2-5H24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
         {/if}
         <div>
-          <h1 class="centre">{isPlatform ? "Supreme DMS" : ws?.name}</h1>
+          <h1 class="centre">{isPlatform ? "CIDMS" : ws?.name}</h1>
           <p class="tagline">{isPlatform ? "Platform administration" : ws?.tagline || "Diagnostics, reports and billing in one place"}</p>
         </div>
         {/if}
@@ -49,7 +49,7 @@
       <div class="pitch">
         {#if isPlatform}
           <p class="headline">Every centre, one platform.</p>
-          <p class="sub">Clients, plans and support for every diagnostic centre on Supreme DMS.</p>
+          <p class="sub">Clients, plans and support for every diagnostic centre on CIDMS.</p>
         {:else}
           <p class="headline">Bills, reports and scans, together for every patient.</p>
           <p class="sub">From the front desk to the reporting room: register, bill, scan, report and deliver without paper.</p>

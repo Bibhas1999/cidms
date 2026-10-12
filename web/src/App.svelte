@@ -99,7 +99,7 @@
 
   $effect(() => {
     session.load().catch((e) => {
-      startError = e?.message ?? "Supreme DMS couldn't start.";
+      startError = e?.message ?? "CIDMS couldn't start.";
       reportError("error", e);
     });
   });
@@ -132,7 +132,7 @@
   $effect(() => {
     const where = session.workspace?.name ? ` · ${session.workspace.name}` : "";
     const titles: Record<string, string> = { "/login": "Sign in", "/forgot-password": "Forgot password", "/reset-password": "Choose a new password", "/terms": "Terms and conditions" };
-    document.title = `${titles[router.path] ?? route?.title ?? "Not found"}${where} · Supreme DMS`;
+    document.title = `${titles[router.path] ?? route?.title ?? "Not found"}${where} · CIDMS`;
   });
 </script>
 
@@ -147,13 +147,13 @@
 {/snippet}
 
 {#if startError}
-  <Message title="Supreme DMS couldn't start" text="{startError} Refresh the page to try again." action={false} />
+  <Message title="CIDMS couldn't start" text="{startError} Refresh the page to try again." action={false} />
 {:else if !session.ready}
   <div class="splash" aria-busy="true"><span class="text-muted">Loading…</span></div>
 {:else if session.workspace?.kind === "none"}
   <div class="nows">
     <div class="card card-content stack">
-      <span class="eyebrow">Supreme DMS</span>
+      <span class="eyebrow">CIDMS</span>
       <h1 class="page-title">There's no workspace at this address</h1>
       <p class="text-muted">Each centre has its own address, with the centre's name at the front. Use the address your centre gave you.</p>
       {#if session.workspace.links?.length}

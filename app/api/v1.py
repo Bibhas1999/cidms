@@ -69,7 +69,7 @@ and their progress, signed reports (with PDFs), imaging studies and referring do
 **Financial data (bills, prices, payments, dues) is never available through this API.**
 
 ### Authentication
-Create a key in Supreme DMS under *Settings → API & integrations*, then send it on every call:
+Create a key in CIDMS under *Settings → API & integrations*, then send it on every call:
 
     Authorization: Bearer sdms_live_…
 
@@ -180,7 +180,7 @@ class ApiCallLog(BaseHTTPMiddleware):
 
 
 def create_v1_app() -> FastAPI:
-    v1 = FastAPI(title="Supreme DMS Integration API", version="1.0", description=DESCRIPTION, docs_url=None, redoc_url=None,
+    v1 = FastAPI(title="CIDMS Integration API", version="1.0", description=DESCRIPTION, docs_url=None, redoc_url=None,
                  openapi_url="/openapi.json", openapi_tags=TAGS)
     v1.add_middleware(ApiCallLog)
 
@@ -206,14 +206,14 @@ def create_v1_app() -> FastAPI:
     @v1.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception):
         if is_transient(exc):
-            return _error(503, "Supreme DMS is busy for a moment. Please try again.", headers={"Retry-After": "2"})
+            return _error(503, "CIDMS is busy for a moment. Please try again.", headers={"Retry-After": "2"})
         logging.getLogger("app").exception("Unhandled error on %s %s", request.method, request.url.path)
         return _error(500, "Something went wrong on our side. It's been logged; please try again.")
 
     @v1.get("/docs", include_in_schema=False)
     def docs(request: Request):
         root = request.scope.get("root_path", "").rstrip("/")
-        page = get_swagger_ui_html(openapi_url=f"{root}/openapi.json", title="Supreme DMS Integration API")
+        page = get_swagger_ui_html(openapi_url=f"{root}/openapi.json", title="CIDMS Integration API")
         page.headers["Content-Security-Policy"] = (
             "default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data: https://fastapi.tiangolo.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")

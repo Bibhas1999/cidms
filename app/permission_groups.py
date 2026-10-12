@@ -46,7 +46,7 @@ GROUPS: dict[str, tuple[str, str, dict[str, str]]] = {
     "integrations": ("Integrations", "Connections to other systems", {
         "integrations.manage": "API keys",
     }),
-    "platform": ("Platform", "Running the Supreme DMS platform (platform staff only)", {
+    "platform": ("Platform", "Running the CIDMS platform (platform staff only)", {
         "platform.clients.view": "See clients",
         "platform.clients.manage": "Manage clients",
         "platform.subscriptions.manage": "Subscriptions",

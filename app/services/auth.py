@@ -41,7 +41,7 @@ def manages_own_account(user: User, permissions: set[str]) -> bool:
 
 def workspace_of(request: Request) -> WorkspaceOut:
     if request.state.is_platform:
-        return WorkspaceOut(kind="platform", name="Supreme DMS platform")
+        return WorkspaceOut(kind="platform", name="CIDMS platform")
     tenant: TenantRef | None = request.state.tenant
     if tenant:
         brand = branding(tenant)
@@ -87,7 +87,7 @@ class AuthService:
         if not request.state.is_platform and tenant is None:
             raise NotFound("There's no workspace at this address. Check the link you were given.")
         if tenant and not tenant.is_active:
-            raise Forbidden("This workspace is suspended. Please contact Supreme DMS support.")
+            raise Forbidden("This workspace is suspended. Please contact CIDMS support.")
         login_limiter.hit(f"ip:{client_ip(request)}")
         tenant_id = tenant.id if tenant else None
         s = get_settings()
@@ -166,14 +166,14 @@ class AuthService:
         self.audit.record(user.tenant_id, user.id, "user.password_reset_requested", "user", user.id)
         events.password_reset_requested(self.db, user, ip or "")
         link = f"{request.base_url.scheme}://{request.headers.get('host', '')}/reset-password?token={token}"
-        where = tenant.name if tenant else "the Supreme DMS platform"
+        where = tenant.name if tenant else "the CIDMS platform"
         body = "\n\n".join([
             f"Hello {user.full_name},",
             f"Someone asked to reset your password for {where}. If it was you, open this link within "
             f"{s.password_reset_minutes} minutes and choose a new password:",
             link,
             "If it wasn't you, ignore this email: your password stays the same.",
-            "Supreme DMS",
+            "CIDMS",
         ])
         return user.email, f"Reset your password for {where}", body
 

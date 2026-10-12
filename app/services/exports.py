@@ -285,7 +285,7 @@ def to_pdf(centre: TenantSettings, title: str, subtitle: str, columns: Sequence[
         story.append(p("Nothing to show for these filters."))
 
     stamp = local_now().strftime("%d %b %Y %I:%M %p IST")
-    footer = f"Generated {stamp}" + (f" by {generated_by}" if generated_by else "") + " · Supreme DMS"
+    footer = f"Generated {stamp}" + (f" by {generated_by}" if generated_by else "") + " · CIDMS"
     doc.build(story, canvasmaker=_numbered_canvas(pdf_safe(footer)))
     return out.getvalue()
 

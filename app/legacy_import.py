@@ -1,4 +1,4 @@
-"""Bring a centre's records across from the old Laravel app (MariaDB) into its tables in Supreme DMS.
+"""Bring a centre's records across from the old Laravel app (MariaDB) into its tables in CIDMS.
 
     python -m app.legacy_import --dry-run     # do everything in one transaction, then roll it back
     python -m app.legacy_import               # the real move

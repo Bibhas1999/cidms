@@ -1,4 +1,4 @@
-# Deploys Supreme DMS from this computer to the server, over SSH. From the project folder:
+# Deploys CIDMS from this computer to the server, over SSH. From the project folder:
 #   powershell -File deploy\deploy.ps1 -Ip 140.238.x.x -Key $HOME\.ssh\ssh-key-2026-10-12.key            # update
 #   powershell -File deploy\deploy.ps1 -Ip 140.238.x.x -Key $HOME\.ssh\ssh-key-2026-10-12.key -FirstTime  # + server set-up
 #   ... -MoveData   also copies this computer's database to the server (first time only: replaces the server's data)

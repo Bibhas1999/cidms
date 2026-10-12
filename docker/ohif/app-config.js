@@ -1,4 +1,4 @@
-/** OHIF viewer settings for Supreme DMS. The viewer is served by the app at /viewer/ and reads images only
+/** OHIF viewer settings for CIDMS. The viewer is served by the app at /viewer/ and reads images only
  * through the app's DICOMweb proxy (/api/dicom-web), which uses the signed-in person's session and only ever
  * serves their own centre's studies. No study list: it opens the study it is given (?StudyInstanceUIDs=). */
 window.config = {
@@ -21,7 +21,7 @@ window.config = {
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
       sourceName: 'supreme',
       configuration: {
-        friendlyName: 'Supreme DMS',
+        friendlyName: 'CIDMS',
         name: 'supreme',
         wadoUriRoot: window.location.origin + '/api/dicom-web',
         qidoRoot: window.location.origin + '/api/dicom-web',

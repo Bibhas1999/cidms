@@ -169,7 +169,7 @@
 {/snippet}
 
 <PageHeader compact={embedded} eyebrow="Administration" title={session.isPlatform ? "Platform staff" : "Staff"}
-            description={session.isPlatform ? "People who run the Supreme DMS platform." : "Everyone who works in the centre, and what each person can do."}>
+            description={session.isPlatform ? "People who run the CIDMS platform." : "Everyone who works in the centre, and what each person can do."}>
   {#snippet actions()}<Button variant="primary" icon="plus" onclick={openAdd}>Add a person</Button>{/snippet}
 </PageHeader>
 

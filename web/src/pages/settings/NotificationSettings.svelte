@@ -48,7 +48,7 @@
     permission = await Notification.requestPermission();
     if (permission === "granted") {
       form.values.browser_popups = true;
-      await showPopup("Pop-ups are on", "This is how Supreme DMS will tell you about things while you're in another tab.", "/notifications", "sdms-test");
+      await showPopup("Pop-ups are on", "This is how CIDMS will tell you about things while you're in another tab.", "/notifications", "sdms-test");
       notify("Pop-ups are allowed. Save to keep them on.", { kind: "info" });
     } else if (permission === "denied") {
       notify("The browser blocked pop-ups. Allow them for this site in the browser's site settings (the lock icon next to the address).",
@@ -75,13 +75,13 @@
 
 <form class="card" onsubmit={(e) => form.submit(e).catch((err) => notifyError(err, { title: "Couldn't save your notification settings" }))} novalidate>
   <div class="card-header"><div><h2 class="card-title">Notifications</h2>
-    <p class="card-description">What you hear about in the bell at the top of the page, and pop-ups when Supreme DMS is in another tab.</p></div></div>
+    <p class="card-description">What you hear about in the bell at the top of the page, and pop-ups when CIDMS is in another tab.</p></div></div>
   <div class="card-content stack-lg">
     <FormErrors {form} {labels} idPrefix="np_" />
 
     <fieldset class="group">
       <legend class="label row" style="gap: 6px">Browser pop-ups
-        <InfoTip about="browser pop-ups" text="A small message from your computer, shown only while Supreme DMS is open in a tab you aren't looking at. Clicking it brings you to the right page. Nothing is shown when the tab is in front: the bell is enough then." /></legend>
+        <InfoTip about="browser pop-ups" text="A small message from your computer, shown only while CIDMS is open in a tab you aren't looking at. Clicking it brings you to the right page. Nothing is shown when the tab is in front: the bell is enough then." /></legend>
       {#if permission === "unsupported"}
         <p class="text-sm text-muted">This browser can't show pop-ups. The bell still shows everything.</p>
       {:else}
