@@ -92,7 +92,10 @@ export async function searchCachedTests(q: string, page: number, size: number): 
 export async function searchCachedDoctors(q: string, page: number, size: number): Promise<Page<Doctor>> {
   const words = norm(q);
   const all = (await cached<Doctor[]>("doctors")) ?? [];
-  return pageOf(words ? all.filter((d) => norm(d.name).includes(words)) : all, page, size);
+  const digits = q.replace(/\D/g, "");
+  const hit = (d: Doctor) => norm(d.name).includes(words) || norm(d.qualification ?? "").includes(words)
+    || (digits.length >= 3 && (d.phone ?? "").replace(/\D/g, "").includes(digits));
+  return pageOf(words ? all.filter(hit) : all, page, size);
 }
 
 export async function searchCachedPatients(q: string, page: number, size: number): Promise<Page<Patient>> {

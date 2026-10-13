@@ -53,6 +53,8 @@ class Settings(BaseSettings):
 
     # Files the app keeps (logos now; signatures, reports and uploads later), outside the web folder.
     storage_dir: str = "storage"
+    # The server's backup folder (deploy/backup.sh), mounted read-only into the app for downloads.
+    backup_dir: str = "backups"
 
     # Medical images: the Orthanc image server (only the app talks to it, with these credentials) and the
     # OHIF viewer, both reached through the app at /api/dicom-web and /viewer so they share its sign-in.

@@ -17,7 +17,7 @@
   import { date, dateTime, rupees } from "../../lib/format";
   import { formatPhone } from "../../lib/phone";
   import { router } from "../../lib/router.svelte";
-  import { optionalEmail, optionalText, phone, submitting, text, wholeNumber } from "../../lib/schemas";
+  import { optionalEmail, optionalPersonName, optionalText, personName, phone, submitting, wholeNumber } from "../../lib/schemas";
   import { session } from "../../lib/session.svelte";
   import { notify } from "../../lib/toast.svelte";
   import { tooltip } from "../../lib/tooltip";
@@ -80,8 +80,8 @@
   // ---------- edit ----------
   const today = todayISO();
   const schema = z.object({
-    name: text("Enter the patient's name.", 200, 2),
-    guardian_name: optionalText(200),
+    name: personName("Enter the patient's name."),
+    guardian_name: optionalPersonName(200, "The guardian's name"),
     age_years: wholeNumber({ min: 0, max: 130, label: "the age in years" }),
     date_of_birth: z.string().refine((v) => !v || v <= today, "The date of birth can't be in the future."),
     gender: z.string().refine((v) => v in GENDER_LABELS, "Choose the gender."),

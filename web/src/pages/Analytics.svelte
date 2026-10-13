@@ -344,7 +344,7 @@
 </div>
 
 <div class="grid-2">
-  <ChartCard title="Top referring doctors" description={data.doctors ? `${count(data.doctors.referred.bills)} referred bills from ${count(data.doctors.referred.doctors)} doctors · ${count(data.doctors.self_referred.bills)} self-referred` : ""}
+  <ChartCard title="Top referrers" description={data.doctors ? `${count(data.doctors.referred.bills)} referred bills from ${count(data.doctors.referred.doctors)} doctors and hospitals · ${count(data.doctors.self_referred.bills)} self-referred` : ""}
              loading={!data.doctors} error={errors.doctors} empty={!doctors.length} emptyIcon="stethoscope" emptyText="No referred bills for these filters."
              tip="By bills referred. The line shows each doctor's bills {per.toLowerCase()} over the period."
              table={{ columns: [{ label: "Doctor" }, { label: "Bills", num: true }, { label: "Revenue", num: true }], rows: doctors.map((d) => [d.name, count(d.bills), exact(num(d.amount), "money")]) }}>

@@ -46,7 +46,7 @@ export const CLIENT_NAV: NavSection[] = [
     heading: "Catalogue",
     items: [
       { href: "/tests", label: "Tests & prices", icon: "flask" },
-      { href: "/doctors", label: "Referring doctors", icon: "stethoscope" },
+      { href: "/doctors", label: "Doctors & hospitals", icon: "stethoscope" },
     ],
   },
 ];

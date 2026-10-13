@@ -14,7 +14,7 @@
   import { Form } from "../../lib/form.svelte";
   import { formatPhone } from "../../lib/phone";
   import { router, setQuery } from "../../lib/router.svelte";
-  import { optionalText, phone, submitting, text } from "../../lib/schemas";
+  import { optionalText, phone, referrerName, submitting } from "../../lib/schemas";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
   import type { Doctor, Page } from "../../lib/types";
@@ -44,7 +44,7 @@
 
   // ---------- add / edit ----------
   const schema = z.object({
-    name: text("Enter the doctor's name.", 200, 2),
+    name: referrerName("Enter the doctor's or hospital's name."),
     qualification: optionalText(200),
     phone: phone(false),
     is_active: z.boolean(),
@@ -100,15 +100,15 @@
 
 {#snippet statusCell(d: Doctor)}<StatusBadge active={d.is_active} help={d.is_active ? "" : "Not suggested on new bills."} />{/snippet}
 
-<PageHeader eyebrow="Catalogue" title="Referring doctors"
-            description="Doctors who send patients to the centre. A doctor is added automatically when a new name is typed on a bill.">
+<PageHeader eyebrow="Catalogue" title="Doctors & hospitals"
+            description="Doctors and hospitals that send patients to the centre. One is added automatically when a new name is typed on a bill.">
   {#snippet actions()}
-    {#if canManage}<Button variant="primary" icon="plus" onclick={openAdd}>Add a doctor</Button>{/if}
+    {#if canManage}<Button variant="primary" icon="plus" onclick={openAdd}>Add doctor / hospital</Button>{/if}
   {/snippet}
 </PageHeader>
 
-<section class="card" aria-label="Referring doctors">
-  <FilterBar placeholder="Search by name…" searchLabel="Search doctors" inlineKeys={["all"]}>
+<section class="card" aria-label="Doctors and hospitals">
+  <FilterBar placeholder="Search by name…" searchLabel="Search doctors and hospitals" inlineKeys={["all"]}>
     {#snippet inline()}
       <label class="check-row">
         <input class="checkbox" type="checkbox" checked={showOff} onchange={(e) => setQuery({ all: e.currentTarget.checked ? "1" : null, page: null })} />
@@ -116,19 +116,19 @@
       </label>
     {/snippet}
   </FilterBar>
-  <DataTable label="Referring doctors" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
+  <DataTable label="Doctors and hospitals" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
              actions={canManage ? actionsFor : undefined} actionsLabel={(d) => `Actions for ${d.name}`}
              onrowclick={canManage ? openEdit : undefined}
-             empty={{ icon: "stethoscope", title: search ? "No doctor matches that search." : "No referring doctors yet." }}
+             empty={{ icon: "stethoscope", title: search ? "Nothing matches that search." : "No doctors or hospitals yet." }}
              columns={[
-               { key: "name", label: "Doctor", value: (d) => d.name, class: "cell-title", mobile: "title" },
+               { key: "name", label: "Name", value: (d) => d.name, class: "cell-title", mobile: "title" },
                { key: "qual", label: "Qualification", value: (d) => d.qualification || "—", mobile: "sub" },
                { key: "phone", label: "Phone", value: (d) => formatPhone(d.phone) || "—", class: "tabular", nowrap: true },
                { key: "status", label: "Status", cell: statusCell, mobile: "end" },
              ]} />
 </section>
 
-<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a doctor"} icon={editing ? "edit" : "stethoscope"} tone="info">
+<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add doctor / hospital"} icon={editing ? "edit" : "stethoscope"} tone="info">
   <form id="doctor-form" class="stack" onsubmit={submitting(form, "Couldn't save")} novalidate>
     <FormErrors {form} {labels} idPrefix="d_" />
     <Field id="d_name" label="Name" required error={form.error("name")} tip="As it should print on bills, e.g. Dr. Kakali Sarkar.">
@@ -142,7 +142,7 @@
           <input id="d_qualification" class="input" bind:value={form.values.qualification} {...form.field("qualification")} aria-invalid={invalid} aria-describedby={describedby} />
         {/snippet}
       </Field>
-      <Field id="d_phone" label="Phone" optional error={form.error("phone")} tip="The doctor's mobile, with its country code. Saved in the international form.">
+      <Field id="d_phone" label="Phone" optional error={form.error("phone")} tip="The doctor's or hospital's number, with its country code. Saved in the international form.">
         {#snippet children({ invalid, describedby })}
           {@const f = form.field("phone")}
           <PhoneInput id="d_phone" bind:value={form.values.phone} {invalid} {describedby} onblur={f.onblur} oninput={f.oninput} />
@@ -151,11 +151,11 @@
     </div>
     <label class="check-row check-top">
       <input class="checkbox" type="checkbox" bind:checked={form.values.is_active} />
-      <span><span class="font-semibold">Active</span> <span class="text-muted">· switched-off doctors aren't suggested on new bills.</span></span>
+      <span><span class="font-semibold">Active</span> <span class="text-muted">· switched-off names aren't suggested on new bills.</span></span>
     </label>
   </form>
   {#snippet footer()}
     <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="doctor-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add doctor"}</Button>
+    <Button variant="primary" type="submit" form="doctor-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add"}</Button>
   {/snippet}
 </Dialog>

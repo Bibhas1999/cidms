@@ -42,8 +42,11 @@ services:
               "--proxy-headers", "--forwarded-allow-ips", "*"]
     depends_on:
       migrate: { condition: service_completed_successfully }
+    environment:
+      BACKUP_DIR: /srv/backups
     volumes:
       - app-storage:/srv/storage
+      - ../backups:/srv/backups:ro   # deploy/backup.sh's copies, for downloads in Settings > Backups
     restart: unless-stopped
 
   worker:

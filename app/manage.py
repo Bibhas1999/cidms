@@ -7,6 +7,7 @@ A temporary password is printed once; the person must choose their own at first 
 """
 
 import argparse
+import sys
 
 from sqlalchemy import select
 
@@ -94,7 +95,42 @@ def main() -> None:
     bf.add_argument("--file", default="")
     bf.add_argument("--bytes", type=int, default=0)
     bf.add_argument("--message", default="")
+    rs = sub.add_parser("restore-start", help="(deploy/restore.sh) print '<run id> <file>' if a restore is asked for, else nothing")
+    rs.add_argument("--file", default="", help="a restore run by hand on the server, with this backup")
+    rf = sub.add_parser("restore-finish", help="(deploy/restore.sh) record how a restore went")
+    rf.add_argument("run_id")
+    rf.add_argument("result", choices=["ok", "failed"])
+    rf.add_argument("--message", default="")
+    br = sub.add_parser("backup-record", help="(deploy/restore.sh) record the backup taken just before a restore")
+    br.add_argument("--file", required=True)
+    br.add_argument("--bytes", type=int, default=0)
+    br.add_argument("--message", default="")
+    sub.add_parser("history-save", help="(deploy/restore.sh) print the backup history as JSON")
+    sub.add_parser("history-load", help="(deploy/restore.sh) put the backup history back from JSON on stdin; signs everyone out")
     args = parser.parse_args()
+    if args.command in ("restore-start", "restore-finish", "backup-record", "history-save", "history-load"):
+        import json
+        import uuid
+
+        from app.services import backups
+        with scoped_session(platform=True) as db, db.begin():
+            if args.command == "restore-start":
+                run = backups.restore_start(db, args.file or None)
+                if run:
+                    print(f"{run.id} {run.file}")
+            elif args.command == "restore-finish":
+                ok = args.result == "ok"
+                backups.finish(db, uuid.UUID(args.run_id), ok, message=args.message or ("Restored." if ok else ""),
+                               file=db.get(backups.BackupRun, uuid.UUID(args.run_id)).file)
+                backups.AuditService(db).record(None, None, "backups.restored" if ok else "backups.restore_failed",
+                                                "backup_runs", args.run_id, {"message": args.message})
+            elif args.command == "backup-record":
+                backups.record(db, args.file, args.bytes, args.message)
+            elif args.command == "history-save":
+                print(json.dumps(backups.history_save(db), default=str))
+            else:
+                backups.history_load(db, json.loads(sys.stdin.read()))
+        return
     if args.command in ("backup-start", "backup-finish"):
         import uuid
 

@@ -113,7 +113,13 @@ class CatalogueService:
     def doctors(self, search: str, active: bool | None, page: int, size: int):
         q = select(ReferringDoctor).where(ReferringDoctor.tenant_id == self.tenant_id)
         if search:
-            q = q.where(func.lower(ReferringDoctor.name).like(contains(search), escape="\\"))
+            # By name or degree, or by mobile number when three or more digits are typed.
+            match = [func.lower(ReferringDoctor.name).like(contains(search), escape="\\"),
+                     func.lower(ReferringDoctor.qualification).like(contains(search), escape="\\")]
+            digits = "".join(ch for ch in search if ch.isdigit())
+            if len(digits) >= 3:
+                match.append(func.regexp_replace(ReferringDoctor.phone, r"\D", "", "g").like(f"%{digits}%"))
+            q = q.where(or_(*match))
         if active is not None:
             q = q.where(ReferringDoctor.is_active.is_(active))
         total = self.db.scalar(select(func.count()).select_from(q.subquery())) or 0
