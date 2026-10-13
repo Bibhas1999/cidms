@@ -1,8 +1,8 @@
 // CIDMS service worker: makes the app installable and quick to open. It keeps only the app itself
 // (the page, scripts, styles, fonts, icons). Patient data never goes in its cache: /api, /viewer and
 // /dicom-web always go to the network, and so does anything that isn't a plain GET.
-const CACHE = "sdms-shell-v3";
-const SHELL = ["/", "/manifest.webmanifest", "/icons/favicon.png", "/icons/icon-192.png"];
+const CACHE = "sdms-shell-v4";
+const SHELL = ["/", "/manifest.webmanifest", "/icons/favicon.png", "/icons/icon-192-v2.png"];
 const NEVER = ["/api/", "/viewer", "/dicom-web", "/healthz"];
 
 self.addEventListener("install", (event) => {

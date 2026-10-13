@@ -108,6 +108,10 @@ def tick(now: datetime | None = None, schedules: list[Schedule] | None = None) -
                 row.last_run_at = now
                 log.info("schedule fired", extra={"schedule": s.name, "jobs": fired[s.name], "next_run_at": row.next_run_at.isoformat()})
             db.commit()
+    # Each client's own backups run at the time its owner chose (Settings > Backups), not on a shared schedule.
+    from app.services import client_backups
+    if queued := client_backups.enqueue_due(now):
+        fired["client_backups"] = queued
     return fired
 
 
