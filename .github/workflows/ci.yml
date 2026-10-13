@@ -115,8 +115,9 @@ jobs:
             set -e
             cd /opt/supreme-dms
             test -f .env.production || { echo "no .env.production on the server"; exit 1; }
-            # The code folders are replaced, not unpacked over: files deleted from the code mustn't linger here
+            # The code folders are replaced, not unpacked over: files deleted from the code do not linger here
             # (they would be built into the app again). .env.production and backups/ are left alone.
+            # No apostrophes anywhere in this block: it is one single-quoted ssh command.
             rm -rf app migrations web deploy docker tests
             tar -xzf /tmp/supreme-dms.tgz && rm /tmp/supreme-dms.tgz && chmod +x deploy/*.sh
             sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
