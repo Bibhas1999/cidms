@@ -1,14 +1,18 @@
 """The platform admin panel: clients and plans."""
 
+import gzip
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import Paging, paging, platform_permission
 from app.core.db import DB
+from app.core.errors import NotFound
 from app.core.security import CurrentUser
-from app.schemas import BackupSettingsIn, ClientCreateIn, ClientOut, ClientUpdateIn, Page, PlanOut
+from app.schemas import BackupRestoreIn, BackupSettingsIn, ClientCreateIn, ClientOut, ClientUpdateIn, Page, PlanOut
 from app.services import backups
 from app.services.clients import ClientService, platform_overview
 
@@ -55,6 +59,39 @@ def backup_schedule(data: BackupSettingsIn, db: Session = DB, current: CurrentUs
 def backup_now(db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
     """Ask for a backup now: the server starts it within 5 minutes."""
     return backups.request_now(db, current.id)
+
+
+@router.get("/backups/{run_id}/download")
+def backup_download(run_id: uuid.UUID, format: Literal["dump", "sql"] = "dump", db: Session = DB,
+                    current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
+    """The backup's file: .dump (Postgres's own format, for restoring) or .sql (plain SQL to read)."""
+    run = db.get(backups.BackupRun, run_id)
+    path = backups.file_for(run, format) if run else None
+    if path is None:
+        raise NotFound("That backup's file isn't on the server.")
+    backups.AuditService(db).record(None, current.id, "backups.downloaded", "backup_runs", run_id, {"format": format})
+    if format == "dump":
+        return FileResponse(path, media_type="application/octet-stream", filename=path.name)
+
+    def chunks():
+        with gzip.open(path, "rb") as f:
+            while block := f.read(1 << 20):
+                yield block
+    name = path.name.removesuffix(".gz")
+    return StreamingResponse(chunks(), media_type="application/sql",
+                             headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.post("/backups/{run_id}/restore")
+def backup_restore(run_id: uuid.UUID, data: BackupRestoreIn, db: Session = DB,
+                   current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
+    """Put the whole database back to this backup. The server starts within a minute; it can be called off till then."""
+    return backups.request_restore(db, current.id, run_id)
+
+
+@router.delete("/backups/restore")
+def backup_restore_cancel(db: Session = DB, current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
+    return backups.cancel_restore(db, current.id)
 
 
 @router.get("/plans", response_model=list[PlanOut])

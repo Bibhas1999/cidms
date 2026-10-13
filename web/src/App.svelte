@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
+  import { untrack } from "svelte";
   import AppShell from "./components/AppShell.svelte";
   import ConfirmHost from "./components/ConfirmHost.svelte";
   import ErrorFallback from "./components/ErrorFallback.svelte";
@@ -64,7 +65,7 @@
     { path: "/reports", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/reports/:name", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/tests", component: Tests, title: "Tests & prices", ...CLIENT_ONLY },
-    { path: "/doctors", component: Doctors, title: "Referring doctors", ...CLIENT_ONLY },
+    { path: "/doctors", component: Doctors, title: "Doctors & hospitals", ...CLIENT_ONLY },
     { path: "/settings", component: SettingsHub, title: "Settings" },
     { path: "/settings/:section", component: SettingsHub, title: "Settings" },
     { path: "/staff", component: SettingsHub, title: "Settings" },
@@ -102,8 +103,9 @@
 
   let startError = $state("");
 
+  // Once, when the app opens (untracked: nothing read while loading may start it again).
   $effect(() => {
-    session.load().catch((e) => {
+    untrack(() => session.load()).catch((e) => {
       startError = e?.message ?? "CIDMS couldn't start.";
       reportError("error", e);
     });

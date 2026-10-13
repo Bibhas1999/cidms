@@ -1,6 +1,7 @@
 // Who is signed in, at which workspace, and what they may do. The session itself is the HttpOnly cookie;
 // this only holds what the server says about it (and the CSRF token it hands back).
 
+import { untrack } from "svelte";
 import { rememberAccount } from "./accounts";
 import { ApiError, get, post, setApiHooks } from "./api";
 import { navigate, router } from "./router.svelte";
@@ -32,7 +33,9 @@ class Session {
   }
 
   async load(): Promise<void> {
-    const before = this.me?.id;
+    // Not watched: called from an effect, reading `me` here made every answer start the next request (an endless
+    // /api/workspace + /api/auth/me loop, and the top loader flickering).
+    const before = untrack(() => this.me?.id);
     try {
       this.workspace = await get<Workspace>("/api/workspace");
       if (this.workspace.kind !== "none") {

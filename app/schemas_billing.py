@@ -1,5 +1,7 @@
 """Request and response shapes for billing: catalogue, patients, bills, payments, worklist and the day's summary."""
 
+import re
+import unicodedata
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -18,7 +20,65 @@ def _strip(v: str) -> str:
     return " ".join(v.split())
 
 
-# ---------- catalogue ----------
+# Name rules, the same as the Sandhata Registry's (app/schemas.py there) and web/src/lib/schemas.ts here.
+PERSON_SYMBOLS = set(" '’.-")
+TITLE_SYMBOLS = set(" -–—&()/.,'’+:#")
+
+
+def _is_mark(ch: str) -> bool:
+    return unicodedata.category(ch).startswith("M")   # vowel signs in Bengali, Hindi and so on
+
+
+def _letters(v: str) -> int:
+    return sum(ch.isalpha() for ch in v)
+
+
+def person_name_problem(v: str, label: str) -> str:
+    if any(not (ch.isalpha() or _is_mark(ch) or ch in PERSON_SYMBOLS) for ch in v):
+        return f"{label} can only contain letters, spaces, hyphens (-), apostrophes (') and full stops."
+    if not v[0].isalpha():
+        return f"{label} must start with a letter."
+    if v[-1] in "-'’":
+        return f"{label} can't end with a hyphen or apostrophe."
+    if re.search(r"[-'’.]{2,}", v):
+        return f"{label} can't have two symbols in a row."
+    if re.search(r" [-'’]|[-'’] ", v):
+        return f"{label} can't have a space next to a hyphen or apostrophe."
+    if _letters(v) < 2:
+        return f"{label} must have at least 2 letters."
+    return ""
+
+
+def title_problem(v: str, label: str) -> str:
+    """Names of places and people with titles: a referring doctor or hospital ("Dr. A. Sen (MD)", "Apollo 24/7")."""
+    if any(not (ch.isalnum() or _is_mark(ch) or ch in TITLE_SYMBOLS) for ch in v):
+        return f"{label} can only contain letters, numbers, spaces and - & ( ) / . , ' + : #"
+    if not v[0].isalnum():
+        return f"{label} must start with a letter or number."
+    if not (v[-1].isalnum() or v[-1] in ")+#"):
+        return f"{label} must end with a letter, number or closing bracket."
+    if re.search(r"([-–—&/.,'’:])", v):
+        return f"{label} can't repeat the same symbol twice in a row."
+    if _letters(v) < 2:
+        return f"{label} must have at least 2 letters."
+    if v.count("(") != v.count(")"):
+        return f"{label} has an unmatched bracket."
+    return ""
+
+
+def _checked(rule, label: str):
+    def check(v: str) -> str:
+        v = unicodedata.normalize("NFC", _strip(v))
+        if v and (problem := rule(v, label)):
+            raise ValueError(problem)
+        return v
+    return check
+
+
+_person = _checked(person_name_problem, "The name")
+_guardian = _checked(person_name_problem, "The guardian's name")
+_referrer = _checked(title_problem, "The name")
+
 
 class DepartmentIn(BaseModel):
     name: str = Field(min_length=2, max_length=100)
@@ -71,7 +131,7 @@ class DoctorIn(BaseModel):
     qualification: str = Field(default="", max_length=200)
     phone: str = Field(default="", max_length=20)
     is_active: bool = True
-    _n = field_validator("name")(_strip)
+    _n = field_validator("name")(_referrer)
     _m = field_validator("phone")(_mobile)
 
 
@@ -94,7 +154,8 @@ class PatientIn(BaseModel):
     mobile: str = Field(default="", max_length=20)
     email: EmailStr | Literal[""] = ""
     address: str = Field(default="", max_length=1000)
-    _n = field_validator("name", "guardian_name")(_strip)
+    _n = field_validator("name")(_person)
+    _g = field_validator("guardian_name")(_guardian)
     _m = field_validator("mobile")(_mobile)
 
     @model_validator(mode="after")
@@ -178,6 +239,7 @@ class BillIn(Discount):
     notes: str = Field(default="", max_length=1000)
     hold: bool = False
     offline: OfflineIn | None = None
+    _r = field_validator("referring_doctor_name")(_referrer)
 
     @model_validator(mode="after")
     def _patient(self) -> "BillIn":

@@ -275,7 +275,7 @@
 
     <div class="grid-2 items-start">
       <section class="card" aria-labelledby="doc-title">
-        <div class="card-header"><div><h2 class="card-title" id="doc-title">Top referring doctors<InfoTip about="Top referring doctors" text="Doctors who referred the most bills in the period, with what those bills came to." /></h2><p class="card-description">Bills referred · {words}.</p></div>
+        <div class="card-header"><div><h2 class="card-title" id="doc-title">Top referrers<InfoTip about="Top referrers" text="Doctors and hospitals that referred the most bills in the period, with what those bills came to." /></h2><p class="card-description">Bills referred · {words}.</p></div>
           <a class="btn btn-ghost btn-sm" href="/doctors">View all <Icon name="arrowRight" size="sm" /></a></div>
         <div class="card-content">
           {#if data.doctors.length}

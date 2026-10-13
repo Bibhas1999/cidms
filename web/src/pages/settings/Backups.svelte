@@ -1,8 +1,10 @@
 <script lang="ts">
+  import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import InfoTip from "../../components/InfoTip.svelte";
-  import { get, post, put } from "../../lib/api";
+  import RowMenu, { type RowAction } from "../../components/RowMenu.svelte";
+  import { api, get, post, put } from "../../lib/api";
   import { dateTime } from "../../lib/format";
   import { notify, notifyError } from "../../lib/toast.svelte";
 
@@ -14,10 +16,12 @@
   interface Option { days: number; label: string }
   interface Settings { enabled: boolean; every_days: number; at_time: string; keep_days: number; next_run_at: string | null; requested_at: string | null }
   interface Run {
-    id: string; trigger: "scheduled" | "manual"; scheduled_for: string | null; started_at: string; finished_at: string | null;
-    status: "running" | "ok" | "failed"; file: string; size_bytes: number; message: string; kept: boolean;
+    id: string; trigger: "scheduled" | "manual" | "restore"; scheduled_for: string | null; started_at: string; finished_at: string | null;
+    status: "requested" | "running" | "ok" | "failed"; file: string; size_bytes: number; message: string; kept: boolean;
+    dump: boolean; sql: boolean;
   }
-  interface Overview { settings: Settings; cycles: Option[]; keep_options: Option[]; timezone: string; runs: Run[] }
+  interface Restore { id: string; status: "requested" | "running"; file: string; requested_at: string; message: string }
+  interface Overview { settings: Settings; cycles: Option[]; keep_options: Option[]; timezone: string; runs: Run[]; restore: Restore | null }
 
   let data = $state<Overview | null>(null);
   let values = $state({ enabled: true, every_days: 1, at_time: "23:00", keep_days: 30 });
@@ -34,8 +38,8 @@
 
   $effect(() => {
     refresh().catch((e) => notifyError(e, { title: "Couldn't load the backup settings" }));
-    // While a backup is asked for or running, look again every 20 seconds so its result shows up by itself.
-    const timer = setInterval(() => { if (data?.settings.requested_at || data?.runs.some((r) => r.status === "running")) refresh().catch(() => {}); }, 20_000);
+    // While a backup or restore is asked for or running, look again every 20 seconds so its result shows up by itself.
+    const timer = setInterval(() => { if (data?.settings.requested_at || data?.restore || data?.runs.some((r) => r.status === "running")) refresh().catch(() => {}); }, 20_000);
     return () => clearInterval(timer);
   });
 
@@ -66,11 +70,72 @@
     }
   }
 
+  // ---------- download and restore ----------
+  let restoring = $state<Run | null>(null);
+  let restoreOpen = $state(false);
+  let typed = $state("");
+  let restoreError = $state("");
+  let sending = $state(false);
+
+  function actionsFor(r: Run): RowAction[] {
+    if (r.trigger === "restore" || r.status !== "ok") return [];
+    const gone = "This copy isn't on the server any more.";
+    return [
+      { label: "Download .dump", icon: "download", href: `/api/platform/backups/${r.id}/download?format=dump`, disabled: !r.dump,
+        hint: r.dump ? "Postgres's own format: what a restore uses" : gone },
+      { label: "Download .sql", icon: "download", href: `/api/platform/backups/${r.id}/download?format=sql`, disabled: !r.sql,
+        hint: r.sql ? "Plain SQL, to read or load anywhere" : r.dump ? "Backups from before 13 Oct 2026 have only the .dump" : gone },
+      { label: "Restore…", icon: "refresh", tone: "danger", disabled: !r.dump || !!data?.restore,
+        hint: !r.dump ? gone : data?.restore ? "A restore is already on its way" : "Put the whole database back to this backup",
+        onclick: () => { restoring = r; typed = ""; restoreError = ""; restoreOpen = true; } },
+    ];
+  }
+
+  async function askRestore(e: Event) {
+    e.preventDefault();
+    if (!restoring) return;
+    if (typed.trim() !== "RESTORE") { restoreError = "Type RESTORE in capitals to confirm."; return; }
+    sending = true;
+    try {
+      load(await post<Overview>(`/api/platform/backups/${restoring.id}/restore`, { confirm: typed.trim() }));
+      restoreOpen = false;
+      notify("The restore starts within a minute. You can still call it off until then.", { kind: "info", title: "Restore on its way" });
+    } catch (err) {
+      notifyError(err, { title: "Couldn't ask for the restore" });
+    } finally {
+      sending = false;
+    }
+  }
+
+  async function cancelRestore() {
+    try {
+      load(await api<Overview>("DELETE", "/api/platform/backups/restore"));
+      notify("The restore is called off. Nothing was changed.");
+    } catch (err) {
+      notifyError(err, { title: "Couldn't call off the restore" });
+      refresh().catch(() => {});
+    }
+  }
+
   const size = (b: number) => (b >= 1_048_576 ? `${(b / 1_048_576).toFixed(1)} MB` : b >= 1024 ? `${Math.round(b / 1024)} KB` : b ? `${b} B` : "—");
   const cycleLabel = $derived(data?.cycles.find((c) => c.days === values.every_days)?.label.toLowerCase() ?? "");
   const lastOk = $derived(data?.runs.find((r) => r.status === "ok"));
-  const busy = $derived(!!data?.settings.requested_at || !!data?.runs.some((r) => r.status === "running"));
+  const busy = $derived(!!data?.settings.requested_at || !!data?.restore || !!data?.runs.some((r) => r.status === "running"));
 </script>
+
+{#if data?.restore}
+  <div class="alert {data.restore.status === 'running' ? 'alert-info' : 'alert-warning'}" role="status">
+    <Icon name={data.restore.status === "running" ? "clock" : "alert"} />
+    <div class="grow">
+      <div class="alert-title">{data.restore.status === "running" ? "Restoring now" : "Restore on its way"}</div>
+      {data.restore.message} ({data.restore.file}).
+      {data.restore.status === "running"
+        ? " CIDMS is unavailable for a minute or two, then everyone signs in again."
+        : " It starts within a minute: the data as it is now is backed up first, then everyone is signed out."}
+    </div>
+    {#if data.restore.status === "requested"}<button type="button" class="btn btn-outline btn-sm" onclick={cancelRestore}>Call it off</button>{/if}
+  </div>
+{/if}
 
 <form class="card" onsubmit={save} novalidate>
   <div class="card-header"><div><h2 class="card-title">Backups</h2>
@@ -102,7 +167,7 @@
           <input id="bk_time" class="input" type="time" step="300" bind:value={values.at_time} disabled={!values.enabled} aria-describedby={describedby} required />
         {/snippet}
       </Field>
-      <Field id="bk_keep" label="Keep copies for" tip="Older copies are deleted after each backup, so the server's disk doesn't fill up.">
+      <Field id="bk_keep" label="Keep copies for" tip="Older copies are deleted after each backup, so the server's disk doesn't fill up. Forever: none are deleted.">
         {#snippet children({ describedby })}
           <select id="bk_keep" class="select" bind:value={values.keep_days} aria-describedby={describedby}>
             {#each data?.keep_options ?? [] as k (k.days)}<option value={k.days}>{k.label}</option>{/each}
@@ -111,7 +176,7 @@
       </Field>
     </div>
     {#if values.enabled && data}
-      <p class="text-sm text-muted">The database will be backed up {cycleLabel} at {values.at_time}, and each copy kept for {data.keep_options.find((k) => k.days === values.keep_days)?.label}.</p>
+      <p class="text-sm text-muted">The database will be backed up {cycleLabel} at {values.at_time}, {values.keep_days === 0 ? "and every copy kept (none deleted; keep an eye on the server's disk)" : `and each copy kept for ${data.keep_options.find((k) => k.days === values.keep_days)?.label}`}.</p>
     {/if}
   </div>
   <div class="card-footer actions">
@@ -124,32 +189,60 @@
 
 <section class="card" aria-labelledby="bk-runs">
   <div class="card-header"><div><h2 class="card-title" id="bk-runs">Recent backups</h2>
-    <p class="card-description">The last 30, newest first. <InfoTip about="where backups are" text="Copies are in /opt/supreme-dms/backups on the server. Restore one with deploy/restore.sh; copy the folder somewhere safe now and then." /></p></div></div>
+    <p class="card-description">The last 30, newest first. Download or restore one from its ⋮ menu. <InfoTip about="where backups are" text="Copies are in /opt/supreme-dms/backups on the server, each as a .dump (what restores use) and a .sql. Download one now and then and keep it somewhere safe, off the server." /></p></div></div>
   <div class="table-wrap">
     <table class="table" style="min-width: 0">
-      <thead><tr><th>Started</th><th class="hide-sm">Why</th><th>Result</th><th class="num">Size</th><th class="hide-sm">File</th></tr></thead>
+      <thead><tr><th>Started</th><th class="hide-sm">Why</th><th>Result</th><th class="num">Size</th><th class="hide-sm">File</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
         {#each data?.runs ?? [] as r (r.id)}
           <tr>
             <td class="tabular">{dateTime(r.started_at)}</td>
-            <td class="hide-sm text-sm">{r.trigger === "manual" ? "Asked for" : "Scheduled"}</td>
+            <td class="hide-sm text-sm">{r.trigger === "restore" ? "Restore" : r.trigger === "manual" ? "Asked for" : "Scheduled"}</td>
             <td>
-              {#if r.status === "ok"}<span class="badge badge-success"><Icon name="check" size="sm" />Done</span>{#if !r.kept}<span class="text-sm text-muted"> · deleted</span>{/if}
+              {#if r.status === "ok"}<span class="badge badge-success"><Icon name="check" size="sm" />{r.trigger === "restore" ? "Restored" : "Done"}</span>{#if r.trigger !== "restore" && !r.kept}<span class="text-sm text-muted"> · deleted</span>{/if}
+                {#if r.message}<div class="cell-sub">{r.message}</div>{/if}
+              {:else if r.status === "requested"}<span class="badge badge-warning"><Icon name="clock" size="sm" />Waiting</span>
               {:else if r.status === "running"}<span class="badge badge-info"><Icon name="clock" size="sm" />Running</span>
               {:else}<span class="badge badge-destructive"><Icon name="alert" size="sm" />Failed</span><div class="cell-sub">{r.message}</div>{/if}
             </td>
             <td class="num tabular">{size(r.size_bytes)}</td>
             <td class="hide-sm mono text-sm">{r.file || "—"}</td>
+            <td class="num">{#if actionsFor(r).length}<RowMenu actions={actionsFor(r)} label="Actions for the backup of {dateTime(r.started_at)}" />{/if}</td>
           </tr>
         {:else}
-          <tr><td colspan="5"><div class="empty"><Icon name="inbox" />{data ? "No backups recorded yet." : "Loading…"}</div></td></tr>
+          <tr><td colspan="6"><div class="empty"><Icon name="inbox" />{data ? "No backups recorded yet." : "Loading…"}</div></td></tr>
         {/each}
       </tbody>
     </table>
   </div>
 </section>
 
+<Dialog bind:open={restoreOpen} title="Restore this backup?" icon="alert" tone="destructive"
+        description={restoring ? `Back to ${dateTime(restoring.started_at)} (${restoring.file})` : ""}>
+  <form id="restore-form" class="stack" onsubmit={askRestore} novalidate>
+    <ul class="restore-list text-sm">
+      <li>Everything in CIDMS goes back to this moment, for <strong>every centre</strong>: bills, payments, patients, staff and settings made since are gone.</li>
+      <li>The data as it is now is backed up first, so this can be undone by restoring that copy.</li>
+      <li>CIDMS is unavailable for a minute or two, and everyone has to sign in again.</li>
+      <li>It starts within a minute. You can call it off until then.</li>
+    </ul>
+    <Field id="restore-confirm" label="Type RESTORE to confirm" required error={restoreError}>
+      {#snippet children({ invalid, describedby })}
+        <input id="restore-confirm" class="input mono" autocomplete="off" spellcheck="false" bind:value={typed}
+               oninput={() => (restoreError = "")} aria-invalid={invalid} aria-describedby={describedby} />
+      {/snippet}
+    </Field>
+  </form>
+  {#snippet footer()}
+    <button type="button" class="btn btn-outline" onclick={() => (restoreOpen = false)}>Cancel</button>
+    <button type="submit" form="restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE"}>
+      {sending ? "Asking…" : "Restore"}
+    </button>
+  {/snippet}
+</Dialog>
+
 <style>
+  .restore-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
   .status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--muted); }
   .status > div { display: flex; flex-direction: column; gap: 2px; }
   .fields { align-items: start; }

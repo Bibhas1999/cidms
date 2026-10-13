@@ -1,24 +1,30 @@
 """Database backups on a schedule the platform owner chooses: the time of day (India time), how often, and how
 long copies are kept, plus "Back up now". The copy itself is made on the server by deploy/backup.sh, which cron
 runs every 5 minutes with --if-due: it asks `python -m app.manage backup-start` whether one is due, makes it,
-and reports back with `backup-finish`. The app never touches the backup files; it only keeps the schedule and
-the record of each run.
+and reports back with `backup-finish`. Each backup is a .dump (Postgres's own format) with a .sql.gz beside it.
+
+The app reads the backup folder (read-only) to offer downloads. Restoring is asked for here and carried out by the
+server: cron runs deploy/restore.sh --if-requested every minute, which takes a fresh backup first, puts the copy
+back in one transaction, brings the tables up to this version of the app, and reports back.
 """
 
 import uuid
 from datetime import datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import Conflict, Invalid
-from app.models import BackupRun, BackupSettings, utcnow
+from app.core.errors import Conflict, Invalid, NotFound
+from app.models import BackupRun, BackupSettings, User, UserSession, utcnow
 from app.services.audit import AuditService
 
 CYCLES = {1: "Every day", 2: "Every 2 days", 3: "Every 3 days", 7: "Every week", 14: "Every 2 weeks", 30: "Every month"}
-KEEP = {7: "1 week", 14: "2 weeks", 30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months", 365: "1 year"}
+KEEP = {7: "1 week", 14: "2 weeks", 30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months", 365: "1 year", 0: "Forever"}  # 0: never deleted
+RESTORE = "restore"          # trigger of a run that puts a backup back (its file: the copy it came from)
+REQUESTED = "requested"      # status of a restore asked for in the app, until the server picks it up
 STALE = timedelta(hours=3)   # a run still "running" this long was cut off (the server restarted mid-backup)
 
 
@@ -62,10 +68,28 @@ def _settings_out(s: BackupSettings) -> dict:
             "next_run_at": s.next_run_at, "requested_at": s.requested_at}
 
 
+def backup_dir() -> Path:
+    return Path(get_settings().backup_dir)
+
+
+def file_for(run: BackupRun, fmt: str) -> Path | None:
+    """The backup's file on the server: the .dump, or for "sql" the .sql.gz beside it. None when it isn't there."""
+    if run.trigger == RESTORE or run.status != "ok" or not run.file.endswith(".dump"):
+        return None
+    name = run.file.rsplit("/", 1)[-1]
+    path = backup_dir() / (name if fmt == "dump" else name[:-5] + ".sql.gz")
+    return path if path.is_file() else None
+
+
+def _pending_restore(db: Session) -> BackupRun | None:
+    return db.scalar(select(BackupRun).where(BackupRun.trigger == RESTORE, BackupRun.status.in_((REQUESTED, "running"))))
+
+
 def overview(db: Session) -> dict:
     s = _row(db)
     now = utcnow()
     runs = list(db.scalars(select(BackupRun).order_by(BackupRun.started_at.desc()).limit(30)))
+    pending = _pending_restore(db)
     return {
         "settings": _settings_out(s),
         "cycles": [{"days": d, "label": label} for d, label in CYCLES.items()],
@@ -73,8 +97,11 @@ def overview(db: Session) -> dict:
         "timezone": get_settings().display_timezone,
         "runs": [{"id": r.id, "trigger": r.trigger, "scheduled_for": r.scheduled_for, "started_at": r.started_at,
                   "finished_at": r.finished_at, "status": r.status, "file": r.file.rsplit("/", 1)[-1], "size_bytes": r.size_bytes,
-                  "message": r.message, "kept": r.status == "ok" and r.started_at >= now - timedelta(days=s.keep_days)}
+                  "message": r.message, "kept": r.status == "ok" and (s.keep_days == 0 or r.started_at >= now - timedelta(days=s.keep_days)),
+                  "dump": file_for(r, "dump") is not None, "sql": file_for(r, "sql") is not None}
                  for r in runs],
+        "restore": None if pending is None else {"id": pending.id, "status": pending.status, "file": pending.file.rsplit("/", 1)[-1],
+                                                 "requested_at": pending.started_at, "message": pending.message},
     }
 
 
@@ -105,6 +132,8 @@ def request_now(db: Session, user_id: uuid.UUID) -> dict:
     s = _row(db, lock=True)
     if db.scalar(select(BackupRun.id).where(BackupRun.status == "running", BackupRun.started_at > utcnow() - STALE)):
         raise Conflict("A backup is being made right now. It shows below when it's done.")
+    if _pending_restore(db):
+        raise Conflict("A restore is on its way. Back up again once it's done.")
     if s.requested_at is None:
         s.requested_at, s.requested_by = utcnow(), user_id
         AuditService(db).record(None, user_id, "backups.requested", "backup_settings", 1, {})
@@ -121,7 +150,7 @@ def start(db: Session, now: datetime | None = None, force: bool = False) -> tupl
     for stuck in db.scalars(select(BackupRun).where(BackupRun.status == "running", BackupRun.started_at <= now - STALE)):
         stuck.status, stuck.finished_at, stuck.message = "failed", now, "Stopped without finishing (the server may have restarted)."
     db.flush()
-    if db.scalar(select(BackupRun.id).where(BackupRun.status == "running")):
+    if db.scalar(select(BackupRun.id).where(BackupRun.status == "running")) or (not force and _pending_restore(db)):
         return None
     if force or s.requested_at is not None:
         run = BackupRun(trigger="manual", requested_by=s.requested_by, started_at=now)
@@ -142,4 +171,104 @@ def finish(db: Session, run_id: uuid.UUID, ok: bool, file: str = "", size_bytes:
         raise SystemExit(f"No backup run {run_id}.")
     run.status, run.finished_at = ("ok" if ok else "failed"), utcnow()
     run.file, run.size_bytes, run.message = file[:200], size_bytes, message[:500]
+    db.flush()
+
+
+# ---- restoring a backup ----
+
+def request_restore(db: Session, user_id: uuid.UUID, run_id: uuid.UUID) -> dict:
+    """Ask for the database to be put back to this backup. The server starts it within a minute."""
+    _row(db, lock=True)
+    source = db.get(BackupRun, run_id)
+    if source is None or source.trigger == RESTORE:
+        raise NotFound("There's no such backup.")
+    if file_for(source, "dump") is None:
+        raise Invalid("This backup's file isn't on the server any more, so it can't be restored.")
+    if _pending_restore(db):
+        raise Conflict("A restore is already on its way.")
+    if db.scalar(select(BackupRun.id).where(BackupRun.status == "running", BackupRun.started_at > utcnow() - STALE)):
+        raise Conflict("A backup is being made right now. Restore once it's done.")
+    when = f"{source.started_at.astimezone(_tz()):%d %b %Y, %I:%M %p}"
+    db.add(BackupRun(trigger=RESTORE, status=REQUESTED, requested_by=user_id, started_at=utcnow(), file=source.file,
+                     message=f"Back to the backup of {when}"))
+    AuditService(db).record(None, user_id, "backups.restore_requested", "backup_runs", source.id, {"file": source.file})
+    db.flush()
+    return overview(db)
+
+
+def cancel_restore(db: Session, user_id: uuid.UUID) -> dict:
+    _row(db, lock=True)
+    pending = _pending_restore(db)
+    if pending is None:
+        raise Conflict("There's no restore waiting.")
+    if pending.status != REQUESTED:
+        raise Conflict("The restore has started and can't be stopped now.")
+    AuditService(db).record(None, user_id, "backups.restore_cancelled", "backup_runs", pending.id, {"file": pending.file})
+    db.delete(pending)
+    db.flush()
+    return overview(db)
+
+
+def restore_start(db: Session, file: str | None = None) -> BackupRun | None:
+    """(deploy/restore.sh) The restore to carry out now: the one asked for in the app, or (file) one run by hand."""
+    _row(db, lock=True)
+    if file:
+        run = BackupRun(trigger=RESTORE, status="running", started_at=utcnow(), file=file[:200], message="Run by hand on the server")
+        db.add(run)
+    else:
+        run = db.scalar(select(BackupRun).where(BackupRun.trigger == RESTORE, BackupRun.status == REQUESTED))
+        if run is None:
+            return None
+        run.status, run.started_at = "running", utcnow()
+    db.flush()
+    return run
+
+
+def record(db: Session, file: str, size_bytes: int, message: str) -> None:
+    """(deploy/restore.sh) A backup the script made itself: the data as it was just before a restore."""
+    now = utcnow()
+    db.add(BackupRun(trigger="manual", started_at=now, finished_at=now, status="ok", file=file[:200], size_bytes=size_bytes,
+                     message=message[:500]))
+    db.flush()
+
+
+# The backup history isn't put back with the data: it's saved before the restore and loaded again after it.
+_UUIDS = {"id", "requested_by"}
+_TIMES = {"started_at", "finished_at", "scheduled_for", "next_run_at", "requested_at", "updated_at"}
+
+
+def _rows(db: Session, model) -> list[dict]:
+    cols = [c.name for c in model.__table__.columns]
+    return [{c: getattr(r, c) for c in cols} for r in db.scalars(select(model))]
+
+
+def history_save(db: Session) -> dict:
+    return {"settings": _rows(db, BackupSettings), "runs": _rows(db, BackupRun)}
+
+
+def history_load(db: Session, saved: dict) -> None:
+    """After a restore: the backup history as it was just before it. Everyone signs in again (the sessions in the
+    copy are old ones, including some signed out since)."""
+    users = set(db.scalars(select(User.id)))
+
+    def typed(row: dict) -> dict:
+        out = {}
+        for k, v in row.items():
+            if isinstance(v, str) and k in _UUIDS:
+                v = uuid.UUID(v)
+            elif isinstance(v, str) and k in _TIMES:
+                v = datetime.fromisoformat(v)
+            out[k] = v
+        if "requested_by" in out and out["requested_by"] not in users:
+            out["requested_by"] = None
+        return out
+
+    db.execute(delete(BackupRun))
+    db.execute(delete(BackupSettings))
+    db.flush()
+    for r in saved["settings"]:
+        db.add(BackupSettings(**typed(r)))
+    for r in saved["runs"]:
+        db.add(BackupRun(**typed(r)))
+    db.execute(delete(UserSession))
     db.flush()

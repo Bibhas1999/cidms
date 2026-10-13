@@ -138,3 +138,17 @@ def test_an_ended_session_returns_to_sign_in(page, alpha, live_server):
     page.wait_for_url("**/login?next=%2Fbills")
     cookie_js = page.evaluate("document.cookie")
     assert "sdms_session" not in cookie_js  # HttpOnly: never visible to scripts
+
+
+def test_the_dashboard_asks_the_server_once(page, alpha, live_server):
+    """Nothing on the dashboard (or the session behind it) asks the server again and again (the top loader flickered)."""
+    make_user(alpha, "owner@alpha.in", ["owner"])
+    page.goto(f"http://alpha.{live_server}/login")
+    page.get_by_label("Email").fill("owner@alpha.in")
+    page.get_by_label("Password", exact=True).fill("Test-password-1")
+    page.get_by_role("button", name="Sign in").click()
+    page.wait_for_url(f"http://alpha.{live_server}/")
+    asked: dict[str, int] = {}
+    page.on("request", lambda r: asked.update({r.url.split("?")[0]: asked.get(r.url.split("?")[0], 0) + 1}))
+    page.wait_for_timeout(3000)
+    assert all(n <= 1 for n in asked.values()), asked
