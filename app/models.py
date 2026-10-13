@@ -667,6 +667,38 @@ class BackupSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
 
 
+class ClientBackupSettings(Base):
+    """When a client's own data is copied (one row per client), set by the centre's owner in Settings > Backups."""
+    __tablename__ = "client_backup_settings"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    every_days: Mapped[int] = mapped_column(Integer, default=1)
+    at_time: Mapped[str] = mapped_column(String(5), default="23:30")     # HH:MM, India time
+    keep_days: Mapped[int] = mapped_column(Integer, default=30)          # 0: forever
+    next_run_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+
+class ClientBackup(Base):
+    """One copy of a client's data (or one restore of a copy): when, why, how it went, and what it held."""
+    __tablename__ = "client_backups"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    trigger: Mapped[str] = mapped_column(String(10))                     # scheduled | manual | restore
+    status: Mapped[str] = mapped_column(String(10), default="running")   # running | ok | failed
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    requested_by_name: Mapped[str] = mapped_column(String(200), default="")
+    source_id: Mapped[uuid.UUID | None] = mapped_column(Id)              # a restore: the copy it put back
+    scheduled_for: Mapped[datetime | None] = mapped_column(Timestamp)
+    started_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    file: Mapped[str] = mapped_column(String(200), default="")
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    schema_version: Mapped[str] = mapped_column(String(64), default="")
+    counts: Mapped[dict] = mapped_column(JSONB, default=dict)
+    message: Mapped[str] = mapped_column(String(500), default="")
+
+
 class BackupRun(Base):
     """One backup: when, why (scheduled or asked for), and how it went. Platform only."""
     __tablename__ = "backup_runs"

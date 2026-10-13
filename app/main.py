@@ -156,6 +156,8 @@ def create_app() -> FastAPI:
     for module in (system, auth, staff, centre, billing, platform, reports, analytics):
         app.include_router(module.router)
     app.include_router(test_reports.router)
+    from app.api.client_backups import router as client_backups_router  # Settings > Backups, per centre
+    app.include_router(client_backups_router)
     from app.api.roles import router as roles_router  # Settings > Roles & permissions
     app.include_router(roles_router)
     from app.api.integrations import install as install_integrations  # API keys, and the integration API at /api/v1

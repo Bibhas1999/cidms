@@ -60,7 +60,7 @@ export const exactTime = (iso: string): string =>
 /** Show a browser pop-up (service worker if registered, else a page Notification). Clicking opens `link`. */
 export async function showPopup(title: string, body: string, link = "", tag = ""): Promise<boolean> {
   if (!popupsSupported() || Notification.permission !== "granted") return false;
-  const options: NotificationOptions = { body, tag: tag || undefined, icon: "/icons/icon-192.png", badge: "/icons/favicon.png", data: { link } };
+  const options: NotificationOptions = { body, tag: tag || undefined, icon: "/icons/icon-192-v2.png", badge: "/icons/favicon.png", data: { link } };
   try {
     const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
     if (reg) { await reg.showNotification(title, options); return true; }

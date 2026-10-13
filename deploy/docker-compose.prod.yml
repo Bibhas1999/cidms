@@ -53,6 +53,8 @@ services:
     image: supreme-dms:latest
     env_file: [../.env.production]
     command: ["python", "-m", "app.worker", "--concurrency", "2"]
+    volumes:
+      - app-storage:/srv/storage   # each centre's backups (written here, downloaded through the app)
     depends_on:
       migrate: { condition: service_completed_successfully }
     stop_signal: SIGTERM

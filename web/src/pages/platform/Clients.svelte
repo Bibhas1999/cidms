@@ -2,6 +2,7 @@
   import { z } from "zod";
   import Button from "../../components/Button.svelte";
   import DataTable from "../../components/DataTable.svelte";
+  import ClientBackupsPanel from "../../components/ClientBackupsPanel.svelte";
   import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
   import FilterBar from "../../components/FilterBar.svelte";
@@ -25,6 +26,9 @@
   const search = $derived(router.query.get("search") ?? "");
   const status = $derived(router.query.get("status") ?? "");
   const canManage = $derived(session.can("platform.clients.manage"));
+  const canBackups = $derived(session.can("platform.backups.manage"));
+  let backupsOf = $state<Client | null>(null);
+  let backupsOpen = $state(false);
 
   let data = $state<Page<Client> | null>(null);
   let plans = $state<Plan[]>([]);
@@ -133,6 +137,8 @@
           ? { label: "Suspend", icon: "lock", tone: "danger" as const, onclick: () => setStatus(c, "suspended"), hint: "Signs everyone there out" }
           : { label: "Reactivate", icon: "check", onclick: () => setStatus(c, "active") },
       ] : []),
+      ...(canBackups ? [{ label: "Backups", icon: "download", onclick: () => { backupsOf = c; backupsOpen = true; },
+                          hint: "Their own copies: download or restore" }] : []),
     ];
   }
 </script>
@@ -219,4 +225,11 @@
     <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
     <Button variant="primary" type="submit" form="client-form" loading={form.submitting} loadingText={editing ? "Saving…" : "Adding…"}>{editing ? "Save changes" : "Add client"}</Button>
   {/snippet}
+</Dialog>
+
+<Dialog bind:open={backupsOpen} title={backupsOf ? `Backups · ${backupsOf.name}` : "Backups"} icon="download" tone="info" wide
+        onclose={() => (backupsOf = null)}>
+  {#if backupsOf}
+    <div class="stack-lg"><ClientBackupsPanel base="/api/platform/clients/{backupsOf.id}/backups" schedule={false} who={backupsOf.name} /></div>
+  {/if}
 </Dialog>
