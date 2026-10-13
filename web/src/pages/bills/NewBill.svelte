@@ -430,10 +430,14 @@
             <Button variant="ghost" size="sm" onclick={() => { doctor = null; doctorText = ""; }}>Change</Button>
           </div>
         {:else}
-          <Combobox id="doctor" label="Find a doctor" placeholder="Search by name… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
+          <Combobox id="doctor" label="Find a doctor" placeholder="Name, degree or mobile… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
                     bind:value={doctorText} onpick={(d) => { doctor = d; doctorText = d.name; }}
                     emptyText="Not in your list yet. Press New doctor to add them.">
-            {#snippet option(d)}<span class="font-semibold">{d.name}</span>{#if d.qualification} <span class="text-xs text-muted">{d.qualification}</span>{/if}{/snippet}
+            {#snippet option(d)}
+              <div class="row-between"><span class="font-semibold">{d.name}</span>
+                <span class="text-sm text-muted tabular">{formatPhone(d.phone) || "—"}</span></div>
+              {#if d.qualification}<div class="text-xs text-muted">{d.qualification}</div>{/if}
+            {/snippet}
           </Combobox>
           <div class="row-wrap">
             <Button size="sm" icon="plus" onclick={startNewDoctor}>New doctor</Button>
