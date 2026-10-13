@@ -87,7 +87,7 @@
   // A doctor not in the list yet: add them in a dialog (saved to the list at once) and they're chosen for this bill.
   let addingDoctor = $state(false);
   const doctorForm = new Form({
-    schema: z.object({ name: text("Enter the doctor's name.", 200, 2), qualification: optionalText(200), phone: phone(false) }),
+    schema: z.object({ name: text("Enter the doctor's or hospital's name.", 200, 2), qualification: optionalText(200), phone: phone(false) }),
     initial: { name: "", qualification: "", phone: "" },
     onSubmit: async (v) => {
       try {
@@ -95,9 +95,9 @@
         doctor = d;
         doctorText = d.name;
         addingDoctor = false;
-        notify(`${d.name} is added to your doctors and chosen for this bill.`);
+        notify(`${d.name} is added to your doctors and hospitals and chosen for this bill.`);
       } catch (e) {
-        if (e instanceof ApiError && e.status === 409) { doctorForm.errors = { name: "This doctor is already in your list: search for them instead." }; return; }
+        if (e instanceof ApiError && e.status === 409) { doctorForm.errors = { name: "This name is already in your list: search for it instead." }; return; }
         throw e;
       }
     },
@@ -417,22 +417,22 @@
 
     <section class="card" aria-labelledby="d-title">
       <div class="card-header"><div><h2 class="card-title" id="d-title">Referred by
-        <InfoTip about="Referred by" text="The doctor who sent the patient. It prints on the bill as Consultant, and the referral reports count bills by doctor. Leave it empty when the patient came on their own (Self)." /></h2>
-        <p class="card-description">Choose a doctor from your list, add a new one, or leave it as self.</p></div></div>
+        <InfoTip about="Referred by" text="The doctor or hospital that sent the patient. It prints on the bill as Consultant, and the referral reports count bills by referrer. Leave it empty when the patient came on their own (Self)." /></h2>
+        <p class="card-description">Choose a doctor or hospital from your list, add a new one, or leave it as self.</p></div></div>
       <div class="card-content stack">
         {#if doctor && doctor.name === doctorText}
           <div class="picked">
             <span class="avatar" aria-hidden="true"><Icon name="stethoscope" size="sm" /></span>
             <div class="grow">
               <div class="font-semibold">{doctor.name}</div>
-              <div class="text-sm text-muted">{[doctor.qualification, formatPhone(doctor.phone)].filter(Boolean).join(" · ") || "Referring doctor"}</div>
+              <div class="text-sm text-muted">{[doctor.qualification, formatPhone(doctor.phone)].filter(Boolean).join(" · ") || "Referred by"}</div>
             </div>
             <Button variant="ghost" size="sm" onclick={() => { doctor = null; doctorText = ""; }}>Change</Button>
           </div>
         {:else}
-          <Combobox id="doctor" label="Find a doctor" placeholder="Name, degree or mobile… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
+          <Combobox id="doctor" label="Find a doctor or hospital" placeholder="Name, degree or phone… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
                     bind:value={doctorText} onpick={(d) => { doctor = d; doctorText = d.name; }}
-                    emptyText="Not in your list yet. Press New doctor to add them.">
+                    emptyText="Not in your list yet. Press New doctor / hospital to add them.">
             {#snippet option(d)}
               <div class="row-between"><span class="font-semibold">{d.name}</span>
                 <span class="text-sm text-muted tabular">{formatPhone(d.phone) || "—"}</span></div>
@@ -440,8 +440,8 @@
             {/snippet}
           </Combobox>
           <div class="row-wrap">
-            <Button size="sm" icon="plus" onclick={startNewDoctor}>New doctor</Button>
-            {#if doctorText}<Button variant="ghost" size="sm" onclick={() => { doctorText = ""; doctor = null; }} tooltip="No referring doctor: the patient came on their own">Self</Button>{/if}
+            <Button size="sm" icon="plus" onclick={startNewDoctor}>New doctor / hospital</Button>
+            {#if doctorText}<Button variant="ghost" size="sm" onclick={() => { doctorText = ""; doctor = null; }} tooltip="No referring doctor or hospital: the patient came on their own">Self</Button>{/if}
           </div>
         {/if}
       </div>
@@ -544,15 +544,15 @@
 </div>
 <div class="savebar-space" aria-hidden="true"></div>
 
-<Dialog bind:open={addingDoctor} title="Add a referring doctor" icon="stethoscope" tone="info"
-        description="They're added to your list of doctors and chosen for this bill.">
-  <form id="doctor-form" class="stack" onsubmit={submitting(doctorForm, "Couldn't add the doctor")} novalidate>
+<Dialog bind:open={addingDoctor} title="Add a referring doctor or hospital" icon="stethoscope" tone="info"
+        description="Added to your list of doctors and hospitals and chosen for this bill.">
+  <form id="doctor-form" class="stack" onsubmit={submitting(doctorForm, "Couldn't add it")} novalidate>
     <FormErrors form={doctorForm} labels={{ name: "Name", qualification: "Qualification", phone: "Phone" }} idPrefix="nd-" />
-    <Field id="nd-name" label="Doctor's name" required error={doctorForm.error("name")} tip="As it should print on the bill, e.g. Dr. Kakali Sarkar.">
-      {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" autocomplete="off" placeholder="e.g. Dr. Kakali Sarkar" bind:value={doctorForm.values.name} {...doctorForm.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+    <Field id="nd-name" label="Doctor or hospital name" required error={doctorForm.error("name")} tip="As it should print on the bill, e.g. Dr. Kakali Sarkar or City Nursing Home.">
+      {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" autocomplete="off" placeholder="e.g. Dr. Kakali Sarkar or City Nursing Home" bind:value={doctorForm.values.name} {...doctorForm.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
     </Field>
     <div class="form-grid">
-      <Field id="nd-qualification" label="Qualification" optional error={doctorForm.error("qualification")}>
+      <Field id="nd-qualification" label="Qualification" optional tip="For a doctor, e.g. MBBS, MD. Leave empty for a hospital." error={doctorForm.error("qualification")}>
         {#snippet children({ invalid, describedby })}<input id="nd-qualification" class="input" placeholder="e.g. MBBS, MD" bind:value={doctorForm.values.qualification} {...doctorForm.field("qualification")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
       </Field>
       <Field id="nd-phone" label="Phone" optional error={doctorForm.error("phone")}>
@@ -565,7 +565,7 @@
   </form>
   {#snippet footer()}
     <Button onclick={() => (addingDoctor = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="doctor-form" icon="check" loading={doctorForm.submitting} loadingText="Adding…">Add doctor</Button>
+    <Button variant="primary" type="submit" form="doctor-form" icon="check" loading={doctorForm.submitting} loadingText="Adding…">Add</Button>
   {/snippet}
 </Dialog>
 

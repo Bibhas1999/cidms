@@ -64,7 +64,7 @@
     { path: "/reports", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/reports/:name", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/tests", component: Tests, title: "Tests & prices", ...CLIENT_ONLY },
-    { path: "/doctors", component: Doctors, title: "Referring doctors", ...CLIENT_ONLY },
+    { path: "/doctors", component: Doctors, title: "Doctors & hospitals", ...CLIENT_ONLY },
     { path: "/settings", component: SettingsHub, title: "Settings" },
     { path: "/settings/:section", component: SettingsHub, title: "Settings" },
     { path: "/staff", component: SettingsHub, title: "Settings" },
