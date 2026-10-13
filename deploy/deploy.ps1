@@ -31,7 +31,7 @@ if ($FirstTime) {
 }
 
 Write-Host "== unpacking"
-Remote "mkdir -p /opt/supreme-dms && cd /opt/supreme-dms && tar -xzf /tmp/supreme-dms.tgz && mv /tmp/.env.production .env.production && chmod 600 .env.production && chmod +x deploy/*.sh && rm /tmp/supreme-dms.tgz"
+Remote "mkdir -p /opt/supreme-dms && cd /opt/supreme-dms && rm -rf app migrations web deploy docker tests && tar -xzf /tmp/supreme-dms.tgz && mv /tmp/.env.production .env.production && chmod 600 .env.production && chmod +x deploy/*.sh && rm /tmp/supreme-dms.tgz"
 $compose = "cd /opt/supreme-dms && sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env.production"
 
 if ($MoveData) {
