@@ -18,7 +18,7 @@ from app.models import BackupRun, BackupSettings, utcnow
 from app.services.audit import AuditService
 
 CYCLES = {1: "Every day", 2: "Every 2 days", 3: "Every 3 days", 7: "Every week", 14: "Every 2 weeks", 30: "Every month"}
-KEEP = {7: "1 week", 14: "2 weeks", 30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months", 365: "1 year"}
+KEEP = {7: "1 week", 14: "2 weeks", 30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months", 365: "1 year", 0: "Forever"}  # 0: never deleted
 STALE = timedelta(hours=3)   # a run still "running" this long was cut off (the server restarted mid-backup)
 
 
@@ -73,7 +73,7 @@ def overview(db: Session) -> dict:
         "timezone": get_settings().display_timezone,
         "runs": [{"id": r.id, "trigger": r.trigger, "scheduled_for": r.scheduled_for, "started_at": r.started_at,
                   "finished_at": r.finished_at, "status": r.status, "file": r.file.rsplit("/", 1)[-1], "size_bytes": r.size_bytes,
-                  "message": r.message, "kept": r.status == "ok" and r.started_at >= now - timedelta(days=s.keep_days)}
+                  "message": r.message, "kept": r.status == "ok" and (s.keep_days == 0 or r.started_at >= now - timedelta(days=s.keep_days))}
                  for r in runs],
     }
 

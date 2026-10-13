@@ -52,6 +52,9 @@ def test_owner_sets_the_schedule_and_asks_for_a_backup_now():
     assert r.json()["settings"]["every_days"] == 7 and r.json()["settings"]["next_run_at"]
     assert c.put("/api/platform/backups", json={"enabled": True, "every_days": 5, "at_time": "21:30", "keep_days": 90}).status_code == 422
     assert c.put("/api/platform/backups", json={"enabled": True, "every_days": 1, "at_time": "25:00", "keep_days": 30}).status_code == 422
+    forever = c.put("/api/platform/backups", json={"enabled": True, "every_days": 7, "at_time": "21:30", "keep_days": 0})
+    assert forever.status_code == 200 and forever.json()["settings"]["keep_days"] == 0, forever.text
+    assert c.put("/api/platform/backups", json={"enabled": True, "every_days": 7, "at_time": "21:30", "keep_days": 45}).status_code == 422
     assert c.post("/api/platform/backups/run").json()["settings"]["requested_at"]
     with scoped_session(platform=True) as db, db.begin():
         run, _ = backups.start(db, now=datetime.now(UTC))

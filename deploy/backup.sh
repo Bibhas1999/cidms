@@ -32,7 +32,8 @@ size=$(stat -c %s "$file")
 dc exec -T app python -m app.manage backup-finish "$run_id" ok --file "$file" --bytes "$size"
 echo "$(date '+%F %T') backup ok: $file ($(du -h "$file" | cut -f1))"
 
-find backups -name 'supreme-*.dump' -mtime +"$KEEP_DAYS" -delete
+# 0 days: keep every copy ("Forever" in the app).
+[ "$KEEP_DAYS" -gt 0 ] && find backups -name 'supreme-*.dump' -mtime +"$KEEP_DAYS" -delete
 if [ -n "$RCLONE_REMOTE" ] && command -v rclone >/dev/null; then
   rclone copy "$file" "$RCLONE_REMOTE" && echo "copied off the server to $RCLONE_REMOTE"
 fi

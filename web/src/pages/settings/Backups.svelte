@@ -102,7 +102,7 @@
           <input id="bk_time" class="input" type="time" step="300" bind:value={values.at_time} disabled={!values.enabled} aria-describedby={describedby} required />
         {/snippet}
       </Field>
-      <Field id="bk_keep" label="Keep copies for" tip="Older copies are deleted after each backup, so the server's disk doesn't fill up.">
+      <Field id="bk_keep" label="Keep copies for" tip="Older copies are deleted after each backup, so the server's disk doesn't fill up. Forever: none are deleted.">
         {#snippet children({ describedby })}
           <select id="bk_keep" class="select" bind:value={values.keep_days} aria-describedby={describedby}>
             {#each data?.keep_options ?? [] as k (k.days)}<option value={k.days}>{k.label}</option>{/each}
@@ -111,7 +111,7 @@
       </Field>
     </div>
     {#if values.enabled && data}
-      <p class="text-sm text-muted">The database will be backed up {cycleLabel} at {values.at_time}, and each copy kept for {data.keep_options.find((k) => k.days === values.keep_days)?.label}.</p>
+      <p class="text-sm text-muted">The database will be backed up {cycleLabel} at {values.at_time}, {values.keep_days === 0 ? "and every copy kept (none deleted; keep an eye on the server's disk)" : `and each copy kept for ${data.keep_options.find((k) => k.days === values.keep_days)?.label}`}.</p>
     {/if}
   </div>
   <div class="card-footer actions">
