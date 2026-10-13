@@ -232,6 +232,17 @@ class ClientErrorIn(BaseModel):
     kind: Literal["boundary", "error", "unhandledrejection", "api"] = "error"
 
 
+class BackupRestoreIn(BaseModel):
+    confirm: str = Field(max_length=20)
+
+    @field_validator("confirm")
+    @classmethod
+    def _typed(cls, v: str) -> str:
+        if v.strip() != "RESTORE":
+            raise ValueError("Type RESTORE in capitals to confirm.")
+        return v
+
+
 class BackupSettingsIn(BaseModel):
     enabled: bool = True
     every_days: int = Field(1, ge=1, le=365)
