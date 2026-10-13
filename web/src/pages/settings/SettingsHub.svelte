@@ -9,6 +9,7 @@
   import Appearance from "./Appearance.svelte";
   import ApiKeys from "./ApiKeys.svelte";
   import Backups from "./Backups.svelte";
+  import CentreBackups from "./CentreBackups.svelte";
   import Centre from "./Centre.svelte";
   import NotificationSettings from "./NotificationSettings.svelte";
   import Password from "./Password.svelte";
@@ -33,6 +34,8 @@
       show: () => session.can(session.isPlatform ? "platform.activity.view" : "activity.view") },
     { id: "backups", label: "Backups", icon: "download", group: "Platform", component: Backups,
       show: () => session.isPlatform && session.can("platform.backups.manage") },
+    { id: "centre-backups", label: "Backups", icon: "download", group: "Centre", component: CentreBackups,
+      show: () => !session.isPlatform && session.can("backups.manage") },
     { id: "integrations", label: "API & integrations", icon: "settings", group: "Centre", component: ApiKeys,
       show: () => !session.isPlatform && session.can("integrations.manage") },
   ];

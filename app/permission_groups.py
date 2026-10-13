@@ -38,6 +38,7 @@ GROUPS: dict[str, tuple[str, str, dict[str, str]]] = {
         "settings.manage": "Centre settings",
         "activity.view": "Activity log",
         "account.manage_own": "Change own sign-in details",
+        "backups.manage": "Backups and restore",
     }),
     "business": ("Business & analytics", "Turnover, collections and dues", {
         "business_reports.view": "Business reports",

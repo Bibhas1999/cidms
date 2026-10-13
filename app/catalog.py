@@ -30,6 +30,7 @@ CLIENT_PERMISSIONS = {
     "analytics.view": "See turnover, analytics and business figures",
     "account.manage_own": "Change their own sign-in email and password",
     "integrations.manage": "Create and revoke API keys for other systems (never financial data)",
+    "backups.manage": "Back up the centre's data, download copies and restore one",
 }
 
 ALL_CLIENT = set(CLIENT_PERMISSIONS)
@@ -41,7 +42,8 @@ ROLES: dict[str, tuple[str, str, str, set[str]]] = {
     "platform_owner": ("Platform owner", "platform", "Everything on the platform", set(PLATFORM_PERMISSIONS)),
     "platform_support": ("Platform support", "platform", "View clients and help them", {"platform.clients.view", "platform.activity.view"}),
     "owner": ("Owner", "client", "Everything in the centre", ALL_CLIENT),
-    "admin": ("Centre admin", "client", "Runs the centre day to day", ALL_CLIENT),
+    # Restoring puts every record back to an earlier moment: the owner's call, not the day-to-day admin's.
+    "admin": ("Centre admin", "client", "Runs the centre day to day", ALL_CLIENT - {"backups.manage"}),
     "receptionist": ("Receptionist", "client", "Patients, bills, payments and appointments",
                      {"patients.manage", "billing.create", "payments.collect", "appointments.manage", "reports.deliver"}),
     "technician": ("Technician", "client", "Worklist and images", {"worklist.update", "reports.deliver"}),
