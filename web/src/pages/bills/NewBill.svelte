@@ -21,7 +21,7 @@
   import { rupees } from "../../lib/format";
   import { formatPhone, splitPhone } from "../../lib/phone";
   import { navigate, router, setBeforeLeave } from "../../lib/router.svelte";
-  import { optionalText, phone, submitting, text, wholeNumber } from "../../lib/schemas";
+  import { optionalPersonName, optionalText, personName, phone, referrerName, submitting, wholeNumber } from "../../lib/schemas";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
   import { GENDER_LABELS, type CentreSettings, type Page } from "../../lib/types";
@@ -37,11 +37,11 @@
   let family = $state<Patient[]>([]);
 
   const patientSchema = z.object({
-    name: text("Enter the patient's name.", 200, 2),
+    name: personName("Enter the patient's name."),
     mobile: phone(false),
     age_years: wholeNumber({ min: 0, max: 130, required: "Enter the age in years.", label: "the age in years" }),
     gender: z.string().refine((v) => v in GENDER_LABELS, "Choose the gender."),
-    guardian_name: optionalText(200),
+    guardian_name: optionalPersonName(200, "The guardian's name"),
     address: optionalText(500),
   });
   const patientLabels = { name: "Full name", mobile: "Mobile", age_years: "Age", gender: "Gender", guardian_name: "Guardian", address: "Address" };
@@ -87,7 +87,7 @@
   // A doctor not in the list yet: add them in a dialog (saved to the list at once) and they're chosen for this bill.
   let addingDoctor = $state(false);
   const doctorForm = new Form({
-    schema: z.object({ name: text("Enter the doctor's or hospital's name.", 200, 2), qualification: optionalText(200), phone: phone(false) }),
+    schema: z.object({ name: referrerName("Enter the doctor's or hospital's name."), qualification: optionalText(200), phone: phone(false) }),
     initial: { name: "", qualification: "", phone: "" },
     onSubmit: async (v) => {
       try {

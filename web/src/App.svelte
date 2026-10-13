@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
+  import { untrack } from "svelte";
   import AppShell from "./components/AppShell.svelte";
   import ConfirmHost from "./components/ConfirmHost.svelte";
   import ErrorFallback from "./components/ErrorFallback.svelte";
@@ -102,8 +103,9 @@
 
   let startError = $state("");
 
+  // Once, when the app opens (untracked: nothing read while loading may start it again).
   $effect(() => {
-    session.load().catch((e) => {
+    untrack(() => session.load()).catch((e) => {
       startError = e?.message ?? "CIDMS couldn't start.";
       reportError("error", e);
     });

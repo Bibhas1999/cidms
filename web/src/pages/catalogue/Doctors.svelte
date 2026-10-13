@@ -14,7 +14,7 @@
   import { Form } from "../../lib/form.svelte";
   import { formatPhone } from "../../lib/phone";
   import { router, setQuery } from "../../lib/router.svelte";
-  import { optionalText, phone, submitting, text } from "../../lib/schemas";
+  import { optionalText, phone, referrerName, submitting } from "../../lib/schemas";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
   import type { Doctor, Page } from "../../lib/types";
@@ -44,7 +44,7 @@
 
   // ---------- add / edit ----------
   const schema = z.object({
-    name: text("Enter the doctor's or hospital's name.", 200, 2),
+    name: referrerName("Enter the doctor's or hospital's name."),
     qualification: optionalText(200),
     phone: phone(false),
     is_active: z.boolean(),
