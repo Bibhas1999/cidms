@@ -57,6 +57,27 @@ Both accounts are asked to choose a new password at first sign-in. Edge and Chro
 address to this machine, so nothing else needs setting up. To use only FastAPI, run `cd web && npm run build`
 and open port 8000 instead.
 
+## Dependencies
+
+Exact versions are locked. Add or change a package in `requirements.in` (the app) or `requirements-dev.in` (tests
+and tools), then regenerate the locks inside Linux, as the server runs it:
+
+```sh
+docker run --rm -v "$PWD:/src" -w /src python:3.11-slim sh -c "pip install pip-tools==7.6.2 &&   pip-compile --generate-hashes --allow-unsafe --strip-extras -o requirements.txt requirements.in &&   pip-compile --allow-unsafe --strip-extras -c requirements.txt -o requirements-dev.txt requirements-dev.in"
+```
+
+uvloop doesn't exist for Windows: after regenerating, add ` ; sys_platform != "win32"` to its line in both files
+(right after the version), so local installs on Windows keep working.
+
+`requirements.txt` carries checksums (the Docker image installs with `--require-hashes`); `requirements-dev.txt`
+has the same versions without them, so it also installs on Windows. Docker images are pinned by digest in
+`Dockerfile`, `docker-compose.yml` and `deploy/docker-compose.prod.yml`. CI runs `pip-audit` and `npm audit`.
+
+## Rolling back
+
+Each deploy is kept on the server as `supreme-dms:<commit>` (the last five). `sudo deploy/rollback.sh` on the server
+goes back to the previous one; the database stays as it is.
+
 ## Checks
 
 ```sh
