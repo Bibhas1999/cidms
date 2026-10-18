@@ -4,7 +4,8 @@
   import Icon from "../../components/Icon.svelte";
   import InfoTip from "../../components/InfoTip.svelte";
   import RowMenu, { type RowAction } from "../../components/RowMenu.svelte";
-  import { api, get, post, put } from "../../lib/api";
+  import { ApiError, api, get, post, put } from "../../lib/api";
+  import PasswordInput from "../../components/PasswordInput.svelte";
   import { dateTime } from "../../lib/format";
   import { notify, notifyError } from "../../lib/toast.svelte";
 
@@ -74,6 +75,8 @@
   let restoring = $state<Run | null>(null);
   let restoreOpen = $state(false);
   let typed = $state("");
+  let password = $state("");
+  let passwordError = $state("");
   let restoreError = $state("");
   let sending = $state(false);
 
@@ -87,7 +90,7 @@
         hint: r.sql ? "Plain SQL, to read or load anywhere" : r.dump ? "Backups from before 13 Oct 2026 have only the .dump" : gone },
       { label: "Restore…", icon: "refresh", tone: "danger", disabled: !r.dump || !!data?.restore,
         hint: !r.dump ? gone : data?.restore ? "A restore is already on its way" : "Put the whole database back to this backup",
-        onclick: () => { restoring = r; typed = ""; restoreError = ""; restoreOpen = true; } },
+        onclick: () => { restoring = r; typed = ""; password = ""; passwordError = ""; restoreError = ""; restoreOpen = true; } },
     ];
   }
 
@@ -97,11 +100,12 @@
     if (typed.trim() !== "RESTORE") { restoreError = "Type RESTORE in capitals to confirm."; return; }
     sending = true;
     try {
-      load(await post<Overview>(`/api/platform/backups/${restoring.id}/restore`, { confirm: typed.trim() }));
+      load(await post<Overview>(`/api/platform/backups/${restoring.id}/restore`, { confirm: typed.trim(), password }));
       restoreOpen = false;
       notify("The restore starts within a minute. You can still call it off until then.", { kind: "info", title: "Restore on its way" });
     } catch (err) {
-      notifyError(err, { title: "Couldn't ask for the restore" });
+      if (err instanceof ApiError && err.field === "password") passwordError = err.message;
+      else notifyError(err, { title: "Couldn't ask for the restore" });
     } finally {
       sending = false;
     }
@@ -232,10 +236,15 @@
                oninput={() => (restoreError = "")} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
     </Field>
+    <Field id="restore-password" label="Your password" required error={passwordError} hint="The one you sign in with: restoring is never one click away.">
+      {#snippet children({ invalid, describedby })}
+        <PasswordInput id="restore-password" autocomplete="current-password" bind:value={password} oninput={() => (passwordError = "")} aria-invalid={invalid} aria-describedby={describedby} />
+      {/snippet}
+    </Field>
   </form>
   {#snippet footer()}
     <button type="button" class="btn btn-outline" onclick={() => (restoreOpen = false)}>Cancel</button>
-    <button type="submit" form="restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE"}>
+    <button type="submit" form="restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE" || !password}>
       {sending ? "Asking…" : "Restore"}
     </button>
   {/snippet}

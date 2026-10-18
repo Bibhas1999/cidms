@@ -174,6 +174,17 @@ def get_user_allowing_password_change(request: Request, db: Session = DB) -> Cur
     return _signed_in(request, db, allow_password_change=True)
 
 
+def confirm_identity(current: CurrentUser, password: str) -> None:
+    """Ask for the person's own password again before something that can't be taken back (restoring a backup).
+    Wrong answers count against the sign-in limit for that person."""
+    from app.core.limits import login_limiter
+    from app.core.passwords import verify_password
+    ok, _ = verify_password(password or "", current.user.password_hash)
+    if not ok:
+        login_limiter.hit(f"confirm:{current.user.id}")
+        raise Forbidden("That password isn't right. Enter the password you sign in with.", "password")
+
+
 def require(permission: str):
     """Dependency factory: signed in and holding the permission."""
     def dep(current: CurrentUser = Depends(get_current_user)) -> CurrentUser:
