@@ -11,7 +11,7 @@
   let { path, query = {}, kind = "report", label = "Export", disabled = false, workbook }: {
     path: string; query?: Query; kind?: "bills" | "report"; label?: string; disabled?: boolean;
     /** Also offer one Excel file with every sheet (e.g. /api/reports/workbook.xlsx with the same dates). */
-    workbook?: { path: string; query?: Query; about?: string };
+    workbook?: { path: string; query?: Query; about?: string; label?: string };
   } = $props();
 
   // The server includes at most this many rows in a file (it says so in the file's subtitle when it stops).
@@ -119,7 +119,7 @@
         <div class="export-sep" role="separator"></div>
         <button role="menuitem" type="button" class="export-item" aria-describedby="{uid}-book" onclick={() => download("book")}>
           <Icon name="layers" size="sm" />
-          <span><span class="export-label">Whole workbook (.xlsx)</span>
+          <span><span class="export-label">{workbook.label ?? "Whole workbook (.xlsx)"}</span>
             <span class="export-about" id="{uid}-book">{workbook.about ?? "One Excel file with every sheet, each on its own tab, for the same dates."}</span></span>
         </button>
       {/if}

@@ -22,7 +22,17 @@ from app.models import TenantSettings
 from app.services.audit import AuditService
 from app.services.billing import BillFilters
 from app.services.exports import to_pdf, to_xlsx, to_xlsx_book
-from app.services.reports import CATALOGUE, Report, ReportParams, ReportService, bills_report, file_name, filters_for_log, visible_reports
+from app.services.reports import (
+    CATALOGUE,
+    Report,
+    ReportParams,
+    ReportService,
+    bills_by_doctor,
+    bills_report,
+    file_name,
+    filters_for_log,
+    visible_reports,
+)
 
 router = APIRouter(tags=["reports"])
 
@@ -64,6 +74,17 @@ def bills_xlsx(f: BillFilters = Depends(bill_filters), db: Session = DB, current
 @router.get("/api/exports/bills.pdf")
 def bills_pdf(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
     return _bills_file("pdf", f, db, current)
+
+
+@router.get("/api/exports/bills-by-doctor.xlsx")
+def bills_by_doctor_xlsx(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """The bills list as a workbook: a summary sheet, then one sheet per referring doctor (same filters as the screen)."""
+    report = bills_report(db, current, f)
+    summary, sheets = bills_by_doctor(report)
+    AuditService(db).record(current.user.tenant_id, current.id, "export.bills", "invoice", "", {
+        "format": "xlsx-by-doctor", "filters": filters_for_log(f), "rows": len(report.rows), "sheets": len(sheets)})
+    fname = file_name("bills-by-doctor", f.date_from, f.date_to, "xlsx")
+    return Response(to_xlsx_book(sheets, summary=summary), media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # ---------- reports ----------
