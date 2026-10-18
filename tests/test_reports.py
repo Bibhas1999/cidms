@@ -146,7 +146,7 @@ def test_doctors_tests_departments_staff_discounts_and_payments(centre, books):
     assert {s["label"]: money(s["value"]) for s in pays["summary"]}["Cash"] == Decimal("550.50")
 
     names = [r["name"] for r in owner.get("/api/reports").json()]
-    assert {"bills", "collection", "dues", "referring-doctors", "tests", "departments", "staff", "discounts", "payments"} == set(names)
+    assert {"collection", "dues", "referring-doctors", "tests", "departments", "staff", "discounts", "payments"} == set(names)
     assert owner.get("/api/reports/nope").status_code == 404
     assert owner.get("/api/reports/payments", params={"from": TODAY.isoformat(), "to": "2000-01-01"}).status_code == 422
 
@@ -173,7 +173,7 @@ def test_whole_workbook_has_a_sheet_per_report_including_dues(centre, books):
     assert r.status_code == 200 and "spreadsheetml" in r.headers["content-type"]
     assert "billing-reports-" in r.headers["content-disposition"]
     wb = load_workbook(io.BytesIO(r.content))
-    assert wb.sheetnames == ["Bills", "Collection", "Payments", "Dues", "Discounts", "Tests", "Departments", "Referring doctors", "Staff"]
+    assert wb.sheetnames == ["Collection", "Payments", "Dues", "Discounts", "Tests", "Departments", "Referring doctors", "Staff"]
     dues = wb["Dues"]
     assert dues.cell(row=1, column=1).value == "Dues" and dues[dues.max_row][0].value == "Total"
     # Accounts staff only get the sheets they may see.
@@ -181,7 +181,7 @@ def test_whole_workbook_has_a_sheet_per_report_including_dues(centre, books):
     acc = browser("alpha.localhost")
     acc.login("acc2@alpha.in")
     names = load_workbook(io.BytesIO(acc.get("/api/reports/workbook.xlsx").content)).sheetnames
-    assert names == ["Bills", "Payments", "Dues"]
+    assert names == ["Payments", "Dues"]
 
 
 def test_front_desk_sees_the_totals_but_not_the_analytics(centre, books):
@@ -265,7 +265,7 @@ def test_turnover_reports_are_for_owners_and_admins_only(centre, books):
     make_user(centre["tenant"], "accounts@alpha.in", ["accounts"])
     acc = browser("alpha.localhost")
     acc.login("accounts@alpha.in")
-    assert {r["name"] for r in acc.get("/api/reports").json()} == {"bills", "dues", "payments"}
+    assert {r["name"] for r in acc.get("/api/reports").json()} == {"dues", "payments"}
     assert acc.get("/api/reports/dues").status_code == 200 and acc.get("/api/reports/payments").status_code == 200
     for name in ("collection", "departments", "referring-doctors", "tests", "staff", "discounts"):
         assert acc.get(f"/api/reports/{name}").status_code == 403, name
@@ -287,19 +287,3 @@ def test_bills_workbook_has_a_summary_and_a_sheet_per_referring_doctor(centre, b
     assert [c.value for c in self_sheet[4]][:5] == ["Bill no", "Date", "Patient", "Mobile", "Tests"]  # no "Referred by" column
     assert self_sheet.max_row == 4 + 3 + 1 and self_sheet.auto_filter.ref.startswith("A4:")
     assert self_sheet[4][0].fill.fgColor.rgb.endswith("004AAD")
-
-
-def test_the_bills_report_is_a_workbook_with_a_sheet_per_referring_doctor(centre, books):
-    owner = centre["owner"]
-    r = get(owner, "bills", **WIDE)
-    assert [row["doctor"] for row in r["rows"]] == ["Dr. Halder", "Self"]
-    assert money(r["totals"]["total"]) == Decimal("1351.00")
-    assert [s["title"] for s in r["sheets"]] == ["Dr. Halder", "Self"]
-    self_sheet = r["sheets"][1]
-    assert len(self_sheet["rows"]) == 3 and "doctor" not in {c["key"] for c in self_sheet["columns"]}
-    assert {s["label"] for s in r["summary"]} >= {"Bills", "Billed", "Total due"}
-    # The download is the same workbook.
-    f = owner.get("/api/reports/bills", params={**WIDE, "format": "xlsx"})
-    assert f.status_code == 200 and load_workbook(io.BytesIO(f.content)).sheetnames == ["Summary", "Dr. Halder", "Self"]
-    # Receptionists without the reports permission don't see it.
-    assert centre["front"].get("/api/reports/bills").status_code == 403
