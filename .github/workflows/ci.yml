@@ -17,13 +17,13 @@
 # The server keeps its own /opt/supreme-dms/.env.production; it is never in git or in GitHub.
 name: CI/CD
 
-# Paused (owner's request, 18 Oct 2026): runs only when started by hand (Actions > CI/CD > Run workflow, on main),
-# which tests and then deploys. To run on every push to main again, put back:
-#   push:
-#     branches: [main]
-#   pull_request:
-#     branches: [main]
+# Runs on every push to main (tests, then deploys), on pull requests into main (tests only), and by hand
+# (Actions > CI/CD > Run workflow, on main: tests, then deploys).
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
