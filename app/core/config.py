@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = Field(default="", repr=False)  # the webhook's subscribe check
     whatsapp_app_secret: str = Field(default="", repr=False)    # checks X-Hub-Signature-256 on webhook calls
 
+    # The web app's database limits (seconds): the longest a statement may run, and the longest a transaction
+    # may sit idle. Exports too big for this go to the background worker.
+    db_statement_timeout_s: int = 30
+    db_idle_in_transaction_timeout_s: int = 60
+
     # Signs the links printed on reports (QR codes). Unset: SESSION_SECRET (as before). Set it to the current
     # SESSION_SECRET before ever changing that, so printed reports keep working.
     report_link_secret: str = Field(default="", repr=False)
