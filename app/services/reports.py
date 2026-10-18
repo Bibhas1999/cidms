@@ -39,8 +39,6 @@ class Report:
     totals: dict | None = None
     summary: list[dict] = field(default_factory=list)  # [{label, value, kind}] shown above the table
     landscape: bool = False
-    # A report that is a workbook (Bills): this table is its first sheet, these are the others.
-    sheets: list["Report"] = field(default_factory=list)
 
     def as_json(self) -> dict:
         kinds = {key: kind for key, _, kind in self.columns}
@@ -50,7 +48,6 @@ class Report:
             "rows": [{k: _json(v, kinds.get(k, "text")) for k, v in row.items()} for row in self.rows],
             "totals": {k: _json(v, kinds.get(k, "text")) for k, v in self.totals.items()} if self.totals is not None else None,
             "summary": [{**s, "value": _json(s["value"], s.get("kind", "text"))} for s in self.summary],
-            **({"sheets": [s.as_json() for s in self.sheets]} if self.sheets else {}),
         }
 
 
@@ -79,13 +76,9 @@ class ReportParams:
 # dues and payments are for anyone who sees business reports.
 ANALYTICS = "analytics.view" if "analytics.view" in CLIENT_PERMISSIONS else "business_reports.view"
 MONEY_IN = "business_reports.view"
-PERMISSION = {"dues": MONEY_IN, "payments": MONEY_IN, "bills": MONEY_IN}
+PERMISSION = {"dues": MONEY_IN, "payments": MONEY_IN}
 
 CATALOGUE = [
-    {"name": "bills", "group": "money", "title": "Bills",
-     "question": "Which bills, and which doctor sent them?",
-     "description": "Every bill in the dates as a workbook: a summary by referring doctor, then a sheet for each doctor.",
-     "filters": ["range"]},
     {"name": "collection", "group": "money", "title": "Collection",
      "question": "How much did we bill and collect?",
      "description": "Bills, discounts and money received, by payment mode — one row per day, week, month or year.",
@@ -283,20 +276,6 @@ class ReportService:
         return Report("collection", "Collection", sub, cols, rows, totals, self._collection_summary(totals), landscape=True)
 
     # ---------- dues ----------
-    def bills(self, p: ReportParams) -> Report:
-        """The bills in the dates as a workbook: the summary by referring doctor first, then one sheet per doctor
-        (the same as the Bills page's "Workbook by referring doctor")."""
-        listed = bills_report(self.db, self.current, BillFilters(date_from=p.date_from, date_to=p.date_to))
-        (_title, _subtitle, columns, rows, totals), sheets = bills_by_doctor(listed)
-        due_bills = sum(1 for r in listed.rows if r["status"] != "Cancelled" and r["due"] > 0)
-        return Report("bills", "Bills", listed.subtitle, list(columns), list(rows), totals, summary=[
-            {"label": "Bills", "value": totals["bills"], "kind": "int"},
-            {"label": "Billed", "value": totals["total"], "kind": "money"},
-            {"label": "Paid", "value": totals["paid"], "kind": "money"},
-            {"label": "Total due", "value": totals["due"], "kind": "money"},
-            {"label": "Bills with dues", "value": due_bills, "kind": "int"},
-        ], sheets=[Report("bills", t, sub, list(c), list(r), tot, landscape=True) for t, sub, c, r, tot in sheets])
-
     def dues(self, p: ReportParams) -> Report:
         today = local_today()
         q = select(Invoice).options(noload(Invoice.items), noload(Invoice.payments)).where(*self._live(), Invoice.due > 0)
@@ -608,3 +587,25 @@ def file_name(stem: str, a: date | None, b: date | None, ext: str) -> str:
     else:
         span = local_today().isoformat()
     return f"{stem}-{span}.{ext}"
+
+
+def dues_workbook(db: Session, current: CurrentUser, date_from: date | None = None, date_to: date | None = None) -> tuple[Report, list[Report]]:
+    """The Dues page as a workbook: bills still owing (oldest first, with how many days), as a summary by referring
+    doctor and one sheet per doctor. Dates, if given, narrow by bill date."""
+    listed = bills_report(db, current, BillFilters(payment="due", date_from=date_from, date_to=date_to, oldest_first=True))
+    today = local_today()
+    for row in listed.rows:
+        row["age"] = (today - row["bill_date"]).days
+    at = next(i for i, c in enumerate(listed.columns) if c[0] == "bill_date") + 1
+    listed.columns = [*listed.columns[:at], ("age", "Days owed", "int"), *listed.columns[at:]]
+    (_t, _s, columns, rows, totals), sheets = bills_by_doctor(listed)
+    # Most owed first (Self last), the summary and the sheets in the same order.
+    paired = sorted(zip(rows, sheets, strict=True), key=lambda p: (p[0]["doctor"] == "Self", -p[0]["due"], p[0]["doctor"].lower()))
+    rows, sheets = [p[0] for p in paired], [p[1] for p in paired]
+    oldest = max((r["age"] for r in listed.rows), default=0)
+    summary = Report("dues", "Dues", listed.subtitle, list(columns), list(rows), totals, summary=[
+        {"label": "Bills with dues", "value": totals["bills"], "kind": "int"},
+        {"label": "Total due", "value": totals["due"], "kind": "money"},
+        {"label": "Oldest", "value": f"{oldest} days" if listed.rows else "—", "kind": "text"},
+    ])
+    return summary, [Report("dues", t, sub, list(c), list(r), tot, landscape=True) for t, sub, c, r, tot in sheets]
