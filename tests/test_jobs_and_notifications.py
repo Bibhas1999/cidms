@@ -413,3 +413,31 @@ def test_daily_summary_and_dues_digest_jobs(alpha, people):
     assert jobs.run_one("w") == (a, "done")
     assert jobs.run_one("w") == (b, "done")
     assert _job(a).result["skipped"] and _job(b).result == {"bills": 0, "sent": 0}   # a quiet day: no noise
+
+
+def test_a_job_that_fails_for_good_raises_an_alert_once(monkeypatch):
+    from app.core import alerts, mailer
+    from app.core.config import get_settings
+    sent = []
+    monkeypatch.setattr(get_settings(), "alert_email", "ops@example.com, owner@example.com")
+    monkeypatch.setattr(mailer, "send", lambda to, subject, body: sent.append((to, subject)))
+    assert alerts.alert("test-key", "Something broke", "details") is True
+    assert sorted(t for t, _ in sent) == ["ops@example.com", "owner@example.com"] and sent[0][1] == "[CIDMS] Something broke"
+    assert alerts.alert("test-key", "Something broke", "again") is False  # the same alert: not again for 6 hours
+    assert len(sent) == 2
+
+
+def test_low_disk_space_raises_an_alert(monkeypatch, tmp_path):
+    import shutil
+    from collections import namedtuple
+
+    from app.core import alerts
+    raised = []
+    monkeypatch.setattr(alerts, "alert", lambda key, subject, body: raised.append(key) or True)
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda _p: usage(100, 95, 5))
+    assert alerts.check_disk(str(tmp_path)) == 0.05 and raised == ["disk"]
+    monkeypatch.setattr(shutil, "disk_usage", lambda _p: usage(100, 50, 50))
+    raised.clear()
+    alerts.check_disk(str(tmp_path))
+    assert raised == []

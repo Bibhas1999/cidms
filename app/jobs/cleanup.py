@@ -1,12 +1,12 @@
 """Nightly housekeeping (platform scope): expired sessions and reset links, finished jobs, expired job files,
-old notifications and workers that stopped long ago."""
+old notifications, workers that stopped long ago, unfinished uploads, old payload keys and rate-limit attempts."""
 
 from datetime import timedelta
 
-from sqlalchemy import delete, or_
+from sqlalchemy import delete, or_, text
 
 from app.core.jobs import JobContext, job
-from app.models import Job, JobFile, JobWorker, PasswordReset, UserSession, utcnow
+from app.models import Job, JobFile, JobWorker, PasswordReset, PayloadKey, Upload, UserSession, utcnow
 from app.services.notifications import purge_old
 
 SESSION_GRACE = timedelta(days=7)        # ended sessions are kept a week (for "signed in from" questions)
@@ -28,6 +28,10 @@ def cleanup(ctx: JobContext) -> dict:
             (Job.status == "failed") & (Job.finished_at < now - FAILED_JOBS)))).rowcount,
         "notifications": purge_old(db),
         "workers": db.execute(delete(JobWorker).where(JobWorker.last_seen_at < now - timedelta(days=1))).rowcount,
+        # Uploads nobody finished, encryption keys from tabs closed long ago, and old rate-limit attempts.
+        "uploads": db.execute(delete(Upload).where(Upload.updated_at < now - timedelta(days=1))).rowcount,
+        "payload_keys": db.execute(delete(PayloadKey).where(PayloadKey.created_at < now - timedelta(days=1))).rowcount,
+        "rate_limit_hits": db.execute(text("DELETE FROM rate_limit_hits WHERE at < now() - interval '2 days'")).rowcount,
     }
     ctx.log.info("cleanup done", extra={"job_id": str(ctx.id), "removed": out})
     return out

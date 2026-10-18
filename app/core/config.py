@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = Field(default="", repr=False)  # the webhook's subscribe check
     whatsapp_app_secret: str = Field(default="", repr=False)    # checks X-Hub-Signature-256 on webhook calls
 
+    # Monitoring. ALERT_EMAIL: who hears about failed jobs, a full disk or a stopped worker (comma-separated; empty =
+    # only logged). SENTRY_DSN: send unexpected errors to Sentry (no personal data). WORKER_ALIVE_FILE: the worker
+    # touches it every 30 s; its container health check looks at how old it is.
+    alert_email: str = ""
+    sentry_dsn: str = Field(default="", repr=False)
+    worker_alive_file: str = "/tmp/cidms-worker-alive"  # noqa: S108 - a liveness marker inside the container
+
     # The web app's database limits (seconds): the longest a statement may run, and the longest a transaction
     # may sit idle. Exports too big for this go to the background worker.
     db_statement_timeout_s: int = 30

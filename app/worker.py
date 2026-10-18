@@ -29,12 +29,13 @@ import time as clock
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.core import jobs
+from app.core import alerts, jobs
 from app.core.config import get_settings
 from app.core.db import engine, scoped_session
 from app.core.logging import JsonFormatter, request_id
@@ -45,6 +46,7 @@ log = logging.getLogger("app.worker")
 HEARTBEAT_S = 30
 RECOVER_EVERY_S = 60
 SCHEDULE_EVERY_S = 20
+DISK_EVERY_S = 600
 
 
 # ---------- the schedule ----------------------------------------------------------------------------------------
@@ -152,6 +154,11 @@ class Worker:
                        .values(last_seen_at=utcnow(), jobs_done=done, jobs_failed=failed, status=status))
             db.commit()
         log.info("heartbeat", extra={"worker": self.id, "running": len(ids), "status": status})
+        # The container's health check: this file is touched only while the loop is really running.
+        try:
+            Path(get_settings().worker_alive_file).touch()
+        except OSError:
+            log.warning("couldn't touch the worker's alive file", exc_info=True)
 
     def install_signals(self) -> None:
         def handler(signum, _frame):
@@ -217,10 +224,14 @@ class Worker:
             if self.scheduler and now - last.get("schedule", 0) >= SCHEDULE_EVERY_S:
                 last["schedule"] = now
                 tick()
+            if now - last.get("disk", 0) >= DISK_EVERY_S:
+                last["disk"] = now
+                alerts.check_disk()
         except Exception:
             log.exception("housekeeping failed; will retry", extra={"worker": self.id})
 
     def run(self, once: bool = False) -> int:
+        alerts.init_error_tracking("worker")
         jobs.load_job_modules()
         self._register()
         log.info("worker started", extra={"worker": self.id, "running": self.concurrency})

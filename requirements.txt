@@ -19,3 +19,4 @@ nh3>=0.2.18  # cleaning report HTML from the editor
 cryptography>=43  # encrypted request/response bodies (ECDH key agreement, AES-GCM)
 pypdf>=5  # uploaded PDF reports: checking them and putting the signed cover page in front
 httpx>=0.27  # the image server (Orthanc), the viewer (OHIF) and WhatsApp
+sentry-sdk[fastapi]>=2  # error tracking, only when SENTRY_DSN is set

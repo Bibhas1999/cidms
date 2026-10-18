@@ -59,10 +59,12 @@ services:
       migrate: { condition: service_completed_successfully }
     stop_signal: SIGTERM
     stop_grace_period: 60s   # lets the job in hand finish
-    # The image's health check calls the web port, which the worker doesn't have: check that the process is alive.
+    # The image's health check calls the web port, which the worker doesn't have. The worker touches
+    # WORKER_ALIVE_FILE every 30 s from its main loop: unhealthy when that stops for 2 minutes (stuck, not just alive).
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/proc/1') else 1)"]
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/cidms-worker-alive') < 120 else 1)"]
       interval: 60s
+      start_period: 60s
     restart: unless-stopped
 
   caddy:
