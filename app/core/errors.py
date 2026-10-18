@@ -5,10 +5,11 @@ app/main.py turn these into JSON with a message people can read and the request 
 class DomainError(Exception):
     status = 400
 
-    def __init__(self, message: str, field: str | None = None):
+    def __init__(self, message: str, field: str | None = None, detail: list[dict] | None = None):
         super().__init__(message)
         self.message = message
         self.field = field
+        self.detail = detail  # one {field, message} per problem, e.g. each wrong row of a bulk add
 
 
 class Unauthorized(DomainError):

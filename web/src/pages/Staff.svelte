@@ -76,15 +76,16 @@
       if (editing) return;
       const e = email().safeParse(v.email);
       if (!e.success) add("email", e.error.issues[0].message);
-      if (v.temporary_password.trim().length < 8) add("temporary_password", "Use at least 8 characters, or leave it as supreme@123.");
+      if (v.temporary_password.trim() && v.temporary_password.trim().length < 10) add("temporary_password", "Use at least 10 characters, or leave it empty for a random one.");
     },
     onSubmit: async (v) => {
       if (editing) {
         await patch(`/api/staff/${editing.id}`, { full_name: v.full_name, mobile: v.mobile, role_ids: v.role_ids, is_active: v.is_active });
         notify(`${v.full_name} updated.`);
       } else {
-        await post("/api/staff", { full_name: v.full_name, email: v.email.trim(), mobile: v.mobile, role_ids: v.role_ids, temporary_password: v.temporary_password });
-        notify(`Give them this temporary password: ${v.temporary_password}. They choose their own when they first sign in.`,
+        const made = await post<{ temporary_password: string }>("/api/staff", { full_name: v.full_name, email: v.email.trim(), mobile: v.mobile,
+                                                                                role_ids: v.role_ids, temporary_password: v.temporary_password });
+        notify(`Give them this temporary password: ${made.temporary_password}. It's shown only now. They choose their own when they first sign in.`,
                { kind: "info", title: `${v.full_name} added`, duration: 0 });
       }
       dialogOpen = false;
@@ -92,10 +93,12 @@
     },
   });
 
-  // The centre's temporary password (the server's DEFAULT_TEMPORARY_PASSWORD). It works once: at the first
-  // sign-in they must choose their own.
-  const DEFAULT_TEMP = "supreme@123";
-  const generatePassword = (): string => DEFAULT_TEMP;
+  // A random one-time password for each person (like "Kmrt-4829-Vbxe"). It works once: at the first sign-in
+  // they must choose their own. Left empty, the server makes one; either way it's shown once after saving.
+  const LETTERS = "abcdefghjkmnpqrstuvwxyz";
+  const pick = (chars: string, n: number) => Array.from(crypto.getRandomValues(new Uint32Array(n)), (x) => chars[x % chars.length]).join("");
+  const word = () => { const w = pick(LETTERS, 4); return w[0].toUpperCase() + w.slice(1); };
+  const generatePassword = (): string => `${word()}-${pick("23456789", 4)}-${word()}`;
 
   function openAdd() {
     editing = null;
@@ -118,10 +121,9 @@
   async function resetPassword(who: Staff) {
     if (!(await confirmDialog({ title: `Reset ${who.full_name}'s password?`, confirmLabel: "Reset password", tone: "danger",
                                 message: "They'll be signed out everywhere and get a temporary password to change at their next sign-in." }))) return;
-    const pw = generatePassword();
     try {
-      await post(`/api/staff/${who.id}/reset-password`, { temporary_password: pw });
-      notify(`Their temporary password is ${pw}. They've been signed out everywhere.`, { kind: "info", title: `Password reset for ${who.full_name}`, duration: 0 });
+      const { temporary_password: pw } = await post<{ temporary_password: string }>(`/api/staff/${who.id}/reset-password`, {});
+      notify(`Their temporary password is ${pw}. It's shown only now. They've been signed out everywhere.`, { kind: "info", title: `Password reset for ${who.full_name}`, duration: 0 });
       dialogOpen = false;
       reload++;
     } catch (e) {
@@ -231,12 +233,12 @@
     </fieldset>
     {#if !editing}
       <Field id="s_temporary_password" label="Temporary password" required error={form.error("temporary_password")}
-             tip="Filled in with the centre's temporary password, supreme@123. Tell them this password: it works once, and at their first sign-in they must choose their own.">
+             tip="A random password, different for each person. Tell them this password: it works once, and at their first sign-in they must choose their own.">
         {#snippet children({ invalid, describedby })}
           <div class="row">
             <input id="s_temporary_password" class="input mono" bind:value={form.values.temporary_password} {...form.field("temporary_password")}
                    aria-invalid={invalid} aria-describedby={describedby} />
-            <IconButton icon="refresh" label="Use supreme@123" variant="outline" onclick={() => (form.values.temporary_password = generatePassword())} />
+            <IconButton icon="refresh" label="Make another random password" variant="outline" onclick={() => (form.values.temporary_password = generatePassword())} />
           </div>
         {/snippet}
       </Field>

@@ -19,6 +19,7 @@
   import { notify, notifyError } from "../../lib/toast.svelte";
   import { tooltip } from "../../lib/tooltip";
   import PatientLink from "./PatientLink.svelte";
+  import ReportPdf from "./ReportPdf.svelte";
   import SendWhatsApp from "./SendWhatsApp.svelte";
 
   // Writing one test's report: the editor on the left (autosaved), images and earlier reports on the right.
@@ -217,7 +218,8 @@
     }
   }
   const ACTIONS: Record<string, string> = { created: "Started", saved: "Saved", finalised: "Marked ready to sign", signed: "Signed",
-                                            amended: "Amended and signed", imported: "Brought across from the old app" };
+                                            amended: "Amended and signed", imported: "Brought across from the old app",
+                                            attached: "PDF attached", detached: "PDF removed" };
 
   // ---------- images ----------
   let progress = $state<number | null>(null);
@@ -302,6 +304,7 @@
             </div>
           {/if}
         </section>
+        <ReportPdf itemId={params.itemId} report={null} {canWrite} {canSign} onchanged={(next) => take(next)} onconflict={(m) => (conflict = m)} />
       {:else}
         <form class="card" onsubmit={form.submit} novalidate aria-labelledby="report-title">
           <div class="card-header">
@@ -380,6 +383,8 @@
             {/if}
           </div>
         </form>
+
+        <ReportPdf itemId={params.itemId} {report} {canWrite} {canSign} onchanged={(next) => take(next)} onconflict={(m) => (conflict = m)} />
 
         {#if ws.versions.length}
           <section class="card" aria-labelledby="history-title">

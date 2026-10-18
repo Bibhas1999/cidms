@@ -496,6 +496,39 @@ def bills_report(db: Session, current: CurrentUser, f: BillFilters) -> Report:
     return Report("bills", "Bills", sub, BILL_COLUMNS, rows, totals, landscape=True)
 
 
+DOCTOR_SUMMARY_COLUMNS: list[Column] = [
+    ("doctor", "Referred by", "text"), ("bills", "Bills", "int"), ("total", "Total", "money"), ("discount", "Discount", "money"),
+    ("paid", "Paid", "money"), ("due", "Due", "money"),
+]
+
+
+def bills_by_doctor(report: Report) -> tuple[tuple, list[tuple]]:
+    """The bills report split by referring doctor: a summary (one row per doctor, biggest first, its name linking to
+    the doctor's sheet) and one sheet per doctor with that doctor's bills and totals. Cancelled bills are listed but
+    not added up, as in the bills report."""
+    groups: dict[str, list[dict]] = {}
+    for row in report.rows:
+        groups.setdefault(row["doctor"] or "Self", []).append(row)
+    columns = [c for c in report.columns if c[0] != "doctor"]
+    keys = ("total", "discount", "paid", "due")
+    summed = []
+    for doctor, rows in groups.items():
+        live = [r for r in rows if r["status"] != "Cancelled"]
+        sums = {k: q2(sum((r[k] for r in live), ZERO)) for k in keys}
+        summed.append((doctor, rows, live, sums))
+    summed.sort(key=lambda g: (g[0] == "Self", -g[3]["total"], g[0].lower()))  # "Self" last
+    sheets, summary_rows = [], []
+    for doctor, rows, live, sums in summed:
+        n = len(rows)
+        sheets.append((doctor, f"{report.subtitle.split(' · ')[0]} · referred by {doctor} · {n:,} bill{'s' if n != 1 else ''}",
+                       columns, rows, {"invoice_no": "Total", **sums}))
+        summary_rows.append({"doctor": doctor, "bills": len(live), **sums})
+    grand = {k: q2(sum((r[k] for r in summary_rows), ZERO)) for k in keys}
+    summary = ("Summary", f"Bills by referring doctor · {report.subtitle}", DOCTOR_SUMMARY_COLUMNS, summary_rows,
+               {"doctor": "All doctors", "bills": sum(r["bills"] for r in summary_rows), **grand})
+    return summary, sheets
+
+
 def describe_filters(db: Session, current: CurrentUser, f: BillFilters) -> str:
     t = current.user.tenant_id
     parts = [range_text(f.date_from, f.date_to)]

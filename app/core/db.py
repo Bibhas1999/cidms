@@ -21,7 +21,24 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(get_settings().database_url, pool_pre_ping=True, pool_size=10, max_overflow=10)
+# pool_recycle: connections are replaced every 30 minutes, so one dropped by a firewall or a database restart
+# is never handed out stale for long (pool_pre_ping catches the rest).
+engine = create_engine(get_settings().database_url, pool_pre_ping=True, pool_size=10, max_overflow=10, pool_recycle=1800)
+
+# Limits for the web app's connections only (set by create_app): no request can hold the database for long, and a
+# transaction left open by a stuck request is ended. The worker sets its own per-job timeout (app/core/jobs.py);
+# one-off scripts (imports, seeding) have none.
+web_limits: dict[str, int] = {}
+
+
+@event.listens_for(engine, "connect")
+def _limit_connection(dbapi_connection, _record) -> None:
+    if not web_limits:
+        return
+    with dbapi_connection.cursor() as cur:
+        cur.execute(f"SET statement_timeout = {int(web_limits['statement_ms'])}")
+        cur.execute(f"SET idle_in_transaction_session_timeout = {int(web_limits['idle_in_transaction_ms'])}")
+    dbapi_connection.commit()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

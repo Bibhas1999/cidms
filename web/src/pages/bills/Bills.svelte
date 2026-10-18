@@ -253,7 +253,10 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <ExportMenu path="/api/exports/bills" kind="bills" query={filters} disabled={!data || data.total === 0} />
+      <ExportMenu path="/api/exports/bills" kind="bills" query={filters} disabled={!data || data.total === 0}
+                  workbook={{ path: "/api/exports/bills-by-doctor.xlsx", query: filters,
+                              label: "Workbook by referring doctor (.xlsx)",
+                              about: "A summary sheet, then one sheet per referring doctor with their bills and totals. Same filters." }} />
     {/snippet}
   </FilterBar>
 

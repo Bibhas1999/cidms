@@ -13,3 +13,4 @@ storage/
 .env.production
 backups/
 *.dump
+storage.zip

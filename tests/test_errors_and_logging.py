@@ -71,3 +71,19 @@ def test_security_headers_are_on_every_response(alpha):
     r = browser("alpha.localhost").get("/api/workspace")
     assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
     assert r.headers["cache-control"] == "no-store" and r.headers["x-content-type-options"] == "nosniff"
+
+
+def test_a_body_without_content_length_is_still_cut_off_at_the_limit(alpha):
+    from tests.conftest import browser
+    c = browser("alpha.localhost")
+
+    def chunks():
+        for _ in range(30):
+            yield b"x" * 50_000  # 1.5 MB in all, with no Content-Length (chunked)
+
+    r = c.post("/api/auth/login", content=chunks(), headers={"Content-Type": "application/json"})
+    assert r.status_code == 413 and r.json()["message"] == "That request is too large."
+    big = browser("alpha.localhost").post("/api/auth/login", content=b"x" * 1_500_000, headers={"Content-Type": "application/json"})
+    assert big.status_code == 413
+    # A normal body still goes through (read here, then handed to the app).
+    assert browser("alpha.localhost").post("/api/auth/login", json={"email": "a@b.c", "password": "x"}).status_code == 401

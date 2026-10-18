@@ -39,6 +39,7 @@ from app.schemas_reports import (
     PublicReportOut,
     ReportActionIn,
     ReportAmendIn,
+    ReportAttachIn,
     ReportCreateIn,
     ReportOut,
     ReportPrintOut,
@@ -183,6 +184,28 @@ def amend_report(item_id: uuid.UUID, data: ReportAmendIn, db: Session = DB, curr
     svc = TestReportService(db, current)
     svc.amend(item_id, data)
     return _workspace(svc, item_id)
+
+
+@reports.post("/for-item/{item_id}/attachment", response_model=ReportWorkspaceOut)
+def attach_pdf(item_id: uuid.UUID, data: ReportAttachIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """The report as an uploaded PDF (instead of, or as well as, typed findings)."""
+    svc = TestReportService(db, current)
+    svc.attach(item_id, data.upload_id, data.version, data.reason)
+    return _workspace(svc, item_id)
+
+
+@reports.delete("/for-item/{item_id}/attachment", response_model=ReportWorkspaceOut)
+def detach_pdf(item_id: uuid.UUID, version: int, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    svc = TestReportService(db, current)
+    svc.detach(item_id, version)
+    return _workspace(svc, item_id)
+
+
+@reports.get("/for-item/{item_id}/attachment", include_in_schema=False)
+def attached_pdf(item_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    content, filename = TestReportService(db, current).attachment(item_id)
+    safe = "".join(ch if ch.isalnum() or ch in ".-_" else "-" for ch in filename)
+    return Response(content, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{safe}"'})
 
 
 @reports.get("/for-item/{item_id}/versions/{number}", response_model=ReportVersionFullOut)

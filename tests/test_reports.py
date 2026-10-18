@@ -270,3 +270,20 @@ def test_turnover_reports_are_for_owners_and_admins_only(centre, books):
     for name in ("collection", "departments", "referring-doctors", "tests", "staff", "discounts"):
         assert acc.get(f"/api/reports/{name}").status_code == 403, name
     assert acc.get("/api/reports/staff", params={"format": "pdf"}).status_code == 403
+
+
+def test_bills_workbook_has_a_summary_and_a_sheet_per_referring_doctor(centre, books):
+    r = centre["front"].get("/api/exports/bills-by-doctor.xlsx", params=WIDE)
+    assert r.status_code == 200 and "bills-by-doctor-" in r.headers["content-disposition"]
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["Summary", "Dr. Halder", "Self"]
+    summary = wb["Summary"]
+    rows = list(summary.iter_rows(min_row=5, values_only=True))
+    assert rows[0][:2] == ("Dr. Halder", 1) and Decimal(str(rows[0][2])) == Decimal("600.50")
+    assert rows[1][:2] == ("Self", 2) and Decimal(str(rows[1][2])) == Decimal("750.50")  # the cancelled bill isn't counted
+    assert rows[2][0] == "All doctors" and Decimal(str(rows[2][2])) == Decimal("1351.00")
+    assert summary["A5"].hyperlink.location == "'Dr. Halder'!A1" or "Dr. Halder" in str(summary["A5"].hyperlink.target or summary["A5"].hyperlink.location)
+    self_sheet = wb["Self"]
+    assert [c.value for c in self_sheet[4]][:5] == ["Bill no", "Date", "Patient", "Mobile", "Tests"]  # no "Referred by" column
+    assert self_sheet.max_row == 4 + 3 + 1 and self_sheet.auto_filter.ref.startswith("A4:")
+    assert self_sheet[4][0].fill.fgColor.rgb.endswith("004AAD")

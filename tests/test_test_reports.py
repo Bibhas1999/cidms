@@ -566,3 +566,67 @@ def test_overdue_after_the_target(centre):
         db.execute(text("UPDATE invoices SET created_at = now() - interval '30 hours'"))
     s = centre["doc"].get("/api/test-reports/summary").json()
     assert s["kpis"]["overdue"] == 1 and s["oldest_waiting"][0]["state"] == "overdue"
+
+
+# ---------- a report uploaded as a PDF ---------------------------------------------------------------
+
+def pdf_bytes(pages: int = 2) -> bytes:
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    for n in range(pages):
+        c.drawString(72, 720, f"Outside lab report, page {n + 1}")
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def send_pdf(centre: dict, content: bytes, name: str = "lab-report.pdf") -> str:
+    c = centre["doc"]
+    up = c.post("/api/uploads", json={"filename": name, "size": len(content), "purpose": "report_pdf"})
+    assert up.status_code == 201, up.text
+    up = up.json()
+    step = up["chunk_size"]
+    for start in range(0, len(content), step):
+        end = min(start + step, len(content)) - 1
+        r = c.put(f"/api/uploads/{up['id']}", content=content[start:end + 1],
+                  headers={"Content-Range": f"bytes {start}-{end}/{len(content)}", "Content-Type": "application/octet-stream"})
+        assert r.status_code == 200, r.text
+    return up["id"]
+
+
+def test_a_report_can_be_an_uploaded_pdf_signed_and_shared_with_a_cover_page(centre):
+    from pypdf import PdfReader
+    doc, item = centre["doc"], centre["item_id"]
+    # Attaching starts the report when there isn't one yet.
+    w = doc.post(url(item, "attachment"), json={"upload_id": send_pdf(centre, pdf_bytes(2))})
+    assert w.status_code == 200, w.text
+    rep = w.json()["report"]
+    assert rep["attachment_name"] == "lab-report.pdf" and rep["attachment_pages"] == 2 and rep["status"] == "draft"
+    assert w.json()["versions"][0]["action"] == "attached"
+    raw = doc.get(url(item, "attachment"))
+    assert raw.status_code == 200 and raw.content.startswith(b"%PDF")
+    # No typed findings are needed to sign it.
+    signature(centre)
+    signed = doc.post(url(item, "sign"), json={"version": rep["version"]})
+    assert signed.status_code == 200, signed.text
+    report_id = signed.json()["report"]["id"]
+    pdf = doc.get(f"/api/test-reports/{report_id}/pdf")
+    assert pdf.status_code == 200
+    assert len(PdfReader(io.BytesIO(pdf.content)).pages) >= 3  # the signed cover page, then both uploaded pages
+    # Replacing the PDF of a signed report is an amendment, with a reason.
+    version = signed.json()["report"]["version"]
+    assert doc.post(url(item, "attachment"), json={"upload_id": send_pdf(centre, pdf_bytes(1)), "version": version}).status_code == 422
+    r = doc.post(url(item, "attachment"), json={"upload_id": send_pdf(centre, pdf_bytes(1)), "version": version, "reason": "Corrected value"})
+    assert r.status_code == 200 and r.json()["report"]["status"] == "amended" and r.json()["report"]["attachment_pages"] == 1
+    assert doc.delete(url(item, "attachment"), params={"version": r.json()["report"]["version"]}).status_code == 409
+
+
+def test_only_real_pdfs_are_attached_by_those_who_may_write_reports(centre):
+    doc, front, item = centre["doc"], centre["front"], centre["item_id"]
+    r = doc.post(url(item, "attachment"), json={"upload_id": send_pdf(centre, b"%PDF-1.4 not really", "x.pdf")})
+    assert r.status_code == 422 and "couldn't be read" in r.json()["message"]
+    assert doc.post("/api/uploads", json={"filename": "x.docx", "size": 10, "purpose": "report_pdf"}).status_code == 422
+    assert front.post("/api/uploads", json={"filename": "x.pdf", "size": 10, "purpose": "report_pdf"}).status_code == 403
+    with scoped_session(platform=True) as db:  # kept in the database, not on disk
+        assert db.execute(text("SELECT count(*) FROM uploads")).scalar() >= 1

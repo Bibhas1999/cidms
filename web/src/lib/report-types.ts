@@ -46,6 +46,9 @@ export interface Report {
   amend_reason: string;
   amendments: number;
   imported: boolean;
+  attachment_name: string;
+  attachment_pages: number;
+  attachment_size: number;
   version: number;
   created_at: string;
   updated_at: string;
