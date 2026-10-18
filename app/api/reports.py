@@ -132,6 +132,11 @@ def report(name: str, date_from: date | None = Query(None, alias="from"), date_t
     AuditService(db).record(current.user.tenant_id, current.id, "export.report", "report", name, {
         "format": format, "from": str(params.date_from or ""), "to": str(params.date_to or ""), "group": group,
         "department_id": str(department_id or ""), "mode": mode, "rows": len(result.rows)})
+    if name == "bills" and format == "xlsx":  # the whole workbook: the summary, then a sheet per doctor
+        fname = file_name("bills-by-doctor", params.date_from, params.date_to, format)
+        book = to_xlsx_book([(s.title, s.subtitle, s.columns, s.rows, s.totals) for s in result.sheets],
+                            summary=("Summary", f"Bills by referring doctor · {result.subtitle}", result.columns, result.rows, result.totals))
+        return Response(book, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
     if name == "collection":
         fname = file_name(f"collection-by-{group}", params.date_from, params.date_to, format)
     elif name == "dues" and not (params.date_from or params.date_to):
