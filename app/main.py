@@ -16,18 +16,22 @@ from app.api import (
     analytics,
     auth,
     billing,
+    catalogue_import,
     centre,
+    payload,
     platform,
     reports,
     staff,
     system,
     test_reports,  # test reports, imaging, DICOMweb proxy, viewer, WhatsApp
+    uploads,  # files sent in pieces, with pause and resume
 )
 from app.core.config import get_settings
 from app.core.db import is_transient
 from app.core.errors import DomainError
 from app.core.limits import BodySizeMiddleware
 from app.core.logging import RequestLogMiddleware, configure_logging, request_id
+from app.core.payload import PayloadCryptoMiddleware
 from app.core.tenancy import TenancyMiddleware
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
@@ -89,7 +93,7 @@ def _clean(msg: str) -> str:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error(request: Request, exc: DomainError):
-        return _error(exc.status, exc.message, exc.field)
+        return _error(exc.status, exc.message, exc.field, exc.detail)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
@@ -148,12 +152,19 @@ def create_app() -> FastAPI:
     )
     # The last added runs first: the request log wraps everything, so every line carries the request ID.
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(PayloadCryptoMiddleware)  # encrypted bodies: decrypted before, and encrypted after, everything else
     app.add_middleware(BodySizeMiddleware)
     app.add_middleware(TenancyMiddleware)
+    if settings.environment == "development":  # the Dev monitor (/dev/monitor): never in tests or production
+        from app.api import dev
+        from app.core.db import engine
+        from app.core.devmonitor import install as install_dev_monitor
+        install_dev_monitor(app, engine)  # inside the request log, so its entries carry the request ID
+        app.include_router(dev.router)
     app.add_middleware(RequestLogMiddleware)
     install_error_handlers(app)
 
-    for module in (system, auth, staff, centre, billing, platform, reports, analytics):
+    for module in (system, auth, payload, staff, centre, billing, catalogue_import, platform, reports, analytics, uploads):
         app.include_router(module.router)
     app.include_router(test_reports.router)
     from app.api.client_backups import router as client_backups_router  # Settings > Backups, per centre

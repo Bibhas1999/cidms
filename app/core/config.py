@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = Field(default="", repr=False)  # the webhook's subscribe check
     whatsapp_app_secret: str = Field(default="", repr=False)    # checks X-Hub-Signature-256 on webhook calls
 
+    # Request and response bodies encrypted between the browser and the app (AES-GCM, key agreed by ECDH), so they
+    # can't be read in the browser's network tools or by anything in between. "optional": the app's own pages always
+    # encrypt, other callers may send plain JSON; "required": plain JSON to /api is refused (except the integration
+    # API, webhooks and health checks); "off": never.
+    payload_encryption: Literal["off", "optional", "required"] = "optional"
+
     # The patient's link to a signed report (the QR code on it): how long it works.
     report_link_days: int = 90
     # The reporting dashboard: how long a test may wait for its signed report before it counts as overdue.

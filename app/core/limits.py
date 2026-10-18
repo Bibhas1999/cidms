@@ -49,6 +49,9 @@ class BodySizeMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith("/api/imaging/items/") and request.url.path.endswith("/upload"):
             from app.core.config import get_settings
             limit = get_settings().imaging_max_upload_mb * 1024 * 1024 + 1_000_000  # DICOM uploads (checked again by the route)
+        if request.url.path.startswith("/api/uploads/"):
+            from app.services.uploads import MAX_CHUNK
+            limit = MAX_CHUNK  # one piece of a resumable upload (checked again by the service)
         if request.url.path.startswith("/api/") and length and length.isdigit() and int(length) > limit:
             return JSONResponse({"message": "That request is too large."}, status_code=413)
         return await call_next(request)
