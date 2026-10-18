@@ -10,6 +10,8 @@
 - People who don't write or sign reports only see signed reports (and print them for the patient).
 """
 
+import base64
+import io
 import uuid
 from datetime import date
 
@@ -36,6 +38,7 @@ from app.repositories.common import contains
 from app.schemas_reports import ReportAmendIn, ReportContentIn, ReportSaveIn, SignatureIn, TemplateIn
 from app.services import report_links
 from app.services.audit import AuditService
+from app.services.uploads import UploadService
 
 WRITE, SIGN = "reports.write", "reports.sign"
 EDITABLE = {"draft", "final"}
@@ -131,7 +134,8 @@ class TestReportService:
         self.db.add(TestReportVersion(
             tenant_id=self.tenant_id, report_id=report.id, version=report.version, action=action, status=report.status,
             title=report.title, technique=report.technique, modality=report.modality, findings=report.findings,
-            impression=report.impression, reason=reason, saved_by=self.current.id, saved_by_name=self.current.user.full_name))
+            impression=report.impression, reason=reason, saved_by=self.current.id, saved_by_name=self.current.user.full_name,
+            attachment_name=report.attachment_name))
         self.db.flush()
 
     def _check_version(self, report: TestReport, version: int) -> None:
@@ -211,8 +215,71 @@ class TestReportService:
 
     @staticmethod
     def _has_words(report: TestReport) -> None:
-        if not report.findings and not report.impression:
-            raise Invalid("Write the findings or the impression first.", "findings")
+        if not report.findings and not report.impression and not report.attachment_name:
+            raise Invalid("Write the findings or the impression, or attach the report as a PDF, first.", "findings")
+
+    # ---------- an uploaded PDF report ----------
+    def attach(self, item_id: uuid.UUID, upload_id: uuid.UUID, version: int | None, reason: str = "") -> TestReport:
+        """Attach (or replace) the report as a PDF sent with a resumable upload. A draft or final report goes back to
+        draft; replacing the PDF of a signed report is an amendment, signed again, and needs a reason."""
+        self._need(WRITE)
+        item, invoice = self.item(item_id)
+        self._reportable(item, invoice)
+        report = self.report(item_id, lock=True)
+        if report is None:
+            self.create(item_id)
+            report = self.report(item_id, lock=True)
+        elif version is not None:
+            self._check_version(report, version)
+        signed = report.status in SIGNED
+        if signed:
+            self._need(SIGN)
+            if len(reason.strip()) < 3:
+                raise Invalid("This report is signed: say why the PDF is being replaced.", "reason")
+            sig = self._signature()
+        filename, content = UploadService(self.db, self.current).take(upload_id, "report_pdf")
+        pages = pdf_pages(content)
+        report.attachment_name, report.attachment_pages, report.attachment_size = filename, pages, len(content)
+        report.attachment_data = base64.b64encode(content).decode()
+        report.version += 1
+        report.updated_at = utcnow()
+        if signed:
+            self._sign_as(report, sig)
+            report.status, report.amend_reason = "amended", reason.strip()
+            report.amendments += 1
+            self._record(report, "amended", reason.strip())
+            report_links.issue(self.db, self.tenant_id, report.id, self.current.id)
+        else:
+            report.status = "draft"
+            report.reported_by, report.reported_by_name = self.current.id, self.current.user.full_name
+            self._record(report, "attached")
+        self._audit("report.attached", report, item, invoice, {"file": filename, "pages": pages, "bytes": len(content),
+                                                               **({"reason": reason.strip()} if signed else {})})
+        return report
+
+    def detach(self, item_id: uuid.UUID, version: int) -> TestReport:
+        self._need(WRITE)
+        report, item, invoice = self._existing(item_id)
+        self._check_version(report, version)
+        if report.status in SIGNED:
+            raise Conflict("This report is signed. Replace the PDF instead (that's an amendment).")
+        if not report.attachment_name:
+            return report
+        name = report.attachment_name
+        report.attachment_name, report.attachment_pages, report.attachment_size, report.attachment_data = "", 0, 0, ""
+        report.status = "draft"
+        report.version += 1
+        report.updated_at = utcnow()
+        self._record(report, "detached")
+        self._audit("report.detached", report, item, invoice, {"file": name})
+        return report
+
+    def attachment(self, item_id: uuid.UUID) -> tuple[bytes, str]:
+        """The uploaded PDF as it was sent (to look at while reporting); drafts only for those who may see them."""
+        report = self.visible(self.report(item_id))
+        if report is None or not report.attachment_name:
+            raise NotFound("This report has no PDF attached.")
+        return base64.b64decode(report.attachment_data), report.attachment_name
 
     def _signature(self) -> DoctorSignature:
         sig = self.db.get(DoctorSignature, self.current.id)
@@ -339,6 +406,38 @@ class TestReportService:
         return build_pdf(self.db, self.tenant_id, report, item, invoice, base_url)
 
 
+def pdf_pages(content: bytes) -> int:
+    """Pages in an uploaded PDF; refuses anything that isn't a readable, unlocked PDF."""
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+    if not content.startswith(b"%PDF-"):
+        raise Invalid("That file isn't a PDF.", "file")
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        if reader.is_encrypted and not reader.decrypt(""):
+            raise Invalid("That PDF is password-protected. Save it without a password and upload it again.", "file")
+        pages = len(reader.pages)
+    except (PdfReadError, ValueError, KeyError) as exc:
+        raise Invalid("That PDF couldn't be read. It may be damaged; export it again and upload it.", "file") from exc
+    if not pages:
+        raise Invalid("That PDF has no pages.", "file")
+    return pages
+
+
+def join_pdfs(*parts: bytes) -> bytes:
+    from pypdf import PdfReader, PdfWriter
+    writer = PdfWriter()
+    for part in parts:
+        reader = PdfReader(io.BytesIO(part))
+        if reader.is_encrypted:
+            reader.decrypt("")
+        for page in reader.pages:
+            writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
 def build_print_data(db: Session, tenant_id: uuid.UUID, report: TestReport, item: InvoiceItem, invoice: Invoice, base_url: str = "") -> dict:
     """Everything the printed report (and the PDF, and the patient's page) shows."""
     settings = db.get(TenantSettings, tenant_id)
@@ -368,7 +467,14 @@ def build_pdf(db: Session, tenant_id: uuid.UUID, report: TestReport, item: Invoi
     from app.services.report_pdf import report_pdf
     data = build_print_data(db, tenant_id, report, item, invoice, base_url)
     settings = db.get(TenantSettings, tenant_id)
+    # An uploaded PDF report: the centre's signed page first (any typed findings, the signer, the verification code
+    # and link), then every page of the uploaded report.
+    if report.attachment_name and not data["findings"] and not data["impression"]:
+        n = report.attachment_pages
+        data["findings"] = f"<p>The report follows on the next {n} page{'s' if n != 1 else ''}.</p>"
     content = report_pdf(data, decode(settings.logo_data) if settings else None, decode(report.signature_data))
+    if report.attachment_name:
+        content = join_pdfs(content, base64.b64decode(report.attachment_data))
     safe = "".join(ch if ch.isalnum() else "-" for ch in f"{item.test_name} {invoice.patient_name}").strip("-")
     return content, f"Report-{safe[:60] or 'patient'}.pdf"
 

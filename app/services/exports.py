@@ -88,36 +88,65 @@ def to_xlsx(title: str, subtitle: str, columns: Sequence[Column], rows: Sequence
     return to_xlsx_book([(title, subtitle, columns, rows, totals)])
 
 
-def to_xlsx_book(sheets: Sequence[tuple[str, str, Sequence[Column], Sequence[dict], dict | None]]) -> bytes:
-    """Several reports in one workbook, one sheet each (in the order given), e.g. Collection, Dues, Payments…"""
+# Workbook colours: the centre's brand blue for headings, a light tint for every other row, like an Excel table.
+THEME = {"title": "0B2F6B", "head": "004AAD", "head_text": "FFFFFF", "band": "EEF4FC", "total": "DCE8F8",
+         "line": "C9D3E3", "muted": "5B6B82", "tabs": ["004AAD", "F58634", "0B2F6B", "2E8B57", "8E44AD", "C0392B", "16A085", "D4A017"]}
+
+
+def to_xlsx_book(sheets: Sequence[tuple[str, str, Sequence[Column], Sequence[dict], dict | None]],
+                 summary: tuple[str, str, Sequence[Column], Sequence[dict], dict | None] | None = None) -> bytes:
+    """Several reports in one workbook, one sheet each (in the order given), e.g. Collection, Dues, Payments…
+    With `summary`, a first sheet lists one row per sheet; its first column links to that sheet."""
     wb = Workbook()
     wb.remove(wb.active)
     used: set[str] = set()
-    for title, subtitle, columns, rows, totals in sheets:
+    names = []
+    for title, *_ in sheets:
         name = _sheet_title(title)
-        while name in used:  # sheet names must be unique
-            name = _sheet_title(f"{name[:28]} {len(used)}")
-        used.add(name)
-        _write_sheet(wb.create_sheet(name), title, subtitle, columns, rows, totals)
+        n = 1
+        while name.lower() in used:  # sheet names must be unique (Excel ignores case)
+            n += 1
+            name = _sheet_title(f"{_sheet_title(title)[:27]} ({n})")
+        used.add(name.lower())
+        names.append(name)
+    if summary is not None:
+        title, subtitle, columns, rows, totals = summary
+        ws = wb.create_sheet(_sheet_title(title) if _sheet_title(title).lower() not in used else "Summary")
+        _write_sheet(ws, title, subtitle, columns, rows, totals, tab=THEME["title"])
+        for i, name in enumerate(names):
+            cell = ws.cell(row=HEADER_ROW + 1 + i, column=1)
+            cell.hyperlink = f"#'{name}'!A1"
+            cell.font = Font(color=THEME["head"], underline="single")
+    for i, (name, (title, subtitle, columns, rows, totals)) in enumerate(zip(names, sheets, strict=True)):
+        _write_sheet(wb.create_sheet(name), title, subtitle, columns, rows, totals, tab=THEME["tabs"][i % len(THEME["tabs"])])
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
 
 
-def _write_sheet(ws, title: str, subtitle: str, columns: Sequence[Column], rows: Sequence[dict], totals: dict | None) -> None:
-    ws.cell(row=1, column=1, value=title).font = Font(bold=True, size=14)
-    ws.cell(row=2, column=1, value=subtitle).font = Font(italic=True, color="555555")
-    header_row = 4
-    head_fill = PatternFill("solid", fgColor="E6F0F0")
-    line = Side(style="thin", color="999999")
-    widths = [len(label) + 2 for _, label, _ in columns]
+HEADER_ROW = 4
+
+
+def _write_sheet(ws, title: str, subtitle: str, columns: Sequence[Column], rows: Sequence[dict], totals: dict | None,
+                 tab: str = THEME["head"]) -> None:
+    ws.sheet_properties.tabColor = tab
+    ws.cell(row=1, column=1, value=title).font = Font(bold=True, size=15, color=THEME["title"])
+    ws.cell(row=2, column=1, value=subtitle).font = Font(italic=True, color=THEME["muted"])
+    header_row = HEADER_ROW
+    head_fill = PatternFill("solid", fgColor=THEME["head"])
+    band_fill = PatternFill("solid", fgColor=THEME["band"])
+    total_fill = PatternFill("solid", fgColor=THEME["total"])
+    line = Side(style="thin", color=THEME["line"])
+    grid = Border(left=line, right=line, top=line, bottom=line)
+    widths = [len(label) + 4 for _, label, _ in columns]
 
     for c, (_, label, kind) in enumerate(columns, start=1):
         cell = ws.cell(row=header_row, column=c, value=label)
-        cell.font = Font(bold=True)
+        cell.font = Font(bold=True, color=THEME["head_text"])
         cell.fill = head_fill
-        cell.border = Border(bottom=line)
+        cell.border = grid
         cell.alignment = Alignment(horizontal="right" if kind in NUMERIC else "left", vertical="center")
+    ws.row_dimensions[header_row].height = 22
 
     def put(r: int, c: int, value, kind: str):
         if kind == "money" and value is not None and value != "":
@@ -127,6 +156,7 @@ def _write_sheet(ws, title: str, subtitle: str, columns: Sequence[Column], rows:
         elif kind == "datetime" and isinstance(value, datetime):
             value = local_dt(value).replace(tzinfo=None)
         cell = ws.cell(row=r, column=c, value=value)
+        cell.border = grid
         if kind == "money":
             cell.number_format = MONEY_FORMAT
         elif kind == "percent":
@@ -140,12 +170,15 @@ def _write_sheet(ws, title: str, subtitle: str, columns: Sequence[Column], rows:
         return cell
 
     r = header_row
-    for row in rows:
+    for i, row in enumerate(rows):
         r += 1
         for c, (key, _, kind) in enumerate(columns, start=1):
             value = row.get(key)
-            put(r, c, value, kind)
+            cell = put(r, c, value, kind)
+            if i % 2:
+                cell.fill = band_fill
             widths[c - 1] = max(widths[c - 1], min(len(cell_text(value, kind)) + 2, 60))
+    last_data = r
 
     if totals is not None:
         r += 1
@@ -154,14 +187,21 @@ def _write_sheet(ws, title: str, subtitle: str, columns: Sequence[Column], rows:
             if c == 1 and value in (None, ""):
                 value = "Total"
             cell = put(r, c, value, kind if c > 1 else "text")
-            cell.font = Font(bold=True)
-            cell.border = Border(top=line)
+            cell.font = Font(bold=True, color=THEME["title"])
+            cell.fill = total_fill
+            cell.border = Border(left=line, right=line, top=Side(style="medium", color=THEME["head"]), bottom=line)
             widths[c - 1] = max(widths[c - 1], min(len(cell_text(value, kind)) + 2, 60))
 
     for c, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(c)].width = max(w, 8)
+    if columns:
+        ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(columns))}{max(last_data, header_row)}"
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
     ws.print_title_rows = f"{header_row}:{header_row}"
+    ws.page_setup.orientation = "landscape" if len(columns) > 6 else "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
 # ---------- PDF ----------

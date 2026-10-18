@@ -200,7 +200,7 @@ def test_the_same_email_is_fine_in_another_centre(clinic, beta):
 
 def test_staff_given_a_temporary_password_still_choose_their_own_at_first_sign_in(clinic):
     staff = clinic["owner"].get("/api/staff", params={"search": "front"}).json()["items"][0]
-    assert clinic["owner"].post(f"/api/staff/{staff['id']}/reset-password", json={"temporary_password": "Temp-pass-123"}).status_code == 204
+    assert clinic["owner"].post(f"/api/staff/{staff['id']}/reset-password", json={"temporary_password": "Temp-pass-123"}).status_code == 200
     c = browser("alpha.localhost")
     assert c.login("front@alpha.in", "Temp-pass-123").json()["must_change_password"] is True
     ok = c.post("/api/auth/password", json={"current_password": "Temp-pass-123", "new_password": "Brand-new-pass-9"})

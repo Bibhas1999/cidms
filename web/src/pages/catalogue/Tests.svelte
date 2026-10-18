@@ -1,6 +1,7 @@
 <script lang="ts">
   import { z } from "zod";
   import Button from "../../components/Button.svelte";
+  import BulkAddDialog from "../../components/BulkAddDialog.svelte";
   import DataTable from "../../components/DataTable.svelte";
   import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
@@ -81,6 +82,7 @@
   const labels = { name: "Name", code: "Short code", department_id: "Department", test_type_id: "Type", price: "Price" };
 
   let dialogOpen = $state(false);
+  let bulkOpen = $state(false);
   let editing = $state<LabTest | null>(null);
   const form = new Form({
     schema, initial: { name: "", code: "", department_id: "", test_type_id: "", price: null as number | null, is_active: true },
@@ -145,7 +147,7 @@
 
 <PageHeader eyebrow="Catalogue" title="Tests & prices" description="The tests the centre offers, what each costs, and how they're grouped.">
   {#snippet actions()}
-    {#if canManage && tab === "tests"}<Button variant="primary" icon="plus" onclick={openAdd}>Add a test</Button>{/if}
+    {#if canManage && tab === "tests"}<Button icon="sheet" onclick={() => (bulkOpen = true)}>Add several</Button><Button variant="primary" icon="plus" onclick={openAdd}>Add a test</Button>{/if}
   {/snippet}
 </PageHeader>
 
@@ -239,6 +241,8 @@
     <Button variant="primary" type="submit" form="test-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add test"}</Button>
   {/snippet}
 </Dialog>
+
+<BulkAddDialog bind:open={bulkOpen} kind="tests" {departments} {types} onadded={() => reload++} />
 
 <style>
   .type-badges { flex-wrap: wrap; }

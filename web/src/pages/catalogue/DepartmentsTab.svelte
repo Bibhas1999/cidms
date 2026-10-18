@@ -2,6 +2,7 @@
   import Dialog from "../../components/Dialog.svelte";
   import Field from "../../components/Field.svelte";
   import Button from "../../components/Button.svelte";
+  import BulkAddDialog from "../../components/BulkAddDialog.svelte";
   import DataTable from "../../components/DataTable.svelte";
   import StatusBadge from "../../components/StatusBadge.svelte";
   import Toolbar from "../../components/Toolbar.svelte";
@@ -16,6 +17,7 @@
   const canManage = $derived(session.can("catalogue.manage"));
 
   let dialogOpen = $state(false);
+  let bulkOpen = $state(false);
   let editing = $state<Department | null>(null);
   let form = $state({ name: "", is_active: true });
   let errors = $state<Record<string, string>>({});
@@ -77,7 +79,7 @@
 {#if canManage}
   <Toolbar>
     <p class="text-sm text-muted">Departments group the tests: Pathology, Radiology, Cardiology…</p>
-    {#snippet end()}<Button variant="primary" size="sm" icon="plus" onclick={openAdd}>Add a department</Button>{/snippet}
+    {#snippet end()}<Button size="sm" icon="sheet" onclick={() => (bulkOpen = true)}>Add several</Button><Button variant="primary" size="sm" icon="plus" onclick={openAdd}>Add a department</Button>{/snippet}
   </Toolbar>
 {/if}
 <DataTable label="Departments" rows={departments} loading={!loaded} actions={canManage ? actionsFor : undefined}
@@ -105,3 +107,5 @@
     <Button variant="primary" type="submit" form="department-form" loading={saving} loadingText="Saving…">{editing ? "Save changes" : "Add department"}</Button>
   {/snippet}
 </Dialog>
+
+<BulkAddDialog bind:open={bulkOpen} kind="departments" onadded={onchanged} />
