@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "./Icon.svelte";
   import type { Snippet } from "svelte";
   import { session } from "../lib/session.svelte";
   import Credit from "./Credit.svelte";
@@ -38,8 +39,7 @@
         {#if ws?.logo_url}
           <img class="logo" src={ws.logo_url} alt="{ws.name} logo" />
         {:else}
-          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#fff" fill-opacity=".14" />
-            <path d="M8 17h4.5l2-6 3 11 2-5H24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <Icon name="brandMark" class="mark" />
         {/if}
         <div>
           <h1 class="centre">{isPlatform ? "CIDMS" : ws?.name}</h1>
@@ -62,42 +62,42 @@
       {#if isPlatform}
         <ul class="services" aria-label="What the platform does">
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="9" width="28" height="24" rx="3" /><path d="M6 16h28M13 9V5M27 9V5M12 23h6M12 28h10" /></svg>
+            <Icon name="svcCentres" />
             <span>Centres and plans</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="10" width="30" height="20" rx="3" /><path d="M5 16h30M10 25h7" /></svg>
+            <Icon name="svcSubscriptions" />
             <span>Subscriptions</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="15" cy="15" r="5" /><circle cx="27" cy="17" r="4" /><path d="M6 32c0-5 4-9 9-9s9 4 9 9M24 32c0-3 1.5-6 5-7 3 0 5 3 5 7" /></svg>
+            <Icon name="svcStaff" />
             <span>Platform staff</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 5 8 10v9c0 7 5 12 12 15 7-3 12-8 12-15v-9z" /><path d="m15 20 4 4 7-8" /></svg>
+            <Icon name="svcSecurity" />
             <span>Security and activity</span>
           </li>
         </ul>
       {:else}
         <ul class="services" aria-label="Services">
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="5" width="26" height="30" rx="4" /><path d="M20 10v20M14 14c4 1 8 1 12 0M13 19c5 1.5 9 1.5 14 0M14 24c4 1 8 1 12 0" /></svg>
+            <Icon name="svcXray" />
             <span>Digital X-ray</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="18" r="13" /><circle cx="20" cy="18" r="6" /><path d="M8 34h24M13 34l3-6h8l3 6" /></svg>
+            <Icon name="svcCt" />
             <span>CT scan</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 30c0-9 4-17 10-17s10 8 10 17z" /><path d="M20 13V6M16 6h8M15 24c2 2 8 2 10 0" /></svg>
+            <Icon name="svcUltrasound" />
             <span>Ultrasound &amp; echo</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M17 5h6M18 5v6l-6 12a6 6 0 0 0 5 9h6a6 6 0 0 0 5-9l-6-12V5" /><path d="M14 23h12" /></svg>
+            <Icon name="svcPathology" />
             <span>Pathology</span>
           </li>
           <li>
-            <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 21h8l3-8 5 16 4-11 3 3h9" /></svg>
+            <Icon name="svcEcg" />
             <span>ECG</span>
           </li>
         </ul>
@@ -110,7 +110,7 @@
   <section class="form-side">
     {@render children()}
     <p class="secure muted">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6z" /><path d="m9 12 2 2 4-4" /></svg>
+      <Icon name="shieldCheck" />
       Patient information is kept private and every sign-in is recorded.
     </p>
     {#if isPlatform}
@@ -133,7 +133,7 @@
   .wordmark-tile { display: inline-block; max-width: 100%; padding: 14px 20px; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
   .wordmark { display: block; width: 400px; max-width: 100%; height: auto; }
   .logo { width: 132px; height: 132px; object-fit: contain; padding: 10px; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
-  .mark { width: 72px; height: 72px; }
+  .brand-panel :global(svg.mark) { width: 72px; height: 72px; color: #fff; }
   .centre { color: #fff; font-size: 32px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
   .tagline { margin: 8px 0 0; font-size: 16px; opacity: .85; letter-spacing: .02em; }
   .pitch { margin-top: auto; max-width: 520px; }
@@ -142,7 +142,7 @@
   .services { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; max-width: 560px; }
   .services li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
     background: rgb(255 255 255 / 9%); border: 1px solid rgb(255 255 255 / 14%); font-weight: 550; }
-  .services svg { width: 30px; height: 30px; flex: none; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .services :global(svg.icon) { width: 30px; height: 30px; flex: none; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .powered { margin: 0; font-size: 13px; opacity: .7; }
 
   /* ---------- the form side (shared by sign-in, forgot and reset) ---------- */
@@ -172,7 +172,7 @@
   .form-side :global(.back:hover) { text-decoration: underline; }
   @keyframes -global-auth-spin { to { transform: rotate(360deg); } }
   .secure { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 0; }
-  .secure svg { width: 16px; height: 16px; fill: none; stroke: var(--success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .secure :global(svg.icon) { width: 16px; height: 16px; fill: none; stroke: var(--success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   @media (max-width: 900px) {
     .auth-page { grid-template-columns: 1fr; }

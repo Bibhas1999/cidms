@@ -1,7 +1,16 @@
-// Inline SVG icons (Lucide-style, 24x24, stroke), the same set as the Sandhata Registry plus a few a
-// diagnostic centre needs. Used through components/Icon.svelte.
+// Every icon and small picture in the app, drawn through components/Icon.svelte (<Icon name="mail" />).
+// Most are Lucide-style line icons on a 24x24 grid: just the SVG body as a string. Others give their own grid
+// (viewBox) or are filled shapes: { body, viewBox?, filled? }. Add new ones here rather than inline <svg>s.
 
-export const ICONS: Record<string, string> = {
+export interface IconDef {
+  body: string;
+  /** The drawing's grid; "0 0 24 24" when not given. */
+  viewBox?: string;
+  /** A filled shape (fill: currentColor) rather than lines (stroke: currentColor). */
+  filled?: boolean;
+}
+
+export const ICONS: Record<string, string | IconDef> = {
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -60,4 +69,20 @@ export const ICONS: Record<string, string> = {
   fileText: '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
   sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
   barChart: '<path d="M3 3v18h18"/><path d="M8 17v-5M13 17V7M18 17v-8"/>',
+  // Sign-in, reset and the credit line
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/>',
+  shieldCheck: '<path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  heart: { filled: true, body: '<path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/>' },
+  // The CIDMS mark: a tinted tile with a pulse line, in the current colour.
+  brandMark: { viewBox: "0 0 32 32", body: '<rect width="32" height="32" rx="8" fill="currentColor" fill-opacity=".14" stroke="none"/><path d="M8 17h4.5l2-6 3 11 2-5H24" stroke-width="2.4"/>' },
+  // Pictures of what the centre does and what the platform manages (sign-in page), on a 40x40 grid.
+  svcCentres: { viewBox: "0 0 40 40", body: '<rect x="6" y="9" width="28" height="24" rx="3"/><path d="M6 16h28M13 9V5M27 9V5M12 23h6M12 28h10"/>' },
+  svcSubscriptions: { viewBox: "0 0 40 40", body: '<rect x="5" y="10" width="30" height="20" rx="3"/><path d="M5 16h30M10 25h7"/>' },
+  svcStaff: { viewBox: "0 0 40 40", body: '<circle cx="15" cy="15" r="5"/><circle cx="27" cy="17" r="4"/><path d="M6 32c0-5 4-9 9-9s9 4 9 9M24 32c0-3 1.5-6 5-7 3 0 5 3 5 7"/>' },
+  svcSecurity: { viewBox: "0 0 40 40", body: '<path d="M20 5 8 10v9c0 7 5 12 12 15 7-3 12-8 12-15v-9z"/><path d="m15 20 4 4 7-8"/>' },
+  svcXray: { viewBox: "0 0 40 40", body: '<rect x="7" y="5" width="26" height="30" rx="4"/><path d="M20 10v20M14 14c4 1 8 1 12 0M13 19c5 1.5 9 1.5 14 0M14 24c4 1 8 1 12 0"/>' },
+  svcCt: { viewBox: "0 0 40 40", body: '<circle cx="20" cy="18" r="13"/><circle cx="20" cy="18" r="6"/><path d="M8 34h24M13 34l3-6h8l3 6"/>' },
+  svcUltrasound: { viewBox: "0 0 40 40", body: '<path d="M10 30c0-9 4-17 10-17s10 8 10 17z"/><path d="M20 13V6M16 6h8M15 24c2 2 8 2 10 0"/>' },
+  svcPathology: { viewBox: "0 0 40 40", body: '<path d="M17 5h6M18 5v6l-6 12a6 6 0 0 0 5 9h6a6 6 0 0 0 5-9l-6-12V5"/><path d="M14 23h12"/>' },
+  svcEcg: { viewBox: "0 0 40 40", body: '<path d="M4 21h8l3-8 5 16 4-11 3 3h9"/>' },
 };
