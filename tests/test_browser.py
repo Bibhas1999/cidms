@@ -1,6 +1,7 @@
 """Browser checks of the main journeys in Microsoft Edge (Playwright). Needs the web app built (cd web && npm run build).
 Skipped when the build or Edge isn't available."""
 
+import os
 import threading
 import time
 from pathlib import Path
@@ -35,11 +36,13 @@ def live_server():
 
 @pytest.fixture(scope="module")
 def edge():
+    # BROWSER_CHANNEL: msedge (the default, as installed on Windows) or chromium (Playwright's own, used in CI).
+    channel = os.environ.get("BROWSER_CHANNEL", "msedge")
     with playwright.sync_playwright() as p:
         try:
-            browser = p.chromium.launch(channel="msedge")
-        except Exception as exc:  # Edge not installed
-            pytest.skip(f"Microsoft Edge not available: {exc}")
+            browser = p.chromium.launch(channel=None if channel == "chromium" else channel)
+        except Exception as exc:  # that browser isn't installed
+            pytest.skip(f"Browser {channel} not available: {exc}")
         yield browser
         browser.close()
 

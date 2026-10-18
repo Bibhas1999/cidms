@@ -4,11 +4,13 @@
 #   docker compose -f deploy/docker-compose.prod.yml --env-file .env.production up -d --build
 #
 # Only Caddy is reachable from outside (ports 80 and 443). The database has no public port at all.
+# Images are pinned by digest (the tag says what it is; the digest makes it exactly that build). To update one:
+#   docker buildx imagetools inspect caddy:2-alpine   (copy the Digest line)
 name: supreme-dms
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     environment:
       POSTGRES_DB: supreme
       POSTGRES_USER: supreme_owner
@@ -27,7 +29,7 @@ services:
   # Brings the tables up to date before the app starts (and exits).
   migrate:
     build: { context: .., dockerfile: Dockerfile }
-    image: supreme-dms:latest
+    image: supreme-dms:${APP_VERSION:-latest}   # the commit being deployed (CI sets APP_VERSION)
     command: ["python", "-m", "alembic", "upgrade", "head"]
     env_file: [../.env.production]
     depends_on:
@@ -35,7 +37,7 @@ services:
     restart: "no"
 
   app:
-    image: supreme-dms:latest
+    image: supreme-dms:${APP_VERSION:-latest}   # the commit being deployed (CI sets APP_VERSION)
     env_file: [../.env.production]
     # Behind Caddy on the private Docker network: trust its X-Forwarded-* headers.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3",
@@ -50,7 +52,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: supreme-dms:latest
+    image: supreme-dms:${APP_VERSION:-latest}   # the commit being deployed (CI sets APP_VERSION)
     env_file: [../.env.production]
     command: ["python", "-m", "app.worker", "--concurrency", "2"]
     volumes:
@@ -59,14 +61,16 @@ services:
       migrate: { condition: service_completed_successfully }
     stop_signal: SIGTERM
     stop_grace_period: 60s   # lets the job in hand finish
-    # The image's health check calls the web port, which the worker doesn't have: check that the process is alive.
+    # The image's health check calls the web port, which the worker doesn't have. The worker touches
+    # WORKER_ALIVE_FILE every 30 s from its main loop: unhealthy when that stops for 2 minutes (stuck, not just alive).
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/proc/1') else 1)"]
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/cidms-worker-alive') < 120 else 1)"]
       interval: 60s
+      start_period: 60s
     restart: unless-stopped
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN in .env.production}

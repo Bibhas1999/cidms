@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import Paging, paging, platform_permission
 from app.core.db import DB
 from app.core.errors import NotFound
-from app.core.security import CurrentUser
+from app.core.security import CurrentUser, confirm_identity
 from app.schemas import BackupRestoreIn, BackupSettingsIn, ClientCreateIn, ClientOut, ClientUpdateIn, Page, PlanOut
 from app.services import backups
 from app.services.clients import ClientService, platform_overview
@@ -85,7 +85,9 @@ def backup_download(run_id: uuid.UUID, format: Literal["dump", "sql"] = "dump", 
 @router.post("/backups/{run_id}/restore")
 def backup_restore(run_id: uuid.UUID, data: BackupRestoreIn, db: Session = DB,
                    current: CurrentUser = Depends(platform_permission("platform.backups.manage"))):
-    """Put the whole database back to this backup. The server starts within a minute; it can be called off till then."""
+    """Put the whole database back to this backup. The server starts within a minute; it can be called off till then.
+    Needs the person's own password again."""
+    confirm_identity(current, data.password)
     return backups.request_restore(db, current.id, run_id)
 
 

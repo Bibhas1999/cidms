@@ -303,6 +303,10 @@ def fail(c: Claimed, worker_id: str, error: str, permanent: bool = False) -> str
         db.execute(update(Job).where(Job.id == c.id, Job.locked_by == worker_id).values(**values))
         db.commit()
     spec = JOBS.get(c.kind)
+    if final:
+        from app.core import alerts
+        alerts.alert(f"job-failed:{c.kind}", f"A background job failed: {c.kind}",
+                     f"Job {c.id} ({c.kind}, client {c.tenant_id or 'platform'}) failed after {c.attempts} attempts.\n\n{error[:2000]}")
     if final and spec and spec.notify_failure and c.created_by:
         try:
             from app.services import events

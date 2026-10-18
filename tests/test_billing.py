@@ -332,3 +332,15 @@ def test_offline_bills_must_have_a_believable_time(centre):
     for when in (datetime.now(UTC) + timedelta(hours=2), datetime.now(UTC) - timedelta(days=40)):
         r = bill(centre["front"], centre["tests"], ["CBC"], offline={"made_at": when.isoformat(), "offline_no": "OFF-K7Q-0003", "printed_total": "250.50"})
         assert r.status_code == 422 and r.json()["field"] == "offline"
+
+
+def test_opening_a_patient_or_a_bill_is_logged_once_in_ten_minutes(centre):
+    front = centre["front"]
+    b = bill(front, centre["tests"], ["CBC"]).json()
+    for _ in range(3):
+        assert front.get(f"/api/bills/{b['id']}").status_code == 200
+        assert front.get(f"/api/patients/{b['patient_id']}").status_code == 200
+    with scoped_session(centre["tenant"].id) as db:
+        rows = db.execute(text("SELECT action, entity_id FROM activity_log WHERE action LIKE '%.viewed' ORDER BY id")).all()
+    assert [r.action for r in rows] == ["invoice.viewed", "patient.viewed"]
+    assert {r.entity_id for r in rows} == {b["id"], b["patient_id"]}
