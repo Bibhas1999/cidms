@@ -40,6 +40,18 @@ def _safe_verify(stored: str, password: str) -> bool:
         return False
 
 
+_TEMP_LETTERS = "abcdefghjkmnpqrstuvwxyz"  # no i, l or o: easy to read out over the phone
+_TEMP_DIGITS = "23456789"
+
+
+def random_temporary_password() -> str:
+    """A one-time password for a new person or a reset, e.g. "Kmrt-4829-Vbxe": different for everyone, easy to read
+    out, and they must choose their own at the first sign-in."""
+    import secrets
+    word = lambda: "".join(secrets.choice(_TEMP_LETTERS) for _ in range(4)).capitalize()  # noqa: E731
+    return f"{word()}-{''.join(secrets.choice(_TEMP_DIGITS) for _ in range(4))}-{word()}"
+
+
 def check_strength(password: str, field: str = "new_password") -> None:
     """Long enough, not all one kind of character. (Length matters far more than symbols.)"""
     n = get_settings().min_password_length

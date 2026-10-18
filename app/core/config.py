@@ -41,9 +41,6 @@ class Settings(BaseSettings):
     max_failed_logins: int = 5
     lockout_minutes: int = 15
     min_password_length: int = 10
-    # The temporary password given to new staff and on a password reset (owner's choice). It works once:
-    # at their first sign-in they must choose their own. Set DEFAULT_TEMPORARY_PASSWORD to change it.
-    default_temporary_password: str = "supreme@123"  # noqa: S105 - the owner's chosen one-time password, not a secret
 
     # First sign-in details used by "python -m app.seed" (each person must change the password at first sign-in).
     seed_platform_owner_email: str = "owner@supremedms.local"

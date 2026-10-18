@@ -18,9 +18,9 @@ from app.models import Role, Tenant, User, UserRole
 
 
 def temporary_password() -> str:
-    """The centre's one-time temporary password (DEFAULT_TEMPORARY_PASSWORD); they choose their own at first sign-in."""
-    from app.core.config import get_settings
-    return get_settings().default_temporary_password
+    """A random one-time password; they choose their own at first sign-in."""
+    from app.core.passwords import random_temporary_password
+    return random_temporary_password()
 
 
 def create_user(workspace: str, email: str, name: str, role_code: str) -> str:
