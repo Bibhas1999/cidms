@@ -35,8 +35,7 @@
 <div class="landing">
   <header class="hero">
     <span class="mark" aria-hidden="true">
-      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="currentColor" fill-opacity=".14" />
-        <path d="M8 17h4.5l2-6 3 11 2-5H24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      <Icon name="brandMark" />
     </span>
     <h1>CIDMS</h1>
     <p class="full">Cloud Integrated Diagnostic Management System</p>
@@ -83,7 +82,7 @@
   .landing { max-width: 1040px; margin: 0 auto; padding: 48px 20px 32px; display: flex; flex-direction: column; gap: 28px; }
   .hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
   .mark { color: var(--primary); width: 56px; height: 56px; }
-  .mark svg { width: 100%; height: 100%; }
+  .mark :global(svg.icon) { width: 100%; height: 100%; }
   .hero h1 { margin: 6px 0 0; font-size: 44px; font-weight: 800; letter-spacing: -0.03em; color: var(--primary-text); }
   .full { margin: 0; font-size: 16px; font-weight: 600; color: var(--foreground); }
   .lead { margin: 8px 0 0; max-width: 620px; font-size: 16px; line-height: 1.6; color: var(--muted-foreground); }

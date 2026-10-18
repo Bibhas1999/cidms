@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import AuthLayout from "../components/AuthLayout.svelte";
   import { ApiError, post } from "../lib/api";
   import { navigate, router } from "../lib/router.svelte";
@@ -46,7 +47,7 @@
       <label class="field">
         <span>New password</span>
         <span class="control">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+          <Icon name="lock" />
           <input type={show ? "text" : "password"} autocomplete="new-password" bind:value={password}
                  aria-invalid={!!errors.new_password} aria-describedby={errors.new_password ? "pw-error" : undefined} />
         </span>
@@ -55,7 +56,7 @@
       <label class="field">
         <span>New password again</span>
         <span class="control">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+          <Icon name="lock" />
           <input type={show ? "text" : "password"} autocomplete="new-password" bind:value={again}
                  aria-invalid={!!errors.again} aria-describedby={errors.again ? "again-error" : undefined} />
         </span>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { tooltip } from "../lib/tooltip";
   import AuthLayout from "../components/AuthLayout.svelte";
   import { forgetAccount, recentAccounts, type RecentAccount } from "../lib/accounts";
@@ -89,7 +90,7 @@
                 <span class="account-text"><span class="account-name">{a.name}</span><span class="account-email">{a.email}</span></span>
               </button>
               <button type="button" class="account-forget" aria-label="Remove {a.name} from this computer" use:tooltip={"Remove from this computer"} onclick={() => forget(a)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                <Icon name="x" />
               </button>
             </div>
           {/each}
@@ -106,7 +107,7 @@
       <div class="field">
         <label for="login-email">Email</label>
         <span class="control">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg>
+          <Icon name="mail" />
           <input id="login-email" type="email" autocomplete="username" placeholder="you@example.com" bind:value={email} required aria-invalid={failed} />
         </span>
       </div>
@@ -115,7 +116,7 @@
       <div class="field">
         <label for="login-password">Password</label>
         <span class="control">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+          <Icon name="lock" />
           <input id="login-password" class="password" bind:this={passwordInput} type={showPassword ? "text" : "password"} autocomplete="current-password" bind:value={password}
                  onkeydown={onKey} onkeyup={onKey} required aria-invalid={failed} />
           <button type="button" class="reveal" aria-label={showPassword ? "Hide password" : "Show password"}
@@ -123,10 +124,10 @@
                   onclick={() => (showPassword = !showPassword)}>
             {#if showPassword}
               <!-- eye-off -->
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2.5 12S6 19 12 19a9.6 9.6 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+              <Icon name="eyeOff" />
             {:else}
               <!-- eye -->
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" /><circle cx="12" cy="12" r="3" /></svg>
+              <Icon name="eye" />
             {/if}
           </button>
         </span>
@@ -163,13 +164,13 @@
   .account-email { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .account-forget { flex: none; width: 34px; height: 34px; margin-right: 6px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--text-2); cursor: pointer; }
   .account-forget:hover { background: var(--surface-2); }
-  .account-forget svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .account-forget :global(svg.icon) { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   .other { justify-self: center; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; padding: 4px; margin-left: auto; }
   .other:hover { text-decoration: underline; }
   .reveal { position: absolute; right: 4px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px;
     background: transparent; color: var(--text-2); cursor: pointer; }
   .reveal:hover { background: var(--surface-2); }
-  .reveal svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .reveal :global(svg.icon) { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .password { padding-right: 46px !important; }
   .caps { color: var(--warning); font-weight: 500; font-size: 12px; }
   .options { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; }
