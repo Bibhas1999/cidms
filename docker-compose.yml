@@ -7,7 +7,7 @@
 # Passwords below are for these throwaway local containers only.
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     environment:
       POSTGRES_DB: supreme
       POSTGRES_USER: supreme_owner        # owns the tables and runs migrations
@@ -37,7 +37,7 @@ services:
   # with the user and password below (set ORTHANC_USER / ORTHANC_PASSWORD in .env, the same values the app uses).
   # Scanners send studies to its DICOM port 4242 (AE title SUPREME).
   orthanc:
-    image: orthancteam/orthanc:latest
+    image: orthancteam/orthanc:latest@sha256:d2705f2c56547e55ce9bc2250fd22d05d326493b3f3d9fa191ecb7db8ca6b5a2
     environment:
       ORTHANC__NAME: "Supreme DMS images"
       ORTHANC__DICOM_AET: SUPREME
@@ -60,7 +60,7 @@ services:
   # The OHIF image viewer. Browsers reach it only through the app at /viewer (same address, same sign-in);
   # its data source is the app's DICOMweb proxy at /api/dicom-web (docker/ohif/app-config.js).
   ohif:
-    image: ohif/app:latest
+    image: ohif/app:latest@sha256:d9c875439ee682efb751c004ee9124405861633a5e7dd654f792e55a2dcce895
     environment:
       PORT: "80"
     ports:

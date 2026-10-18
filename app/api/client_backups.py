@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_user, platform_permission
 from app.core.db import DB
 from app.core.errors import NotFound
-from app.core.security import CurrentUser, require
+from app.core.security import CurrentUser, confirm_identity, require
 from app.models import Tenant
 from app.schemas import BackupRestoreIn, BackupSettingsIn
 from app.services import client_backups as cb
@@ -64,7 +64,9 @@ def download(backup_id: uuid.UUID, format: Format = "xlsx", db: Session = DB, cu
 
 @router.post("/api/backups/{backup_id}/restore")
 def restore(backup_id: uuid.UUID, data: BackupRestoreIn, db: Session = DB, current: CurrentUser = Depends(_owner)):
-    """Put all the centre's records back to this copy. A fresh copy is made first; everyone signs in again."""
+    """Put all the centre's records back to this copy. A fresh copy is made first; everyone signs in again.
+    Needs the owner's own password again."""
+    confirm_identity(current, data.password)
     return cb.request_restore(db, current.tenant.id, current.id, backup_id)
 
 
@@ -99,4 +101,5 @@ def client_download(tenant_id: uuid.UUID, backup_id: uuid.UUID, format: Format =
 @router.post("/api/platform/clients/{tenant_id}/backups/{backup_id}/restore")
 def client_restore(tenant_id: uuid.UUID, backup_id: uuid.UUID, data: BackupRestoreIn, db: Session = DB,
                    current: CurrentUser = PLATFORM):
+    confirm_identity(current, data.password)
     return cb.request_restore(db, _client(db, tenant_id).id, current.id, backup_id)

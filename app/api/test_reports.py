@@ -148,7 +148,9 @@ def report_summary(date_from: date | None = Query(None, alias="from"), date_to: 
 
 @reports.get("/for-item/{item_id}", response_model=ReportWorkspaceOut)
 def report_for_item(item_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
-    return _workspace(TestReportService(db, current), item_id, check_server=True)
+    out = _workspace(TestReportService(db, current), item_id, check_server=True)
+    AuditService(db).viewed(current.user.tenant_id, current.id, "invoice_item", item_id, {"as": "report", "test": out.item.test_name})
+    return out
 
 
 @reports.post("/for-item/{item_id}", response_model=ReportWorkspaceOut, status_code=status.HTTP_201_CREATED)
@@ -215,7 +217,9 @@ def report_version(item_id: uuid.UUID, number: int, db: Session = DB, current: C
 
 @reports.get("/for-item/{item_id}/print", response_model=ReportPrintOut)
 def report_print(item_id: uuid.UUID, request: Request, db: Session = DB, current: CurrentUser = Depends(client_user)):
-    return TestReportService(db, current).print_data(item_id, base_url(request))
+    data = TestReportService(db, current).print_data(item_id, base_url(request))
+    AuditService(db).viewed(current.user.tenant_id, current.id, "invoice_item", item_id, {"as": "print"})
+    return data
 
 
 # ---------- the PDF, and sending it to the patient ----------
@@ -224,6 +228,7 @@ def report_print(item_id: uuid.UUID, request: Request, db: Session = DB, current
 def report_pdf(report_id: uuid.UUID, request: Request, download: bool = False, db: Session = DB,
                current: CurrentUser = Depends(client_user)):
     content, filename = TestReportService(db, current).pdf(report_id, base_url(request))
+    AuditService(db).viewed(current.user.tenant_id, current.id, "test_report", report_id, {"as": "pdf"})
     disposition = "attachment" if download else "inline"
     return Response(content, media_type="application/pdf", headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
 

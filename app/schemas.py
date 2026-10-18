@@ -239,6 +239,7 @@ class ClientErrorIn(BaseModel):
 
 class BackupRestoreIn(BaseModel):
     confirm: str = Field(max_length=20)
+    password: str = Field(default="", max_length=200)  # their own password again: a restore is never one click away
 
     @field_validator("confirm")
     @classmethod

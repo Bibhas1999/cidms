@@ -144,6 +144,8 @@ def mount_web(app: FastAPI) -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
+    from app.core.alerts import init_error_tracking
+    init_error_tracking("web")
     from app.core.db import web_limits
     web_limits.update(statement_ms=settings.db_statement_timeout_s * 1000,
                       idle_in_transaction_ms=settings.db_idle_in_transaction_timeout_s * 1000)

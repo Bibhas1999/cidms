@@ -12,7 +12,7 @@ from app.core import jobs
 from app.core.db import scoped_session
 from app.models import ClientBackup, ClientBackupSettings
 from app.services import client_backups as cb
-from tests.conftest import browser, make_user
+from tests.conftest import PASSWORD, browser, make_user
 from tests.test_billing import bill, centre  # noqa: F401  (fixture)
 
 
@@ -58,7 +58,11 @@ def test_a_copy_is_made_downloaded_and_restored(centre):  # noqa: F811
     test_id = centre["tests"]["CBC"]
     owner.patch(f"/api/tests/{test_id}", json={"name": "CBC (renamed)"})
     assert owner.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "yes"}).status_code == 422
-    assert owner.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE"}).status_code == 200
+    # Their own password again, or nothing happens.
+    wrong = owner.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE", "password": "not-it-123"})
+    assert wrong.status_code == 403 and wrong.json()["field"] == "password"
+    assert owner.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE"}).status_code == 403
+    assert owner.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE", "password": PASSWORD}).status_code == 200
     run_jobs()
     assert owner.get("/api/bills").status_code == 401, [r["message"] for r in owner.get("/api/backups").json()["runs"][:2]]  # everyone signs in again
     owner.login("owner@alpha.in")
@@ -84,7 +88,7 @@ def test_a_centre_cannot_reach_another_centres_copies(centre, beta):  # noqa: F8
     other = browser("beta.localhost")
     other.login("owner@beta.in")
     assert other.get(f"/api/backups/{copy['id']}/download").status_code == 404
-    assert other.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE"}).status_code == 404
+    assert other.post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE", "password": PASSWORD}).status_code == 404
     assert other.get("/api/backups").json()["runs"] == []
 
 
@@ -98,7 +102,7 @@ def test_the_platform_backs_up_and_restores_any_client(centre):  # noqa: F811
     copy = p.get(f"/api/platform/clients/{t}/backups").json()["runs"][0]
     assert copy["status"] == "ok"
     assert p.get(f"/api/platform/clients/{t}/backups/{copy['id']}/download?format=sql").status_code == 200
-    assert p.post(f"/api/platform/clients/{t}/backups/{copy['id']}/restore", json={"confirm": "RESTORE"}).status_code == 200
+    assert p.post(f"/api/platform/clients/{t}/backups/{copy['id']}/restore", json={"confirm": "RESTORE", "password": PASSWORD}).status_code == 200
     run_jobs()
     assert p.get(f"/api/platform/clients/{t}/backups").json()["runs"][0]["status"] == "ok"
 
@@ -109,7 +113,7 @@ def test_a_copy_from_another_version_is_kept_but_not_restored(centre):  # noqa: 
         db.get(ClientBackup, copy["id"]).schema_version = "0001_foundation"
     row = centre["owner"].get("/api/backups").json()["runs"][0]
     assert row["available"] and not row["restorable"]
-    assert centre["owner"].post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE"}).status_code == 422
+    assert centre["owner"].post(f"/api/backups/{copy['id']}/restore", json={"confirm": "RESTORE", "password": PASSWORD}).status_code == 422
     assert centre["owner"].get(f"/api/backups/{copy['id']}/download?format=xlsx").status_code == 200
 
 
