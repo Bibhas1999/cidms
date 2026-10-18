@@ -24,7 +24,7 @@ from app.models import Role, Tenant, TenantSettings, User, UserRole
 from app.seed import seed_reference
 
 PASSWORD = "Test-password-1"
-TABLES = "password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
+TABLES = "rate_limit_hits, password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
 
 
 @pytest.fixture(scope="session", autouse=True)

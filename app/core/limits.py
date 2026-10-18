@@ -1,10 +1,11 @@
-"""Small in-process limits: request body size, and attempts per IP for sign-in and error reports.
-(One app process locally; a shared store such as Redis replaces this when there are several.)"""
+"""Limits: request body size, and attempts per caller (sign-in, reset emails, error reports, report-link checks,
+API keys). Attempts are kept in the database (rate_limit_hits), so every app process and worker counts them
+together; each attempt is saved in its own short transaction, so it counts even when the request then fails."""
 
-import threading
-import time
-from collections import deque
+import math
+import random
 
+from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -15,31 +16,46 @@ MAX_JSON_BYTES = 1_000_000
 
 
 class RateLimiter:
-    def __init__(self, limit: int, per_seconds: int):
-        self.limit, self.per = limit, per_seconds
-        self._hits: dict[str, deque[float]] = {}
-        self._lock = threading.Lock()
+    """At most `limit` attempts per key in any `per_seconds` window (sliding), shared by all processes."""
+
+    def __init__(self, name: str, limit: int, per_seconds: int):
+        self.name, self.limit, self.per = name, limit, per_seconds
+
+    def wait_seconds(self, key: str, record: bool = True) -> int:
+        """Record an attempt and return 0, or, when over the limit, how long to wait (and record nothing).
+        record=False only asks whether the key is over the limit."""
+        from app.core.db import engine
+        key = key[:200]
+        with engine.begin() as conn:
+            # One caller's attempts are counted one at a time, so two at once can't both slip under the limit.
+            conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"{self.name}:{key}"})
+            count, oldest, now = conn.execute(text(
+                "SELECT count(*), min(at), now() FROM rate_limit_hits"
+                " WHERE bucket = :b AND key = :k AND at > now() - make_interval(secs => :p)"),
+                {"b": self.name, "k": key, "p": self.per}).one()
+            if count >= self.limit:
+                return max(1, math.ceil(self.per - (now - oldest).total_seconds()))
+            if not record:
+                return 0
+            conn.execute(text("INSERT INTO rate_limit_hits (bucket, key) VALUES (:b, :k)"), {"b": self.name, "k": key})
+            if random.random() < 0.01:  # noqa: S311 - housekeeping, not security
+                conn.execute(text("DELETE FROM rate_limit_hits WHERE at < now() - interval '2 days'"))
+        return 0
 
     def hit(self, key: str, message: str = "Too many attempts. Please wait a few minutes and try again.") -> None:
-        now = time.monotonic()
-        with self._lock:
-            q = self._hits.setdefault(key, deque())
-            while q and q[0] <= now - self.per:
-                q.popleft()
-            if len(q) >= self.limit:
-                raise TooManyRequests(message)
-            q.append(now)
-            if len(self._hits) > 50_000:  # forget idle callers so memory stays bounded
-                self._hits = {k: v for k, v in self._hits.items() if v and v[-1] > now - self.per}
+        if self.wait_seconds(key):
+            raise TooManyRequests(message)
 
     def reset(self) -> None:
-        with self._lock:
-            self._hits.clear()
+        """Forget every attempt in this bucket (tests)."""
+        from app.core.db import engine
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM rate_limit_hits WHERE bucket = :b"), {"b": self.name})
 
 
-login_limiter = RateLimiter(limit=20, per_seconds=300)
-client_error_limiter = RateLimiter(limit=30, per_seconds=60)
-reset_limiter = RateLimiter(limit=3, per_seconds=900)  # reset emails per address
+login_limiter = RateLimiter("login", limit=20, per_seconds=300)
+client_error_limiter = RateLimiter("client-error", limit=30, per_seconds=60)
+reset_limiter = RateLimiter("reset-email", limit=3, per_seconds=900)  # reset emails per address
 
 
 class BodySizeMiddleware(BaseHTTPMiddleware):

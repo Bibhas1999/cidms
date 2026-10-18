@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = Field(default="", repr=False)  # the webhook's subscribe check
     whatsapp_app_secret: str = Field(default="", repr=False)    # checks X-Hub-Signature-256 on webhook calls
 
+    # Signs the links printed on reports (QR codes). Unset: SESSION_SECRET (as before). Set it to the current
+    # SESSION_SECRET before ever changing that, so printed reports keep working.
+    report_link_secret: str = Field(default="", repr=False)
+
     # Request and response bodies encrypted between the browser and the app (AES-GCM, key agreed by ECDH), so they
     # can't be read in the browser's network tools or by anything in between. "optional": the app's own pages always
     # encrypt, other callers may send plain JSON; "required": plain JSON to /api is refused (except the integration

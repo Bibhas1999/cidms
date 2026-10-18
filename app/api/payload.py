@@ -11,7 +11,7 @@ from app.core.logging import client_ip
 from app.core.payload import agree
 
 router = APIRouter(prefix="/api/payload", tags=["payload"])
-key_limiter = RateLimiter(limit=120, per_seconds=300)  # a tab agrees one key per load
+key_limiter = RateLimiter("payload-key", limit=120, per_seconds=300)  # a tab agrees one key per load
 
 
 class KeyIn(BaseModel):
