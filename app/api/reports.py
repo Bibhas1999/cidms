@@ -29,6 +29,7 @@ from app.services.reports import (
     ReportService,
     bills_by_doctor,
     bills_report,
+    dues_workbook,
     file_name,
     filters_for_log,
     visible_reports,
@@ -85,6 +86,34 @@ def bills_by_doctor_xlsx(f: BillFilters = Depends(bill_filters), db: Session = D
         "format": "xlsx-by-doctor", "filters": filters_for_log(f), "rows": len(report.rows), "sheets": len(sheets)})
     fname = file_name("bills-by-doctor", f.date_from, f.date_to, "xlsx")
     return Response(to_xlsx_book(sheets, summary=summary), media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+# ---------- the Dues page as a workbook ----------
+
+def dues_viewer(current: CurrentUser = Depends(client_user)) -> CurrentUser:
+    if not current.can("payments.collect"):
+        raise Forbidden("You don't have permission to see dues.")
+    return current
+
+
+@router.get("/api/dues/workbook")
+def dues_book(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
+              db: Session = DB, current: CurrentUser = Depends(dues_viewer)):
+    """Bills still owing: a summary by referring doctor and a sheet for each doctor (oldest first)."""
+    summary, sheets = dues_workbook(db, current, date_from, date_to)
+    return {**summary.as_json(), "sheets": [s.as_json() for s in sheets]}
+
+
+@router.get("/api/dues/workbook.xlsx")
+def dues_book_xlsx(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
+                   db: Session = DB, current: CurrentUser = Depends(dues_viewer)):
+    summary, sheets = dues_workbook(db, current, date_from, date_to)
+    AuditService(db).record(current.user.tenant_id, current.id, "export.dues", "invoice", "", {
+        "format": "xlsx", "from": str(date_from or ""), "to": str(date_to or ""), "sheets": len(sheets)})
+    book = to_xlsx_book([(s.title, s.subtitle, s.columns, s.rows, s.totals) for s in sheets],
+                        summary=("Summary", f"Dues by referring doctor · {summary.subtitle}", summary.columns, summary.rows, summary.totals))
+    fname = f"dues-by-doctor-{local_today().isoformat()}.xlsx" if not (date_from or date_to) else file_name("dues-by-doctor", date_from, date_to, "xlsx")
+    return Response(book, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # ---------- reports ----------

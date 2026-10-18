@@ -587,3 +587,25 @@ def file_name(stem: str, a: date | None, b: date | None, ext: str) -> str:
     else:
         span = local_today().isoformat()
     return f"{stem}-{span}.{ext}"
+
+
+def dues_workbook(db: Session, current: CurrentUser, date_from: date | None = None, date_to: date | None = None) -> tuple[Report, list[Report]]:
+    """The Dues page as a workbook: bills still owing (oldest first, with how many days), as a summary by referring
+    doctor and one sheet per doctor. Dates, if given, narrow by bill date."""
+    listed = bills_report(db, current, BillFilters(payment="due", date_from=date_from, date_to=date_to, oldest_first=True))
+    today = local_today()
+    for row in listed.rows:
+        row["age"] = (today - row["bill_date"]).days
+    at = next(i for i, c in enumerate(listed.columns) if c[0] == "bill_date") + 1
+    listed.columns = [*listed.columns[:at], ("age", "Days owed", "int"), *listed.columns[at:]]
+    (_t, _s, columns, rows, totals), sheets = bills_by_doctor(listed)
+    # Most owed first (Self last), the summary and the sheets in the same order.
+    paired = sorted(zip(rows, sheets, strict=True), key=lambda p: (p[0]["doctor"] == "Self", -p[0]["due"], p[0]["doctor"].lower()))
+    rows, sheets = [p[0] for p in paired], [p[1] for p in paired]
+    oldest = max((r["age"] for r in listed.rows), default=0)
+    summary = Report("dues", "Dues", listed.subtitle, list(columns), list(rows), totals, summary=[
+        {"label": "Bills with dues", "value": totals["bills"], "kind": "int"},
+        {"label": "Total due", "value": totals["due"], "kind": "money"},
+        {"label": "Oldest", "value": f"{oldest} days" if listed.rows else "—", "kind": "text"},
+    ])
+    return summary, [Report("dues", t, sub, list(c), list(r), tot, landscape=True) for t, sub, c, r, tot in sheets]

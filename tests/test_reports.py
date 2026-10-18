@@ -287,3 +287,21 @@ def test_bills_workbook_has_a_summary_and_a_sheet_per_referring_doctor(centre, b
     assert [c.value for c in self_sheet[4]][:5] == ["Bill no", "Date", "Patient", "Mobile", "Tests"]  # no "Referred by" column
     assert self_sheet.max_row == 4 + 3 + 1 and self_sheet.auto_filter.ref.startswith("A4:")
     assert self_sheet[4][0].fill.fgColor.rgb.endswith("004AAD")
+
+
+def test_dues_as_a_workbook_with_a_sheet_per_referring_doctor(centre, books):
+    front = centre["front"]  # the front desk collects dues, so it sees them
+    r = front.get("/api/dues/workbook")
+    assert r.status_code == 200, r.text
+    book = r.json()
+    assert [(row["doctor"], money(row["due"])) for row in book["rows"]] == [("Dr. Halder", Decimal("500.50")), ("Self", Decimal("100.00"))]
+    assert [s["title"] for s in book["sheets"]] == ["Dr. Halder", "Self"]
+    halder = book["sheets"][0]
+    assert [c["key"] for c in halder["columns"]][:3] == ["invoice_no", "bill_date", "age"] and halder["rows"][0]["age"] == 40
+    assert {s["label"] for s in book["summary"]} == {"Bills with dues", "Total due", "Oldest"}
+    x = front.get("/api/dues/workbook.xlsx")
+    assert x.status_code == 200 and load_workbook(io.BytesIO(x.content)).sheetnames == ["Summary", "Dr. Halder", "Self"]
+    make_user(centre["tenant"], "tech2@alpha.in", ["technician"])
+    tech = browser("alpha.localhost")
+    tech.login("tech2@alpha.in")
+    assert tech.get("/api/dues/workbook").status_code == 403
