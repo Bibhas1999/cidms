@@ -1,6 +1,8 @@
 <script lang="ts">
   import { connection } from "../lib/connection.svelte";
   import { offline } from "../lib/offline.svelte";
+  import { outbox } from "../lib/outbox.svelte";
+  import { savedCopies } from "../lib/response-cache.svelte";
   import { session } from "../lib/session.svelte";
 
   // A strip across the top when CIDMS can't be reached (this computer is offline, or the centre's internet is
@@ -18,7 +20,9 @@
   $effect(() => () => clearTimeout(timer));
 
   const canBill = $derived(!!session.me && !session.isPlatform && session.can("billing.create"));
-  const waiting = $derived(offline.waiting);
+  const waiting = $derived(offline.waiting + outbox.waiting);
+  const savedAt = $derived(savedCopies.oldest);
+  const time = (ms: number) => new Date(ms).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 </script>
 
@@ -26,10 +30,13 @@
   <div class="offline-banner" role="status" aria-live="polite">
     {#if canBill}You're offline. You can still make bills: they're kept on this computer and sent when the connection is back.
     {:else}You're offline. Changes can't be saved until the connection is back.{/if}
-    {#if canBill && waiting}<a href="/bills/offline">{plural(waiting, "bill", "bills")} waiting</a>{/if}
+    {#if savedAt}Showing what was saved at {time(savedAt)}.{/if}
+    {#if waiting}<a href="/bills/offline">{plural(waiting, "item", "items")} waiting</a>{/if}
   </div>
-{:else if canBill && offline.sending}
-  <div class="offline-banner is-sending" role="status" aria-live="polite">Sending offline bills to CIDMS…</div>
+{:else if offline.sending || outbox.sending}
+  <div class="offline-banner is-sending" role="status" aria-live="polite">Sending what was made offline to CIDMS…</div>
+{:else if savedAt}
+  <div class="offline-banner is-attention" role="status" aria-live="polite">CIDMS isn't answering right now: showing what was saved at {time(savedAt)}.</div>
 {:else if canBill && offline.attention}
   <div class="offline-banner is-attention" role="status" aria-live="polite">
     {plural(offline.attention, "offline bill needs", "offline bills need")} a look before {offline.attention === 1 ? "it" : "they"} can be sent.
