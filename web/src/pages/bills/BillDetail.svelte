@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { connection } from "../../lib/connection.svelte";
+  import { outbox } from "../../lib/outbox.svelte";
   import { FEATURES } from "../../lib/features";
   import Dialog from "../../components/Dialog.svelte";
   import EditTestsDialog from "../../components/EditTestsDialog.svelte";
@@ -66,16 +68,30 @@
     busy = true; errors = {};
     try {
       const body = kind === "payments" ? { mode, amount, reference, note } : { mode, amount, note };
+      if (kind === "payments" && !connection.usable && (await keepPaymentOffline(body))) return;
       bill = await post<Bill>(`/api/bills/${bill!.id}/${kind}`, body, { "Idempotency-Key": requestKey });
       payOpen = refundOpen = false;
       notify(kind === "payments" ? `${rupees(amount)} received.${due - Number(amount) <= 0 ? " The bill is fully paid." : ""}` : `${rupees(amount)} refunded.`,
              { title: kind === "payments" ? "Payment saved" : "Refund saved" });
     } catch (e) {
+      if (kind === "payments" && e instanceof ApiError && e.transient && (await keepPaymentOffline({ mode, amount, reference, note }))) return;
       if (e instanceof ApiError && Object.keys(e.fieldErrors).length) errors = e.fieldErrors;
       else notifyError(e, { title: kind === "payments" ? "Couldn't save the payment" : "Couldn't save the refund" });
     } finally {
       busy = false;
     }
+  }
+
+  /** CIDMS can't be reached: keep the payment on this computer and send it when the connection is back. */
+  async function keepPaymentOffline(body: Record<string, unknown>): Promise<boolean> {
+    const b = bill!;
+    const kept = await outbox.add(requestKey, { method: "POST", path: `/api/bills/${b.id}/payments`, body },
+                                  `${rupees(String(body.amount))} from ${b.patient_name} on ${b.invoice_no}`, `/bills/${b.id}`);
+    if (!kept) return false;
+    payOpen = false;
+    notify(`${rupees(String(body.amount))} is kept on this computer and goes to CIDMS when the connection is back.`,
+           { kind: "info", title: "Payment saved offline", duration: 0 });
+    return true;
   }
 
   let editOpen = $state(false);

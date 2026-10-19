@@ -14,6 +14,9 @@ import { session } from "./session.svelte";
 import { navigate } from "./router.svelte";
 import { notify } from "./toast.svelte";
 import type { CentreSettings, Page } from "./types";
+import { outbox } from "./outbox.svelte";
+import { forgetCopies, savedCopies } from "./response-cache.svelte";
+import { persistStorage } from "./vault";
 
 const REFRESH_EVERY_MS = 30 * 60 * 1000;
 const KEEP_SENT_MS = 7 * 24 * 3600 * 1000;   // sent bills stay listed a week (to reprint with the final number)
@@ -248,8 +251,11 @@ export const offline = new OfflineState();
 export function installOffline(): void {
   session.onSignedIn(() => void startOfflineFor());
   session.onSignedOut(() => void forgetOfflineData());
-  const tick = () => { if (offline.waiting) void offline.send(); };
-  connection.onBack(() => { void session.refresh().then(() => { void offline.send(); void refreshOfflineData(); }); });
+  const tick = () => { if (offline.waiting) void offline.send(); if (outbox.waiting) void outbox.send(); };
+  connection.onBack(() => {
+    savedCopies.clearShowing();   // screens load live again from here on
+    void session.refresh().then(() => { void offline.send(); void outbox.send(); void refreshOfflineData(); });
+  });
   setInterval(tick, 30_000);
   setInterval(() => void refreshOfflineData(), REFRESH_EVERY_MS);
   void cached<string>("refreshed_at").then((at) => { offline.readyAt = at ?? ""; });
@@ -257,13 +263,18 @@ export function installOffline(): void {
 
 /** Signed in (or the page opened with a session): load my offline bills, send any waiting, refresh the copy. */
 export async function startOfflineFor(): Promise<void> {
-  await offline.reload();
+  await Promise.all([offline.reload(), outbox.reload()]);
   void offline.send();
+  void outbox.send();
   void refreshOfflineData();
+  void persistStorage();   // ask the browser not to clear the saved copies when space runs low
 }
 
-/** Signing out: the copy of patients and the catalogue goes; bills not yet sent stay, for their maker. */
+/** Signing out: the copy of patients and the catalogue and every saved screen go; bills and changes not yet sent
+ *  stay, for their maker. */
 export async function forgetOfflineData(): Promise<void> {
   try { await idbClear("cache"); } catch { /* blocked */ }
+  await forgetCopies();
   offline.bills = [];
+  outbox.items = [];
 }
