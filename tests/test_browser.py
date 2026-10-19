@@ -155,3 +155,62 @@ def test_the_dashboard_asks_the_server_once(page, alpha, live_server):
     page.on("request", lambda r: asked.update({r.url.split("?")[0]: asked.get(r.url.split("?")[0], 0) + 1}))
     page.wait_for_timeout(3000)
     assert all(n <= 1 for n in asked.values()), asked
+
+
+def test_screens_and_payments_work_offline_from_encrypted_saved_copies(page, alpha, live_server):
+    from tests.conftest import browser
+    make_user(alpha, "owner@alpha.in", ["owner"])
+    api = browser("alpha.localhost")
+    api.login("owner@alpha.in")
+    dept = api.post("/api/departments", json={"name": "Pathology"}).json()["id"]
+    test = api.post("/api/tests", json={"name": "CBC", "department_id": dept, "price": "300"}).json()["id"]
+    bill = api.post("/api/bills", json={"patient": {"name": "Tapasi Mondal", "age_years": 40, "gender": "female", "mobile": "9000011111",
+                                                    "address": "Hooghly"}, "lines": [{"test_id": test}]}).json()
+
+    page.goto(f"http://alpha.{live_server}/login")
+    page.get_by_label("Email").fill("owner@alpha.in")
+    page.get_by_label("Password", exact=True).fill("Test-password-1")
+    page.get_by_role("button", name="Sign in").click()
+    page.wait_for_url(f"http://alpha.{live_server}/")
+    page.goto(f"http://alpha.{live_server}/bills")                     # opened once while online: saved
+    page.get_by_text(bill["invoice_no"]).first.wait_for()
+    page.goto(f"http://alpha.{live_server}/bills/{bill['id']}")
+    page.get_by_role("heading", name=bill["invoice_no"]).wait_for()
+    page.wait_for_timeout(500)
+
+    page.context.set_offline(True)
+    page.get_by_role("link", name="Bills", exact=True).first.click()  # within the app: from the saved copy
+    page.get_by_text(bill["invoice_no"]).first.wait_for()
+    assert page.locator(".offline-banner").is_visible()
+    page.go_back()
+    page.get_by_role("heading", name=bill["invoice_no"]).wait_for()
+
+    # A payment taken offline waits on this computer.
+    page.get_by_role("button", name="Collect", exact=False).first.click()
+    page.get_by_role("button", name="Receive", exact=False).click()
+    page.get_by_text("Payment saved offline").wait_for()
+
+    # What's kept is encrypted: no patient name anywhere in the saved copies, the catalogue copy or the waiting payment.
+    raw = page.evaluate("""() => new Promise((ok) => {
+        const r = indexedDB.open("cidms-offline");
+        r.onsuccess = () => {
+          const tx = r.result.transaction(["responses", "outbox", "cache", "bills"]);
+          const out = [];
+          const dump = (v) => JSON.stringify(v, (k, x) => x instanceof ArrayBuffer ? new TextDecoder().decode(x) : x);
+          tx.objectStore("responses").getAll().onsuccess = (e) => out.push(...e.target.result.map(dump));
+          tx.objectStore("outbox").getAll().onsuccess = (e) => out.push(...e.target.result.map(dump));
+          tx.objectStore("cache").getAll().onsuccess = (e) => out.push(...e.target.result.map(dump));
+          tx.objectStore("bills").getAll().onsuccess = (e) => out.push(...e.target.result.map(dump));
+          tx.oncomplete = () => ok(out);
+        };
+    })""")
+    assert len(raw) >= 3 and not any("Tapasi" in r or "Mondal" in r for r in raw)
+
+    # Back online: the payment is sent by itself, once.
+    page.context.set_offline(False)
+    for _ in range(40):
+        if api.get(f"/api/bills/{bill['id']}").json()["paid"] in ("300.00", "300"):
+            break
+        page.wait_for_timeout(500)
+    saved = api.get(f"/api/bills/{bill['id']}").json()
+    assert saved["paid"] in ("300.00", "300") and len([p for p in saved["payments"] if p["kind"] == "payment"]) == 1

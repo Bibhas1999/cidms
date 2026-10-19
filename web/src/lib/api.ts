@@ -1,6 +1,7 @@
 import * as loader from "./loader";
 import { connection } from "./connection.svelte";
 import { ENCRYPTED, open, payloadKey, resetPayloadKey, seal } from "./payload";
+import { cacheable, changed, freshCopy, saveCopy, savedCopies, savedCopy } from "./response-cache.svelte";
 import { toasts } from "./toast.svelte";
 
 // The one way the app talks to the server. The session lives in an HttpOnly cookie that JavaScript never
@@ -40,6 +41,8 @@ interface Hooks {
   csrf: () => string;
   onUnauthorized: () => void;
   onMustChangePassword: () => void;
+  /** Who is signed in (whose saved copies to use); "" for nobody. */
+  user?: () => string;
 }
 
 let hooks: Hooks = { csrf: () => "", onUnauthorized: () => {}, onMustChangePassword: () => {} };
@@ -98,10 +101,27 @@ export async function api<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
     ? setTimeout(() => { toastId = toasts.show(options.progress || progressWords(method, path), { kind: "progress" }); }, PROGRESS_AFTER_MS)
     : undefined;
 
+  // Saved copies (lib/response-cache): the catalogue straight from a fresh copy; any screen from its last copy
+  // when CIDMS can't be reached.
+  const url = withQuery(path, options.query);
+  const user = hooks.user?.() ?? "";
+  const copyable = method === "GET" && !!user && cacheable(new URL(path, location.origin).pathname);
+  if (copyable) {
+    const fresh = await freshCopy<T>(user, url);
+    if (fresh !== null) { clearTimeout(timer); return fresh; }
+  }
+
   loader.start();
   try {
-    return await send<T>(method, path, options, headers);
+    const result = await send<T>(method, path, options, headers);
+    if (copyable) { void saveCopy(user, url, result); savedCopies.live(url); }
+    else if (method !== "GET") changed();
+    return result;
   } catch (e) {
+    if (copyable && e instanceof ApiError && e.transient) {
+      const hit = await savedCopy<T>(user, url);
+      if (hit) { savedCopies.shown(url, hit.saved_at); return hit.data; }
+    }
     // A change that failed on the network or a busy server can be sent again from the error toast ("Try again").
     if (e instanceof ApiError && method !== "GET" && e.transient) e.retry = () => api<T>(method, path, options);
     throw e;
