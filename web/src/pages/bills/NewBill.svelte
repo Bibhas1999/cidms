@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog } from "../../lib/confirm.svelte";
   import { z } from "zod";
   import Button from "../../components/Button.svelte";
   import Combobox from "../../components/Combobox.svelte";
@@ -149,6 +150,20 @@
   );
   const total = $derived(round2(subtotal - discount));
   const paying = $derived(Math.min(total, round2(Number(payNow) || 0)));
+  // Paid now can never be more than the bill: typed above it (or the total drops below it after a test is taken
+  // off or the discount goes up), it comes down to the total, and says so.
+  let payCapped = $state(false);
+  function capPaid(input: HTMLInputElement) {
+    const v = round2(Number(input.value));
+    if (input.value !== "" && v > total && total > 0) { payCapped = true; payNow = total.toFixed(2); input.value = payNow; }
+    else if (input.value === "" || v < total) payCapped = false;   // at exactly the total: it may have just been capped
+  }
+  $effect(() => {
+    const v = Number(payNow);
+    if (payNow === "" || Number.isNaN(v)) return;
+    if (v < 0) { payNow = ""; return; }
+    if (round2(v) > total) { payNow = total > 0 ? total.toFixed(2) : ""; payCapped = total > 0; }
+  });
   const dueAfter = $derived(round2(total - paying));
   const overLimit = $derived(maxDiscount !== null && subtotal > 0 && discount * 100 > subtotal * maxDiscount);
 
@@ -161,6 +176,8 @@
   let errors = $state<Record<string, string>>({});
   let saving = $state(false);
   let requestKey: string = newRequestKey();
+  // The summary (discount, payment, hold, save) waits for the first test: until then there's nothing to price.
+  const noTests = $derived(!lines.length);
   const dirty = $derived(!!(patient || addingPatient || lines.length || doctorText.trim() || notes.trim() || discountValue || payNow));
 
   // ---------- draft ----------
@@ -195,6 +212,13 @@
     applyDraft(waiting.value);
     restored = waiting;
     waiting = null;
+  }
+  /** "Clear draft": after asking, empty the form and forget the draft kept on this computer. */
+  async function clearTheDraft() {
+    if (!(await confirmDialog({ title: "Clear this draft?", tone: "danger", confirmLabel: "Clear draft",
+                                message: "Everything typed on this bill goes, and the draft kept on this computer is removed." }))) return;
+    startAfresh();
+    notify("Draft cleared.");
   }
   function startAfresh() {
     clearDraft(DRAFT);
@@ -321,7 +345,10 @@
 {#snippet lineTotal(l: Line)}<span class="money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</span>{/snippet}
 
 <PageHeader eyebrow="Front desk" title="New bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
-  {#snippet actions()}<span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
+  {#snippet actions()}
+    {#if dirty}<span class="draft-saved text-sm text-muted" role="status"><Icon name="check" size="sm" />Draft saved on this computer</span>
+      <Button variant="ghost-destructive" size="sm" icon="trash" onclick={clearTheDraft} tooltip="Empty the form and remove the draft">Clear draft</Button>{/if}
+    <span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
 </PageHeader>
 
 {#if !connection.usable}
@@ -336,7 +363,7 @@
   <div class="alert alert-info draft-note" role="status"><Icon name="info" />
     <div class="grow"><div class="alert-title">Your unsaved bill is back</div>From {savedAgo(restored.saved_at)}. It's kept on this computer until you save it.</div>
     <Button variant="ghost" size="sm" onclick={() => (restored = null)}>OK</Button>
-    <Button variant="outline" size="sm" onclick={startAfresh}>Start a new bill</Button>
+    <Button variant="outline" size="sm" icon="trash" onclick={clearTheDraft}>Clear draft</Button>
   </div>
 {:else if waiting}
   <div class="alert alert-warning draft-note" role="status"><Icon name="alert" />
@@ -489,18 +516,20 @@
 
   <aside class="card summary" aria-labelledby="s-title" id="bill-summary">
     <div class="card-header"><h2 class="card-title" id="s-title">Summary</h2><span class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</span></div>
-    <div class="card-content stack">
+    <div class="card-content stack" class:is-waiting={noTests}>
+      {#if noTests}<p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to set the discount and payment.</p>{/if}
       <div class="line"><span class="text-muted">Subtotal</span><span class="money">{rupees(subtotal)}</span></div>
       <div class="field">
         <div class="label-row"><span class="label" id="disc-label">Discount</span><InfoTip about="Discount" text={discountTip} /></div>
         <div class="row" role="group" aria-labelledby="disc-label">
           <div class="disc-kind" role="radiogroup" aria-label="Discount in">
-            <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} /> % Percent</label>
-            <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} /> ₹ Rupees</label>
+            <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} disabled={noTests} /> % Percent</label>
+            <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} disabled={noTests} /> ₹ Rupees</label>
           </div>
           <input class="input money disc-value" type="number" min="0" step={discountKind === "percent" ? "1" : "0.01"} max={discountKind === "percent" ? 100 : subtotal}
                  inputmode="decimal" placeholder={discountKind === "percent" ? "0 %" : "₹ 0"}
-                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value} />
+                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value}
+                 disabled={noTests} />
         </div>
         {#if overLimit && !overLimitOk}<p class="field-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
         {#if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
@@ -512,22 +541,25 @@
       <div class="field">
         <div class="row-between"><div class="label-row"><label class="label" for="pay-now">Paid now (₹)</label>
           <InfoTip about="Paid now" text="What the patient pays at the desk now. Leave it empty if nothing is paid; the rest stays due and can be collected later from Dues, in as many instalments as needed." /></div>
-          {#if total > 0}<button class="link-button" type="button" onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
+          {#if total > 0}<button class="link-button" type="button" disabled={noTests} onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
         <div class="row pay-row">
-          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} />
+          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
+                 oninput={(e) => capPaid(e.currentTarget)} aria-describedby={payCapped ? "pay-capped" : undefined} />
           <label class="sr-only" for="pay-mode">Paid by</label>
-          <select id="pay-mode" class="select pay-mode" bind:value={payMode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
+          <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
           <InfoTip about="Paid by" text="How the money was taken. The day's collection is split by this (cash in the drawer, UPI, card…). Add the UPI or card reference so it can be matched with the bank." />
         </div>
-        {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} />{/if}
+        {#if payCapped}<p class="field-hint" id="pay-capped" role="status"><Icon name="info" size="sm" />Can't be more than the total, {rupees(total)}.</p>{/if}
+        {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} disabled={noTests} />{/if}
       </div>
       <div class="line {dueAfter > 0 ? 'is-due' : ''}"><span>{dueAfter > 0 ? "Due after this" : "Nothing due"}</span><span class="money">{rupees(dueAfter)}</span></div>
-      <div class="check-line"><label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} /> Put the bill on hold</label>
+      <div class="check-line"><label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} disabled={noTests} /> Put the bill on hold</label>
         <InfoTip about="On hold" text="Saves the bill without sending its tests to the worklist, e.g. while waiting for the doctor's slip. Confirm it later from the bill." /></div>
     </div>
     <div class="card-footer card-footer-stack summary-actions">
-      <Button variant="primary" size="lg" block icon="printer" loading={saving || np.submitting} loadingText="Saving…" onclick={() => save(true)}>Save and print</Button>
-      <Button block icon="check" disabled={saving || np.submitting} onclick={() => save(false)}>Save bill</Button>
+      <Button variant="primary" size="lg" block icon="printer" loading={saving || np.submitting} loadingText="Saving…" disabled={noTests}
+              tooltip={noTests ? "Add a test first" : ""} onclick={() => save(true)}>Save and print</Button>
+      <Button block icon="check" disabled={saving || np.submitting || noTests} tooltip={noTests ? "Add a test first" : ""} onclick={() => save(false)}>Save bill</Button>
     </div>
   </aside>
 </div>
@@ -539,8 +571,8 @@
     <strong class="money">{rupees(total)}</strong>
     {#if dueAfter > 0 && lines.length}<span class="text-xs money-due">{rupees(dueAfter)} due</span>{/if}
   </a>
-  <Button disabled={saving || np.submitting} onclick={() => save(false)} aria-label="Save bill">Save</Button>
-  <Button variant="primary" icon="printer" loading={saving || np.submitting} onclick={() => save(true)} aria-label="Save and print">Save & print</Button>
+  <Button disabled={saving || np.submitting || noTests} onclick={() => save(false)} aria-label="Save bill">Save</Button>
+  <Button variant="primary" icon="printer" loading={saving || np.submitting} disabled={noTests} onclick={() => save(true)} aria-label="Save and print">Save & print</Button>
 </div>
 <div class="savebar-space" aria-hidden="true"></div>
 
@@ -616,4 +648,11 @@
   }
   .draft-note { margin-bottom: 16px; align-items: center; }
   @media (max-width: 600px) { .draft-note { flex-wrap: wrap; } }
+  /* Until a test is added the summary's controls are switched off (the help buttons still work). */
+  .is-waiting .disc-kind label, .is-waiting .check-row { opacity: .55; cursor: not-allowed; }
+  .is-waiting .link-button:disabled { opacity: .5; cursor: not-allowed; text-decoration: none; }
+  .waiting-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 10px; border-radius: 8px;
+    background: var(--muted); color: var(--muted-foreground); }
+  .field-hint { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; font-size: 12.5px; color: var(--primary-text); }
+  .draft-saved { display: inline-flex; align-items: center; gap: 5px; }
 </style>
