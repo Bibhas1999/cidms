@@ -214,3 +214,56 @@ def test_screens_and_payments_work_offline_from_encrypted_saved_copies(page, alp
         page.wait_for_timeout(500)
     saved = api.get(f"/api/bills/{bill['id']}").json()
     assert saved["paid"] in ("300.00", "300") and len([p for p in saved["payments"] if p["kind"] == "payment"]) == 1
+
+
+def test_new_bill_waits_for_a_test_caps_the_payment_and_clears_its_draft(page, alpha, live_server):
+    from tests.conftest import browser
+    make_user(alpha, "owner@alpha.in", ["owner"])
+    api = browser("alpha.localhost")
+    api.login("owner@alpha.in")
+    d = api.post("/api/departments", json={"name": "Pathology"}).json()["id"]
+    api.post("/api/tests", json={"name": "CBC", "department_id": d, "price": "250"})
+    page.goto(f"http://alpha.{live_server}/login")
+    page.get_by_label("Email").fill("owner@alpha.in")
+    page.get_by_label("Password", exact=True).fill("Test-password-1")
+    page.get_by_role("button", name="Sign in").click()
+    page.wait_for_url(f"http://alpha.{live_server}/")
+    page.goto(f"http://alpha.{live_server}/bills/new")
+
+    def add_cbc():
+        page.locator("#nb-test").click()
+        page.locator("#nb-test").fill("CBC")
+        page.get_by_role("option", name="CBC", exact=False).first.click()
+        page.keyboard.press("Escape")
+
+    # Nothing in the summary works until a test is on the bill.
+    assert page.locator("#pay-now").is_disabled() and page.locator("#pay-mode").is_disabled()
+    assert page.get_by_role("button", name="Save bill").is_disabled()
+    add_cbc()
+    assert page.locator("#pay-now").is_enabled()
+
+    # Paid now can't be more than the bill.
+    page.locator("#pay-now").fill("900")
+    assert page.locator("#pay-now").input_value() == "250.00"
+    assert "more than the total" in page.locator("#pay-capped").inner_text()
+
+    # The draft is kept, and can be cleared.
+    page.get_by_text("Draft saved on this computer").wait_for()
+    page.get_by_role("button", name="Clear draft").first.click()
+    page.get_by_role("dialog").get_by_role("button", name="Clear draft").click()
+    page.get_by_text("Draft cleared.").wait_for()
+    assert page.locator("#pay-now").is_disabled() and page.get_by_text("Draft saved on this computer").count() == 0
+
+    # Saving the bill removes its draft: New bill opens empty afterwards.
+    add_cbc()
+    page.get_by_role("button", name="New patient", exact=False).first.click()
+    page.locator("#np-name").fill("Rina Das")
+    page.locator("#np-age_years").fill("33")
+    page.locator("#np-gender").select_option("female")
+    page.get_by_role("button", name="Save bill").click()
+    page.get_by_text("Bill saved").wait_for()
+    page.goto(f"http://alpha.{live_server}/bills/new")
+    page.locator("#nb-test").wait_for()
+    assert page.get_by_text("Your unsaved bill is back").count() == 0
+    assert page.get_by_text("Draft saved on this computer").count() == 0
+    assert page.errors == []
