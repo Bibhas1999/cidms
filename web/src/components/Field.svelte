@@ -16,7 +16,8 @@
     children: Snippet<[{ invalid: boolean; describedby: string | undefined }]>;
   } = $props();
 
-  const describedby = $derived([hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined);
+  // The error takes the hint's place (one line under the box, so a row of fields stays level).
+  const describedby = $derived(error ? `${id}-error` : hint ? `${id}-hint` : undefined);
 </script>
 
 <div class="field">
@@ -25,7 +26,7 @@
     {#if tip}<InfoTip text={tip} about={label} />{/if}
   </div>
   {@render children({ invalid: !!error, describedby })}
-  {#if hint}<div id="{id}-hint" class="hint">{hint}</div>{/if}
+  {#if hint && !error}<div id="{id}-hint" class="hint">{hint}</div>{/if}
   {#if error}<p id="{id}-error" class="field-error"><Icon name="alert" size="sm" />{error}</p>{/if}
 </div>
 
