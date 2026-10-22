@@ -2,6 +2,7 @@
 so the HttpOnly session cookie works everywhere without CORS."""
 
 import logging
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -87,6 +88,11 @@ def _clean(msg: str) -> str:
         return "Enter a valid email address."
     if msg == "Field required":
         return "This is required."
+    # Pydantic's length limits, in plain words ("String should have at least 2 characters").
+    if m := re.fullmatch(r"String should have at least (\d+) characters?", msg):
+        return f"Use at least {m[1]} characters."
+    if m := re.fullmatch(r"String should have at most (\d+) characters?", msg):
+        return f"Use {m[1]} characters or fewer."
     return msg.removeprefix("Value error, ").removeprefix("Assertion failed, ")
 
 

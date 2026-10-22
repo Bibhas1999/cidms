@@ -51,8 +51,8 @@
 </div>
 
 <style>
-  .phone { display: grid; grid-template-columns: 112px minmax(0, 1fr); }
-  .cc { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 26px; background-position: right 8px center; }
+  .phone { display: grid; grid-template-columns: 96px minmax(0, 1fr); }
+  .cc { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-left: 10px; padding-right: 24px; background-position: right 6px center; }
   .num { border-top-left-radius: 0; border-bottom-left-radius: 0; }
   .phone .cc:focus, .phone .num:focus { position: relative; z-index: 1; }
 </style>
