@@ -169,7 +169,7 @@ pymysql==1.2.3
     # via
     #   -c requirements.txt
     #   -r requirements.in
-pypdf==6.21.1
+pypdf==6.21.2
     # via
     #   -c requirements.txt
     #   -r requirements.in
