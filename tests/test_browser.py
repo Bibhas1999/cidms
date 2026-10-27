@@ -242,10 +242,12 @@ def test_new_bill_waits_for_a_test_caps_the_payment_and_clears_its_draft(page, a
     add_cbc()
     assert page.locator("#pay-now").is_enabled()
 
-    # Paid now can't be more than the bill.
+    # Paid now can't be more than the bill: an error at once, and the bill isn't saved until it's put right.
     page.locator("#pay-now").fill("900")
-    assert page.locator("#pay-now").input_value() == "250.00"
     assert "more than the total" in page.locator("#pay-capped").inner_text()
+    assert page.locator("#pay-now").get_attribute("aria-invalid") == "true"
+    page.get_by_role("button", name="Full amount").click()
+    assert page.locator("#pay-capped").count() == 0
 
     # The draft is kept, and can be cleared.
     page.get_by_text("Draft saved on this computer").wait_for()

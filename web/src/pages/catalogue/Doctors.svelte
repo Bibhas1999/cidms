@@ -1,5 +1,6 @@
 <script lang="ts">
   import { z } from "zod";
+  import BulkAddDialog from "../../components/BulkAddDialog.svelte";
   import Button from "../../components/Button.svelte";
   import DataTable from "../../components/DataTable.svelte";
   import Dialog from "../../components/Dialog.svelte";
@@ -29,6 +30,7 @@
   let loadError = $state("");
   let loading = $state(false);
   let reload = $state(0);
+  let bulkOpen = $state(false);
 
   $effect(() => {
     const ctrl = new AbortController();
@@ -64,11 +66,6 @@
     },
   });
 
-  function openAdd() {
-    editing = null;
-    form.reset();
-    dialogOpen = true;
-  }
 
   function openEdit(d: Doctor) {
     editing = d;
@@ -103,7 +100,7 @@
 <PageHeader eyebrow="Catalogue" title="Doctors & hospitals"
             description="Doctors and hospitals that send patients to the centre. One is added automatically when a new name is typed on a bill.">
   {#snippet actions()}
-    {#if canManage}<Button variant="primary" icon="plus" onclick={openAdd}>Add doctor / hospital</Button>{/if}
+    {#if canManage}<Button variant="primary" icon="plus" onclick={() => (bulkOpen = true)}>Add doctors / hospitals</Button>{/if}
   {/snippet}
 </PageHeader>
 
@@ -159,3 +156,5 @@
     <Button variant="primary" type="submit" form="doctor-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add"}</Button>
   {/snippet}
 </Dialog>
+
+<BulkAddDialog bind:open={bulkOpen} kind="doctors" onadded={() => reload++} />

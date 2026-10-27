@@ -30,6 +30,8 @@ class CatalogueRowIn(BaseModel):
     test_type: str = Field(default="", max_length=300)
     price: str = Field(default="", max_length=300)
     imaging: str = Field(default="", max_length=300)
+    qualification: str = Field(default="", max_length=300)
+    phone: str = Field(default="", max_length=300)
 
 
 class RowsIn(BaseModel):

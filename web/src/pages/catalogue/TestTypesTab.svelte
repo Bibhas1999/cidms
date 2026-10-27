@@ -23,12 +23,6 @@
   let errors = $state<Record<string, string>>({});
   let saving = $state(false);
 
-  function openAdd() {
-    editing = null;
-    form = { name: "", is_imaging: false, is_active: true };
-    errors = {};
-    dialogOpen = true;
-  }
 
   function openEdit(t: TestType) {
     editing = t;
@@ -79,7 +73,7 @@
 {#if canManage}
   <Toolbar>
     <p class="text-sm text-muted">Types such as X-ray, Blood test or ECG. Types with images go through scanning.</p>
-    {#snippet end()}<Button size="sm" icon="sheet" onclick={() => (bulkOpen = true)}>Add several</Button><Button variant="primary" size="sm" icon="plus" onclick={openAdd}>Add a test type</Button>{/snippet}
+    {#snippet end()}<Button variant="primary" size="sm" icon="plus" onclick={() => (bulkOpen = true)}>Add test types</Button>{/snippet}
   </Toolbar>
 {/if}
 <DataTable label="Test types" rows={types} loading={!loaded} actions={canManage ? actionsFor : undefined}

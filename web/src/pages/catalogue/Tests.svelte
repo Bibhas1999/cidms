@@ -101,11 +101,6 @@
   const deptOptions = $derived(departments.filter((d) => d.is_active || d.id === form.values.department_id));
   const typeOptions = $derived(types.filter((t) => t.is_active || t.id === form.values.test_type_id));
 
-  function openAdd() {
-    editing = null;
-    form.reset({ name: "", code: "", department_id: department, test_type_id: "", price: null, is_active: true });
-    dialogOpen = true;
-  }
 
   function openEdit(t: LabTest) {
     editing = t;
@@ -147,7 +142,7 @@
 
 <PageHeader eyebrow="Catalogue" title="Tests & prices" description="The tests the centre offers, what each costs, and how they're grouped.">
   {#snippet actions()}
-    {#if canManage && tab === "tests"}<Button icon="sheet" onclick={() => (bulkOpen = true)}>Add several</Button><Button variant="primary" icon="plus" onclick={openAdd}>Add a test</Button>{/if}
+    {#if canManage && tab === "tests"}<Button variant="primary" icon="plus" onclick={() => (bulkOpen = true)}>Add tests</Button>{/if}
   {/snippet}
 </PageHeader>
 

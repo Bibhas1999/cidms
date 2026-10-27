@@ -56,6 +56,18 @@
   let errors = $state<Record<string, string>>({});
   let busy = $state(false);
   let requestKey = "";
+  // Checked as the amount is typed: more than is due (a payment) or than has been paid (a refund) shows an error at
+  // once and the button stays off until it's put right.
+  function amountProblem(limit: number, words: string): string {
+    if (amount === "" || amount === null) return "";
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return "Enter an amount above ₹0.";
+    if (Math.abs(Math.round(n * 100) - n * 100) > 1e-6) return "Use at most two decimal places (paise).";
+    if (Math.round(n * 100) > Math.round(limit * 100)) return `Can't be more than ${words}, ${rupees(limit)}.`;
+    return "";
+  }
+  const payProblem = $derived(amountProblem(due, "what's due"));
+  const refundProblem = $derived(amountProblem(paid, "what's been paid"));
 
   function openPay() {
     amount = due.toFixed(2); mode = "cash"; reference = ""; note = ""; errors = {}; requestKey = newRequestKey(); payOpen = true;
@@ -65,6 +77,7 @@
   }
 
   async function submitMoney(kind: "payments" | "refunds") {
+    if (kind === "payments" ? payProblem : refundProblem) { document.getElementById(kind === "payments" ? "pay-amount" : "ref-amount")?.focus(); return; }
     busy = true; errors = {};
     try {
       const body = kind === "payments" ? { mode, amount, reference, note } : { mode, amount, note };
@@ -308,7 +321,7 @@
   <Dialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}.">
     <form id="pay-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("payments"); }} novalidate>
       <div class="grid-2">
-        <Field id="pay-amount" label="Amount (₹)" required error={errors.amount}>
+        <Field id="pay-amount" label="Amount (₹)" required error={payProblem || errors.amount}>
           {#snippet children({ invalid, describedby })}<input id="pay-amount" class="input money" type="number" min="0.01" step="0.01" max={due} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
         </Field>
         <Field id="pay-mode" label="Paid by" required error={errors.mode}>
@@ -323,14 +336,14 @@
     </form>
     {#snippet footer()}
       <button class="btn btn-outline" type="button" onclick={() => (payOpen = false)}>Cancel</button>
-      <button class="btn btn-primary" type="submit" form="pay-form" disabled={busy || !Number(amount)}><Icon name="check" /> {busy ? "Saving…" : `Receive ${rupees(amount || 0)}`}</button>
+      <button class="btn btn-primary" type="submit" form="pay-form" disabled={busy || !Number(amount) || !!payProblem}><Icon name="check" /> {busy ? "Saving…" : `Receive ${rupees(amount || 0)}`}</button>
     {/snippet}
   </Dialog>
 
   <Dialog bind:open={refundOpen} title="Give money back" icon="alert" tone="destructive" description="{rupees(paid)} has been paid on this bill. A refund is recorded with its reason; nothing is deleted.">
     <form id="refund-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("refunds"); }} novalidate>
       <div class="grid-2">
-        <Field id="ref-amount" label="Amount (₹)" required error={errors.amount}>
+        <Field id="ref-amount" label="Amount (₹)" required error={refundProblem || errors.amount}>
           {#snippet children({ invalid, describedby })}<input id="ref-amount" class="input money" type="number" min="0.01" step="0.01" max={paid} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
         </Field>
         <Field id="ref-mode" label="Given back by" required>
@@ -343,7 +356,7 @@
     </form>
     {#snippet footer()}
       <button class="btn btn-outline" type="button" onclick={() => (refundOpen = false)}>Cancel</button>
-      <button class="btn btn-destructive" type="submit" form="refund-form" disabled={busy || !Number(amount) || note.trim().length < 3}>{busy ? "Saving…" : "Save refund"}</button>
+      <button class="btn btn-destructive" type="submit" form="refund-form" disabled={busy || !Number(amount) || !!refundProblem || note.trim().length < 3}>{busy ? "Saving…" : "Save refund"}</button>
     {/snippet}
   </Dialog>
 

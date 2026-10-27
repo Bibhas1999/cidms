@@ -1,4 +1,4 @@
-"""Adding many departments, test types or tests at once: typed into a grid, pasted from a spreadsheet, or read from
+"""Adding many departments, test types, tests or referring doctors at once: typed into a grid, pasted from a spreadsheet, or read from
 an uploaded Excel sheet (or CSV). Every row is checked first and nothing is added unless every row is right, so a
 half-imported list never happens; the browser shows each row's problem next to it."""
 
@@ -18,11 +18,13 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import Conflict, Invalid
 from app.core.money import q2
+from app.core.phone import normalise_mobile
 from app.core.security import CurrentUser
-from app.models import Department, LabTest, TestType
+from app.models import Department, LabTest, ReferringDoctor, TestType
+from app.schemas_billing import title_problem
 from app.services.audit import AuditService
 
-Kind = Literal["departments", "test-types", "tests"]
+Kind = Literal["departments", "test-types", "tests", "doctors"]
 MAX_ROWS = 1000
 
 # The columns of each list: (field, heading in the sheet, other headings taken for it).
@@ -35,9 +37,13 @@ COLUMNS: dict[str, list[tuple[str, str, set[str]]]] = {
               ("department", "Department", {"dept", "department name"}),
               ("test_type", "Test type", {"type"}),
               ("price", "Price", {"price (₹)", "price (rs)", "rate", "amount", "mrp"})],
+    "doctors": [("name", "Doctor or hospital", {"name", "doctor", "hospital", "doctor name"}),
+                ("qualification", "Qualification", {"degree", "qualifications"}),
+                ("phone", "Phone", {"mobile", "phone number", "mobile number", "contact"})],
 }
-WHAT = {"departments": ("department", "departments"), "test-types": ("test type", "test types"), "tests": ("test", "tests")}
-NAME_MAX = {"departments": 100, "test-types": 100, "tests": 200}
+WHAT = {"departments": ("department", "departments"), "test-types": ("test type", "test types"), "tests": ("test", "tests"),
+        "doctors": ("doctor or hospital", "doctors and hospitals")}
+NAME_MAX = {"departments": 100, "test-types": 100, "tests": 200, "doctors": 200}
 YES = {"yes", "y", "true", "1"}
 NO = {"no", "n", "false", "0", ""}
 
@@ -145,7 +151,7 @@ class CatalogueImport:
         """Each row's cleaned values and its problems ({field: message}); an empty errors dict means it's right."""
         if len(rows) > MAX_ROWS:
             raise Invalid(f"Add at most {MAX_ROWS} at a time.", "rows")
-        model = {"departments": Department, "test-types": TestType, "tests": LabTest}[kind]
+        model = {"departments": Department, "test-types": TestType, "tests": LabTest, "doctors": ReferringDoctor}[kind]
         existing = {r.name.lower() for r in self._all(model)}
         depts = {d.name.lower(): d for d in self._all(Department)} if kind == "tests" else {}
         types = {t.name.lower(): t for t in self._all(TestType)} if kind == "tests" else {}
@@ -165,6 +171,15 @@ class CatalogueImport:
                 errors["name"] = f"Listed twice (also row {seen[low]})."
             if name:
                 seen.setdefault(low, n)
+            if kind == "doctors":
+                if "name" not in errors and (problem := title_problem(name, "The name")):
+                    errors["name"] = problem
+                if len(v["qualification"]) > 200:
+                    errors["qualification"] = "Use at most 200 characters."
+                try:
+                    v["phone"] = normalise_mobile(v["phone"])
+                except ValueError as exc:
+                    errors["phone"] = str(exc)
             if kind == "test-types":
                 flag = v["imaging"].lower()
                 if flag not in YES | NO:
@@ -228,6 +243,9 @@ class CatalogueImport:
             elif kind == "test-types":
                 row = TestType(tenant_id=self.tenant_id, name=v["name"], is_imaging=v["imaging"] == "Yes", is_active=True)
                 details, action = {"name": v["name"], "is_imaging": row.is_imaging}, "catalogue.test_type_saved"
+            elif kind == "doctors":
+                row = ReferringDoctor(tenant_id=self.tenant_id, name=v["name"], qualification=v["qualification"], phone=v["phone"], is_active=True)
+                details, action = {k: v[k] for k in ("name", "qualification", "phone")}, "catalogue.doctor_saved"
             else:
                 row = LabTest(tenant_id=self.tenant_id, name=v["name"], code=v["code"], department_id=depts[v["department"]],
                               test_type_id=types.get(v["test_type"]) if v["test_type"] else None,
@@ -240,7 +258,7 @@ class CatalogueImport:
                 self.db.flush()
         except IntegrityError as exc:
             raise Conflict("Someone added one of these at the same moment. Check the list and try again.", "rows") from exc
-        entity = {"departments": "department", "test-types": "test_type", "tests": "test"}[kind]
+        entity = {"departments": "department", "test-types": "test_type", "tests": "test", "doctors": "doctor"}[kind]
         for row, action, details in added:
             self.audit.record(self.tenant_id, self.current.id, action, entity, row.id, {**details, "from": "bulk add"})
         return len(added)
