@@ -3,7 +3,7 @@
   import Button from "../../components/Button.svelte";
   import Card from "../../components/Card.svelte";
   import DataTable from "../../components/DataTable.svelte";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -188,9 +188,9 @@
   </div>
 {/if}
 
-<Dialog bind:open={dialogOpen} title="Edit patient details" icon="user" tone="info" wide
-        description="Changes show on new bills. Bills already made keep the details they were printed with.">
-  <form id="patient-form" class="stack" onsubmit={submitting(form, "Couldn't save")} novalidate>
+<FormDialog bind:open={dialogOpen} title="Edit patient details" icon="user" tone="info" wide
+        description="Changes show on new bills. Bills already made keep the details they were printed with."
+            submitLabel="Save changes" busy={form.submitting} onsubmit={submitting(form, "Couldn't save")}>
     <FormErrors {form} {labels} idPrefix="p_" />
     <div class="form-grid">
       <Field id="p_name" label="Name" required error={form.error("name")}>
@@ -247,12 +247,7 @@
         </Field>
       </div>
     </div>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="patient-form" loading={form.submitting} loadingText="Saving…">Save changes</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <style>
   .break { overflow-wrap: anywhere; }
