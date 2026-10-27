@@ -8,6 +8,8 @@ from app.core.db import scoped_session
 from app.models import Plan, Role
 from tests.conftest import PASSWORD, browser, make_user
 
+RECEPTION = [{"area": "reception"}]  # where they work (needed unless a role works everywhere)
+
 
 def _role_ids(c, *codes):
     roles = {r["code"]: r["id"] for r in c.get("/api/roles").json()}
@@ -35,10 +37,10 @@ def test_owner_adds_staff_who_must_then_choose_a_password(alpha):
     c = browser("alpha.localhost")
     c.login("owner@alpha.in")
     r = c.post("/api/staff", json={"full_name": "Piu Koley", "email": "Piu@Alpha.in", "mobile": "98765 43210",
-                                   "role_ids": _role_ids(c, "receptionist"), "temporary_password": "Temp-pass-123"})
+                                   "role_ids": _role_ids(c, "receptionist"), "areas": RECEPTION, "temporary_password": "Temp-pass-123"})
     assert r.status_code == 201, r.text
     assert r.json()["email"] == "piu@alpha.in" and r.json()["must_change_password"] is True
-    dup = c.post("/api/staff", json={"full_name": "Again", "email": "piu@alpha.in", "role_ids": _role_ids(c, "receptionist"),
+    dup = c.post("/api/staff", json={"full_name": "Again", "email": "piu@alpha.in", "role_ids": _role_ids(c, "receptionist"), "areas": RECEPTION,
                                      "temporary_password": "Temp-pass-123"})
     assert dup.status_code == 409 and dup.json()["field"] == "email"
     piu = browser("alpha.localhost")
@@ -80,13 +82,13 @@ def test_everyone_gets_their_own_random_temporary_password(alpha):
     make_user(alpha, "owner@alpha.in", ["owner"])
     c = browser("alpha.localhost")
     c.login("owner@alpha.in")
-    r = c.post("/api/staff", json={"full_name": "Tapas Patra", "email": "tapas@alpha.in", "role_ids": _role_ids(c, "receptionist")})
+    r = c.post("/api/staff", json={"full_name": "Tapas Patra", "email": "tapas@alpha.in", "role_ids": _role_ids(c, "receptionist"), "areas": RECEPTION})
     assert r.status_code == 201, r.text
     first_pw = r.json()["temporary_password"]
     assert re.fullmatch(r"[A-Z][a-z]{3}-[2-9]{4}-[A-Z][a-z]{3}", first_pw)
     assert browser("alpha.localhost").login("tapas@alpha.in", "supreme@123").status_code == 401  # no shared password any more
     assert browser("alpha.localhost").login("tapas@alpha.in", first_pw).json()["must_change_password"] is True
-    other = c.post("/api/staff", json={"full_name": "Rina Das", "email": "rina@alpha.in", "role_ids": _role_ids(c, "receptionist")})
+    other = c.post("/api/staff", json={"full_name": "Rina Das", "email": "rina@alpha.in", "role_ids": _role_ids(c, "receptionist"), "areas": RECEPTION})
     assert other.json()["temporary_password"] != first_pw
     # A reset without a password makes a new random one, and they must choose their own again.
     reset = c.post(f"/api/staff/{r.json()['id']}/reset-password", json={})
@@ -116,7 +118,7 @@ def test_the_plan_limits_active_staff(alpha):
     make_user(alpha, "owner@alpha.in", ["owner"])
     c = browser("alpha.localhost")
     c.login("owner@alpha.in")
-    r = c.post("/api/staff", json={"full_name": "One Too Many", "email": "x@alpha.in", "role_ids": _role_ids(c, "technician"),
+    r = c.post("/api/staff", json={"full_name": "One Too Many", "email": "x@alpha.in", "role_ids": _role_ids(c, "technician"), "areas": RECEPTION,
                                    "temporary_password": "Temp-pass-123"})
     assert r.status_code == 409 and "plan" in r.json()["message"]
 

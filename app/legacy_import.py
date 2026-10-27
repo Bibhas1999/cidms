@@ -317,6 +317,7 @@ class LegacyImport:
         self.import_patients()
         self.import_invoices()
         self.set_counters()
+        self.give_areas()
         self.new.execute(insert(ActivityLog.__table__), [{
             "tenant_id": self.tenant_id, "user_id": None, "action": "import.completed", "entity": "import", "entity_id": "",
             "details": {name: vars(t) for name, t in self.counts.items()} | {"issues": len(self.issues)},
@@ -359,6 +360,28 @@ class LegacyImport:
         rows = self._new_rows("SELECT id, full_name, legacy_id FROM users WHERE tenant_id = :t", t=self.tenant_id)
         self.user_by_legacy = {r.legacy_id: (r.id, r.full_name) for r in rows if r.legacy_id is not None}
         self.user_by_name = {collapse(r.full_name).lower(): r.id for r in rows}
+
+    def give_areas(self) -> None:
+        """Where imported staff work, from what their role does (as migration 0020 did for everyone then):
+        billing -> reception, appointments -> OPD, worklist -> every department. Only people with no areas yet;
+        owners and admins need none (they work everywhere)."""
+        bare = [r.id for r in self._new_rows(
+            "SELECT u.id FROM users u WHERE u.tenant_id = :t AND NOT EXISTS (SELECT 1 FROM staff_areas s WHERE s.user_id = u.id)",
+            t=self.tenant_id)]
+        if not bare:
+            return
+        for permissions, area, departments in ((["billing.create", "payments.collect"], "reception", False),
+                                               (["appointments.manage"], "opd", False), (["worklist.update"], "department", True)):
+            self.new.execute(text(f"""
+                INSERT INTO staff_areas (id, tenant_id, user_id, area, department_id)
+                SELECT gen_random_uuid(), u.tenant_id, u.id, :area, {'d.id' if departments else 'NULL'}
+                FROM users u {'JOIN departments d ON d.tenant_id = u.tenant_id' if departments else ''}
+                WHERE u.tenant_id = :t AND u.id = ANY(:ids)
+                  AND EXISTS (SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id = ur.role_id
+                              WHERE ur.user_id = u.id AND rp.permission_code = ANY(:perms))
+                  AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id = ur.role_id
+                                  WHERE ur.user_id = u.id AND rp.permission_code = 'areas.all')
+                ON CONFLICT DO NOTHING"""), {"t": self.tenant_id, "area": area, "perms": permissions, "ids": bare})  # noqa: S608 (fixed text)
 
     # -- catalogue
     def _named_rows(self, table_name: str) -> tuple[dict, dict]:
