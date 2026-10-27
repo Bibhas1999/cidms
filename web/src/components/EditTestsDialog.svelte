@@ -45,7 +45,11 @@
   }
 
   const price = (r: Row) => Number(r.line ? r.line.unit_price : r.test!.price);
-  const subtotal = $derived(rows.reduce((s, r) => s + price(r) * r.quantity, 0));
+  // A quantity outside 1–20 (or not whole) shows an error under the table at once; saving waits until it's right.
+  const qtyOk = (q: unknown) => Number.isInteger(q) && (q as number) >= 1 && (q as number) <= 20;
+  const qtyProblems = $derived(rows.filter((r) => !qtyOk(r.quantity))
+    .map((r) => `${r.line?.test_name ?? r.test?.name}: the quantity must be a whole number from 1 to 20.`));
+  const subtotal = $derived(rows.reduce((s, r) => s + price(r) * (qtyOk(r.quantity) ? r.quantity : 0), 0));
   const added = $derived(rows.filter((r) => r.test).length);
   const removed = $derived(bill.items.filter((l) => l.status !== "cancelled" && !rows.some((r) => r.line?.id === l.id)).length);
 
@@ -86,7 +90,7 @@
               <div class="cell-sub">{r.line?.department_name ?? r.test?.department.name}{#if started} · already {r.line?.status}{/if}</div></td>
             <td class="num money">{rupees(price(r))}</td>
             <td class="num"><input class="input input-sm tabular" style="width: 70px; text-align: right" type="number" min="1" max="20"
-                                   aria-label="Quantity" bind:value={r.quantity} disabled={started} /></td>
+                                   aria-label="Quantity" bind:value={r.quantity} aria-invalid={!qtyOk(r.quantity)} disabled={started} /></td>
             <td class="num money">{rupees(price(r) * r.quantity)}</td>
             <td class="num">
               {#if !started}<button class="btn btn-ghost-destructive btn-icon btn-sm" aria-label="Take off {r.line?.test_name ?? r.test?.name}" use:tooltip={"Take this test off the bill"} onclick={() => rows.splice(i, 1)}><Icon name="x" size="sm" /></button>{/if}
@@ -95,6 +99,7 @@
         {/each}
       </tbody>
     </table></div>
+    {#each qtyProblems as message (message)}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{message}</p>{/each}
     <div class="row-between text-sm">
       <span class="text-muted">{added} added · {removed} taken off</span>
       <span>New subtotal <strong class="money">{rupees(subtotal)}</strong> <span class="text-muted">(before any discount)</span></span>
@@ -105,7 +110,7 @@
   </div>
   {#snippet footer()}
     <button class="btn btn-outline" type="button" onclick={() => (open = false)}>Cancel</button>
-    <button class="btn btn-primary" type="button" disabled={saving || !rows.length || reason.trim().length < 3 || (!added && !removed && rows.every((r) => !r.line || r.quantity === r.line.quantity))}
+    <button class="btn btn-primary" type="button" disabled={saving || !rows.length || qtyProblems.length > 0 || reason.trim().length < 3 || (!added && !removed && rows.every((r) => !r.line || r.quantity === r.line.quantity))}
             onclick={save}><Icon name="check" /> {saving ? "Saving…" : "Save changes"}</button>
   {/snippet}
 </Dialog>

@@ -11,7 +11,7 @@
   // Add many departments, test types or tests at once: type them in the grid, paste from a spreadsheet, or upload an
   // Excel sheet (sent in pieces, with pause and resume). Nothing is added until every row is right; each row's
   // problem shows under it.
-  type Kind = "departments" | "test-types" | "tests";
+  type Kind = "departments" | "test-types" | "tests" | "doctors";
   let { open = $bindable(false), kind, departments = [], types = [], onadded }: {
     open?: boolean; kind: Kind; departments?: Department[]; types?: TestType[]; onadded: () => void;
   } = $props();
@@ -23,8 +23,12 @@
     "tests": [{ key: "name", label: "Test name", placeholder: "e.g. CBC" }, { key: "code", label: "Short code", width: "110px" },
               { key: "department", label: "Department", list: "departments" }, { key: "test_type", label: "Test type", list: "types" },
               { key: "price", label: "Price (₹)", width: "110px", money: true }],
+    "doctors": [{ key: "name", label: "Doctor or hospital", placeholder: "e.g. Dr. Kakali Sarkar" },
+                { key: "qualification", label: "Qualification", placeholder: "e.g. MBBS, MD" },
+                { key: "phone", label: "Phone", placeholder: "98765 43210", width: "160px" }],
   };
-  const NAMES: Record<Kind, [string, string]> = { "departments": ["department", "departments"], "test-types": ["test type", "test types"], "tests": ["test", "tests"] };
+  const NAMES: Record<Kind, [string, string]> = { "departments": ["department", "departments"], "test-types": ["test type", "test types"], "tests": ["test", "tests"],
+                                           "doctors": ["doctor or hospital", "doctors and hospitals"] };
   const cols = $derived(COLUMNS[kind]);
   const uid = $props.id();
 
@@ -140,7 +144,7 @@
   }
 </script>
 
-<Dialog bind:open title="Add several {NAMES[kind][1]}" icon="sheet" tone="info" wide
+<Dialog bind:open title="Add {NAMES[kind][1]}" icon="sheet" tone="info" wide
         description="Type them below, paste rows copied from Excel, or upload an Excel sheet. Nothing is added until every row is right.">
   <div class="stack">
     <div class="row gap-sm wrap">

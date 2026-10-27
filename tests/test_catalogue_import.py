@@ -1,4 +1,4 @@
-"""Adding many departments, test types and tests at once, from a grid or an Excel sheet sent as a resumable upload."""
+"""Adding many departments, test types, tests and referring doctors at once, from a grid or an Excel sheet sent as a resumable upload."""
 
 import io
 
@@ -61,6 +61,23 @@ def test_test_types_take_yes_or_no_for_images(owner):
     assert rows[1]["errors"] == {"imaging": "Write Yes or No."}
     assert owner.post("/api/catalogue/test-types/bulk", json={"rows": [{"name": "CT", "imaging": "Yes"}]}).status_code == 201
     assert owner.get("/api/test-types").json()[0]["is_imaging"] is True
+
+
+def test_several_doctors_and_hospitals_are_added_with_their_phones_checked(owner):
+    owner.post("/api/doctors", json={"name": "Dr. Sen"})
+    r = owner.post("/api/catalogue/doctors/check", json={"rows": [
+        {"name": "Dr. Kakali Sarkar", "qualification": "MBBS, MD", "phone": "98765 43210"},
+        {"name": "dr. sen", "qualification": "", "phone": ""},
+        {"name": "City Nursing Home", "qualification": "", "phone": "12345"}]})
+    rows = r.json()["rows"]
+    assert rows[0] == {"values": {"name": "Dr. Kakali Sarkar", "qualification": "MBBS, MD", "phone": "+919876543210"}, "errors": {}}
+    assert "already" in rows[1]["errors"]["name"]
+    assert "phone" in rows[2]["errors"]
+    assert owner.post("/api/catalogue/doctors/bulk", json={"rows": [rows[0]["values"]]}).status_code == 201
+    names = {d["name"]: d["phone"] for d in owner.get("/api/doctors", params={"all": "true"}).json()["items"]}
+    assert names["Dr. Kakali Sarkar"] == "+919876543210"
+    template = load_workbook(io.BytesIO(owner.get("/api/catalogue/doctors/template").content)).active
+    assert [c.value for c in template[1]] == ["Doctor or hospital", "Qualification", "Phone"]
 
 
 def test_tests_are_read_from_an_excel_sheet_sent_in_pieces(owner):

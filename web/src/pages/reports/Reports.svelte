@@ -175,7 +175,7 @@
 </section>
 
 {#if meta}
-  <!-- the workbook's sheets: one tab per report, as in Excel -->
+  <!-- one tab per report -->
   <nav class="sheet-tabs no-print" aria-label="Sheets">
     {#each catalogue as r (r.name)}
       <a class="sheet-tab" class:is-active={r.name === name} href={linkFor(r)} aria-current={r.name === name ? "page" : undefined}
@@ -226,12 +226,16 @@
 <style>
   .bar { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 12px 16px; }
   .bar > .select { width: 190px; flex: none; }
-  /* sheet tabs, Excel-style: a strip of tabs, the open one joined to the sheet below */
-  .sheet-tabs { display: flex; gap: 2px; overflow-x: auto; margin-bottom: -13px; padding: 0 8px; position: relative; z-index: 1; scrollbar-width: thin; }
-  .sheet-tab { flex: none; padding: 8px 14px; border: 1px solid var(--border); border-bottom: 0; border-radius: 9px 9px 0 0;
-    background: var(--muted); color: var(--muted-foreground); font-size: 13px; font-weight: 500; text-decoration: none !important; white-space: nowrap; }
-  .sheet-tab:hover { color: var(--foreground); background: color-mix(in srgb, var(--muted) 60%, var(--card)); }
-  .sheet-tab.is-active { background: var(--card); color: var(--primary-text); font-weight: 650; box-shadow: inset 0 2px 0 var(--primary); }
+  /* report tabs, like Bootstrap's nav-tabs: a line under the strip; the open tab is outlined on three sides and
+     sits on the line, so it opens onto the page below; the others are plain links that get a faint outline on hover */
+  .sheet-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; margin: 0 0 16px; padding: 0;
+    border-bottom: 1px solid var(--border); scrollbar-width: thin; }
+  .sheet-tab { flex: none; margin-bottom: -1px; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px 6px 0 0;
+    background: none; color: var(--primary-text); font-size: 14px; font-weight: 500; line-height: 1.5; text-decoration: none !important;
+    white-space: nowrap; transition: color .15s, border-color .15s; }
+  .sheet-tab:hover { border-color: var(--muted) var(--muted) var(--border); color: var(--primary); }
+  .sheet-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+  .sheet-tab.is-active { color: var(--foreground); background: var(--background); border-color: var(--border) var(--border) var(--background); }
   .bar :global(.date-filter > .select) { width: 170px; min-width: 0; }
   .segmented { display: inline-flex; align-items: center; height: 38px; padding: 3px; gap: 2px; border: 1px solid var(--input); border-radius: 9px; background: var(--background); }
   .seg-label { padding: 0 8px 0 6px; font-size: 12.5px; color: var(--muted-foreground); white-space: nowrap; }
