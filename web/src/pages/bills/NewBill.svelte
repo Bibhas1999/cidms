@@ -117,12 +117,19 @@
   // Ticking a test in the drop-down puts it on the bill straight away; unticking (or Remove) takes it off.
   function toggleTest(t: LabTest, on: boolean) {
     if (on && !onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
-    if (!on) lines = lines.filter((l) => l.test.id !== t.id);
+    if (!on) { lines = lines.filter((l) => l.test.id !== t.id); const { [t.id]: _, ...rest } = qtyProblems; qtyProblems = rest; }
     errors = { ...errors, lines: "" };
   }
+  // A quantity outside 1–20 (or not a whole number) shows an error under the tests at once and the bill can't be
+  // saved until it's put right; the line keeps its last good quantity meanwhile.
+  let qtyProblems = $state<Record<string, string>>({});
   function setQty(id: string, n: number) {
     const l = lines.find((x) => x.test.id === id);
-    if (l) l.quantity = Math.max(1, Math.min(20, Math.round(n) || 1));
+    if (!l) return;
+    const { [id]: _, ...rest } = qtyProblems;
+    if (!Number.isInteger(n) || n < 1 || n > 20) { qtyProblems = { ...rest, [id]: `${l.test.name}: the quantity must be a whole number from 1 to 20.` }; return; }
+    qtyProblems = rest;
+    l.quantity = n;
   }
 
   // ---------- money ----------
@@ -150,20 +157,20 @@
   );
   const total = $derived(round2(subtotal - discount));
   const paying = $derived(Math.min(total, round2(Number(payNow) || 0)));
-  // Paid now can never be more than the bill: typed above it (or the total drops below it after a test is taken
-  // off or the discount goes up), it comes down to the total, and says so.
-  let payCapped = $state(false);
-  function capPaid(input: HTMLInputElement) {
-    const v = round2(Number(input.value));
-    if (input.value !== "" && v > total && total > 0) { payCapped = true; payNow = total.toFixed(2); input.value = payNow; }
-    else if (input.value === "" || v < total) payCapped = false;   // at exactly the total: it may have just been capped
-  }
-  $effect(() => {
-    const v = Number(payNow);
-    if (payNow === "" || Number.isNaN(v)) return;
-    if (v < 0) { payNow = ""; return; }
-    if (round2(v) > total) { payNow = total > 0 ? total.toFixed(2) : ""; payCapped = total > 0; }
+  // Paid now can't be more than the bill. Typed above it (or the total drops below it after a test is taken off or
+  // the discount goes up), the amount stays as typed and an error shows under the box at once; the bill can't be
+  // saved until it's put right ("Full amount" sets it to the total).
+  // The discount box, checked as it's typed: a percentage above 100, rupees above the subtotal, or less than 0.
+  const discountProblem = $derived.by(() => {
+    if (discountValue === "" || discountValue === null) return "";
+    const n = Number(discountValue);
+    if (!Number.isFinite(n) || n < 0) return "Enter a discount of 0 or more.";
+    if (discountKind === "percent" && n > 100) return "A discount can't be more than 100%.";
+    if (discountKind === "amount" && round2(n) > subtotal) return `A discount can't be more than the subtotal, ${rupees(subtotal)}.`;
+    return "";
   });
+  const payTooMuch = $derived(payNow !== "" && !Number.isNaN(Number(payNow)) && round2(Number(payNow)) > total);
+  $effect(() => { if (payNow !== "" && Number(payNow) < 0) payNow = ""; });
   const dueAfter = $derived(round2(total - paying));
   const overLimit = $derived(maxDiscount !== null && subtotal > 0 && discount * 100 > subtotal * maxDiscount);
 
@@ -253,6 +260,11 @@
 
   async function saveBill(print: boolean, newPatient: z.output<typeof patientSchema> | null) {
     if (!lines.length) { errors = { lines: "Add at least one test." }; document.getElementById("nb-test")?.focus(); return; }
+    // These errors are already showing next to their boxes: go to the first one.
+    const firstQty = Object.keys(qtyProblems)[0];
+    if (firstQty) { document.querySelector<HTMLInputElement>(`input[aria-label="Quantity of ${lines.find((l) => l.test.id === firstQty)?.test.name}"]`)?.focus(); return; }
+    if (discountProblem) { document.querySelector<HTMLInputElement>(".disc-value")?.focus(); return; }
+    if (payTooMuch) { document.getElementById("pay-now")?.focus(); return; }
     saving = true;
     const body = {
       patient_id: patient?.id ?? null,
@@ -340,7 +352,7 @@
 {#snippet testCell(l: Line)}<div class="cell-title">{l.test.name}</div><div class="cell-sub">{l.test.department.name}</div>{/snippet}
 {#snippet qtyCell(l: Line)}
   <input class="input tabular qty" type="number" min="1" max="20" inputmode="numeric" aria-label="Quantity of {l.test.name}" value={l.quantity}
-         onchange={(e) => setQty(l.test.id, e.currentTarget.valueAsNumber)} />
+         aria-invalid={!!qtyProblems[l.test.id]} onchange={(e) => setQty(l.test.id, e.currentTarget.valueAsNumber)} />
 {/snippet}
 {#snippet lineTotal(l: Line)}<span class="money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</span>{/snippet}
 
@@ -491,6 +503,7 @@
           </div>
         </div>
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
+        {#each Object.entries(qtyProblems) as [id, message] (id)}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{message}</p>{/each}
       </div>
       <DataTable label="Tests on the bill" rows={lines} rowKey={(l) => l.test.id}
                  actionsInline minWidth={0}
@@ -528,11 +541,12 @@
           </div>
           <input class="input money disc-value" type="number" min="0" step={discountKind === "percent" ? "1" : "0.01"} max={discountKind === "percent" ? 100 : subtotal}
                  inputmode="decimal" placeholder={discountKind === "percent" ? "0 %" : "₹ 0"}
-                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value}
+                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value || !!discountProblem}
                  disabled={noTests} />
         </div>
         {#if overLimit && !overLimitOk}<p class="field-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
-        {#if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
+        {#if discountProblem}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{discountProblem}</p>
+        {:else if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
       </div>
       {#if discount > 0}<div class="line"><span class="text-muted">Discount</span><span class="money">− {rupees(discount)}</span></div>{/if}
       <div class="line grand"><span>Total</span><span class="money">{rupees(total)}</span></div>
@@ -544,12 +558,12 @@
           {#if total > 0}<button class="link-button" type="button" disabled={noTests} onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
         <div class="row pay-row">
           <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
-                 oninput={(e) => capPaid(e.currentTarget)} aria-describedby={payCapped ? "pay-capped" : undefined} />
+                 aria-invalid={payTooMuch} aria-describedby={payTooMuch ? "pay-capped" : undefined} />
           <label class="sr-only" for="pay-mode">Paid by</label>
           <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
           <InfoTip about="Paid by" text="How the money was taken. The day's collection is split by this (cash in the drawer, UPI, card…). Add the UPI or card reference so it can be matched with the bank." />
         </div>
-        {#if payCapped}<p class="field-hint" id="pay-capped" role="status"><Icon name="info" size="sm" />Can't be more than the total, {rupees(total)}.</p>{/if}
+        {#if payTooMuch}<p class="field-error" id="pay-capped" role="alert"><Icon name="alert" size="sm" />Paid now can't be more than the total, {rupees(total)}.</p>{/if}
         {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} disabled={noTests} />{/if}
       </div>
       <div class="line {dueAfter > 0 ? 'is-due' : ''}"><span>{dueAfter > 0 ? "Due after this" : "Nothing due"}</span><span class="money">{rupees(dueAfter)}</span></div>
