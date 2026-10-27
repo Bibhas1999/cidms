@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Button from "../../components/Button.svelte";
   import BulkAddDialog from "../../components/BulkAddDialog.svelte";
@@ -84,8 +84,8 @@
              { key: "status", label: "Status", cell: statusCell, mobile: "end" },
            ]} />
 
-<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a department"} icon={editing ? "edit" : "layers"} tone="info">
-  <form id="department-form" class="stack" onsubmit={(e) => { e.preventDefault(); save(); }} novalidate>
+<FormDialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a department"} icon={editing ? "edit" : "layers"} tone="info"
+            submitLabel={editing ? "Save changes" : "Add department"} busy={saving} onsubmit={save}>
     <Field id="dept_name" label="Name" required error={errors.name} tip="A section of the centre, e.g. Pathology or Radiology. Tests, bills and reports can be grouped and filtered by it.">
       {#snippet children({ invalid, describedby })}
         <input id="dept_name" class="input" bind:value={form.name} aria-invalid={invalid} aria-describedby={describedby} />
@@ -95,11 +95,6 @@
       <input class="checkbox" type="checkbox" bind:checked={form.is_active} />
       <span><span class="font-semibold">Active</span> <span class="text-muted">· switched-off departments can't be chosen for new tests.</span></span>
     </label>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="department-form" loading={saving} loadingText="Saving…">{editing ? "Save changes" : "Add department"}</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <BulkAddDialog bind:open={bulkOpen} kind="departments" onadded={onchanged} />

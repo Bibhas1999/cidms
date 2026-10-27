@@ -2,7 +2,7 @@
   import { connection } from "../../lib/connection.svelte";
   import { outbox } from "../../lib/outbox.svelte";
   import { FEATURES } from "../../lib/features";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import EditTestsDialog from "../../components/EditTestsDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -318,8 +318,9 @@
 
   <EditTestsDialog bind:open={editOpen} {bill} onsaved={(b) => (bill = b)} />
 
-  <Dialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}.">
-    <form id="pay-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("payments"); }} novalidate>
+  <FormDialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}."
+              submitLabel={`Receive ${rupees(amount || 0)}`} submitIcon="check" {busy} disabled={!Number(amount) || !!payProblem}
+              onsubmit={() => submitMoney("payments")}>
       <div class="grid-2">
         <Field id="pay-amount" label="Amount (₹)" required error={payProblem || errors.amount}>
           {#snippet children({ invalid, describedby })}<input id="pay-amount" class="input money" type="number" min="0.01" step="0.01" max={due} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
@@ -333,15 +334,11 @@
           {#snippet children({ invalid, describedby })}<input id="pay-ref" class="input mono" bind:value={reference} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
         </Field>
       {/if}
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (payOpen = false)}>Cancel</button>
-      <button class="btn btn-primary" type="submit" form="pay-form" disabled={busy || !Number(amount) || !!payProblem}><Icon name="check" /> {busy ? "Saving…" : `Receive ${rupees(amount || 0)}`}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 
-  <Dialog bind:open={refundOpen} title="Give money back" icon="alert" tone="destructive" description="{rupees(paid)} has been paid on this bill. A refund is recorded with its reason; nothing is deleted.">
-    <form id="refund-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("refunds"); }} novalidate>
+  <FormDialog bind:open={refundOpen} title="Give money back" icon="alert" tone="destructive" description="{rupees(paid)} has been paid on this bill. A refund is recorded with its reason; nothing is deleted."
+              submitLabel="Save refund" submitVariant="destructive" {busy} disabled={!Number(amount) || !!refundProblem || note.trim().length < 3}
+              onsubmit={() => submitMoney("refunds")}>
       <div class="grid-2">
         <Field id="ref-amount" label="Amount (₹)" required error={refundProblem || errors.amount}>
           {#snippet children({ invalid, describedby })}<input id="ref-amount" class="input money" type="number" min="0.01" step="0.01" max={paid} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
@@ -353,27 +350,18 @@
       <Field id="ref-note" label="Reason" required error={errors.note}>
         {#snippet children({ invalid, describedby })}<textarea id="ref-note" class="textarea" style="min-height: 72px" bind:value={note} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (refundOpen = false)}>Cancel</button>
-      <button class="btn btn-destructive" type="submit" form="refund-form" disabled={busy || !Number(amount) || !!refundProblem || note.trim().length < 3}>{busy ? "Saving…" : "Save refund"}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 
-  <Dialog open={reasonOpen !== ""} onclose={() => (reasonOpen = "")} title={reasonOpen === "cancel" ? "Cancel this bill?" : "Put this bill on hold?"}
+  <FormDialog open={reasonOpen !== ""} onclose={() => (reasonOpen = "")} title={reasonOpen === "cancel" ? "Cancel this bill?" : "Put this bill on hold?"}
           icon={reasonOpen === "cancel" ? "x" : "clock"} tone={reasonOpen === "cancel" ? "destructive" : "info"}
-          description={reasonOpen === "cancel" ? (paid > 0 ? `${rupees(paid)} has been paid. Refund it first, then cancel.` : "The bill stays on record, marked cancelled, with your reason.") : "It won't count as confirmed until someone confirms it."}>
-    <form id="reason-form" onsubmit={(e) => { e.preventDefault(); setStatus(reasonOpen as "hold" | "cancel"); }} novalidate>
+          description={reasonOpen === "cancel" ? (paid > 0 ? `${rupees(paid)} has been paid. Refund it first, then cancel.` : "The bill stays on record, marked cancelled, with your reason.") : "It won't count as confirmed until someone confirms it."}
+          submitLabel={reasonOpen === "cancel" ? "Cancel bill" : "Put on hold"} submitVariant={reasonOpen === "cancel" ? "destructive" : "primary"}
+          cancelLabel="Keep it" oncancel={() => (reasonOpen = "")} {busy} disabled={reason.trim().length < 3 || (reasonOpen === "cancel" && paid > 0)}
+          onsubmit={() => setStatus(reasonOpen as "hold" | "cancel")}>
       <Field id="reason" label="Reason" required error={errors.reason}>
         {#snippet children({ invalid, describedby })}<textarea id="reason" class="textarea" style="min-height: 72px" bind:value={reason} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (reasonOpen = "")}>Keep it</button>
-      <button class="btn {reasonOpen === 'cancel' ? 'btn-destructive' : 'btn-primary'}" type="submit" form="reason-form"
-              disabled={busy || reason.trim().length < 3 || (reasonOpen === "cancel" && paid > 0)}>{reasonOpen === "cancel" ? "Cancel bill" : "Put on hold"}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 {/if}
 
 <style>

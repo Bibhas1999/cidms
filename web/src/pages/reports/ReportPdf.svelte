@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from "../../components/Button.svelte";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import UploadProgress from "../../components/UploadProgress.svelte";
@@ -126,20 +126,15 @@
   </section>
 {/if}
 
-<Dialog bind:open={reasonOpen} title="Replace the signed PDF?" icon="edit" tone="info"
-        description="This amends the signed report and signs it again as you. The earlier version is kept.">
-  <form id="pdf-reason" onsubmit={submitReason} novalidate>
+<FormDialog bind:open={reasonOpen} title="Replace the signed PDF?" icon="edit" tone="info"
+        description="This amends the signed report and signs it again as you. The earlier version is kept."
+            submitLabel="Replace and sign" submitIcon="lock" oncancel={() => (file = null)} onsubmit={submitReason}>
     <Field id="pdf-reason-text" label="Why is it being replaced?" required error={reasonError}>
       {#snippet children({ invalid, describedby })}
         <input id="pdf-reason-text" class="input" bind:value={reason} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
     </Field>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => { reasonOpen = false; file = null; }}>Cancel</Button>
-    <Button variant="primary" icon="lock" type="submit" form="pdf-reason">Replace and sign</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <style>
   .attached { align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }

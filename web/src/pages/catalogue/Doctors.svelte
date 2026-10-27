@@ -3,7 +3,7 @@
   import BulkAddDialog from "../../components/BulkAddDialog.svelte";
   import Button from "../../components/Button.svelte";
   import DataTable from "../../components/DataTable.svelte";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FilterBar from "../../components/FilterBar.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
@@ -125,8 +125,8 @@
              ]} />
 </section>
 
-<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add doctor / hospital"} icon={editing ? "edit" : "stethoscope"} tone="info">
-  <form id="doctor-form" class="stack" onsubmit={submitting(form, "Couldn't save")} novalidate>
+<FormDialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add doctor / hospital"} icon={editing ? "edit" : "stethoscope"} tone="info"
+            submitLabel={editing ? "Save changes" : "Add"} busy={form.submitting} onsubmit={submitting(form, "Couldn't save")}>
     <FormErrors {form} {labels} idPrefix="d_" />
     <Field id="d_name" label="Name" required error={form.error("name")} tip="As it should print on bills, e.g. Dr. Kakali Sarkar.">
       {#snippet children({ invalid, describedby })}
@@ -150,11 +150,6 @@
       <input class="checkbox" type="checkbox" bind:checked={form.values.is_active} />
       <span><span class="font-semibold">Active</span> <span class="text-muted">· switched-off names aren't suggested on new bills.</span></span>
     </label>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="doctor-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add"}</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <BulkAddDialog bind:open={bulkOpen} kind="doctors" onadded={() => reload++} />

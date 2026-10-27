@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Dialog from "./Dialog.svelte";
+  import FormDialog from "./FormDialog.svelte";
   import Field from "./Field.svelte";
   import Icon from "./Icon.svelte";
   import InfoTip from "./InfoTip.svelte";
@@ -199,9 +199,10 @@
   </div>
 </section>
 
-<Dialog bind:open={restoreOpen} title="Restore this copy?" icon="alert" tone="destructive"
-        description={restoring ? `Back to ${dateTime(restoring.started_at)}${what(restoring) ? ` (${what(restoring)})` : ""}` : ""}>
-  <form id="cb-restore-form" class="stack" onsubmit={askRestore} novalidate>
+<FormDialog bind:open={restoreOpen} title="Restore this copy?" icon="alert" tone="destructive"
+        description={restoring ? `Back to ${dateTime(restoring.started_at)}${what(restoring) ? ` (${what(restoring)})` : ""}` : ""}
+            submitLabel="Restore" submitVariant="destructive" busy={sending} busyLabel="Starting…" disabled={typed.trim() !== "RESTORE" || !password}
+            onsubmit={askRestore}>
     <ul class="restore-list text-sm">
       <li>Every record of {who} goes back to this moment: bills, payments, patients, reports, tests, doctors and settings made or changed since are gone.</li>
       <li>A fresh copy of the records as they are now is made first, so this can be undone by restoring that copy.</li>
@@ -217,12 +218,7 @@
         <PasswordInput id="cb-restore-password" autocomplete="current-password" bind:value={password} oninput={() => (passwordError = "")} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
     </Field>
-  </form>
-  {#snippet footer()}
-    <button type="button" class="btn btn-outline" onclick={() => (restoreOpen = false)}>Cancel</button>
-    <button type="submit" form="cb-restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE" || !password}>{sending ? "Starting…" : "Restore"}</button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <style>
   .status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--muted); }
