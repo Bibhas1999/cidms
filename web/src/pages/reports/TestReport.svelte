@@ -1,6 +1,7 @@
 <script lang="ts">
   import { z } from "zod";
   import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -19,6 +20,7 @@
   import { notify, notifyError } from "../../lib/toast.svelte";
   import { tooltip } from "../../lib/tooltip";
   import PatientLink from "./PatientLink.svelte";
+  import ReportPdf from "./ReportPdf.svelte";
   import SendWhatsApp from "./SendWhatsApp.svelte";
 
   // Writing one test's report: the editor on the left (autosaved), images and earlier reports on the right.
@@ -217,7 +219,8 @@
     }
   }
   const ACTIONS: Record<string, string> = { created: "Started", saved: "Saved", finalised: "Marked ready to sign", signed: "Signed",
-                                            amended: "Amended and signed", imported: "Brought across from the old app" };
+                                            amended: "Amended and signed", imported: "Brought across from the old app",
+                                            attached: "PDF attached", detached: "PDF removed" };
 
   // ---------- images ----------
   let progress = $state<number | null>(null);
@@ -302,6 +305,7 @@
             </div>
           {/if}
         </section>
+        <ReportPdf itemId={params.itemId} report={null} {canWrite} {canSign} onchanged={(next) => take(next)} onconflict={(m) => (conflict = m)} />
       {:else}
         <form class="card" onsubmit={form.submit} novalidate aria-labelledby="report-title">
           <div class="card-header">
@@ -380,6 +384,8 @@
             {/if}
           </div>
         </form>
+
+        <ReportPdf itemId={params.itemId} {report} {canWrite} {canSign} onchanged={(next) => take(next)} onconflict={(m) => (conflict = m)} />
 
         {#if ws.versions.length}
           <section class="card" aria-labelledby="history-title">
@@ -460,20 +466,15 @@
     </div>
   </div>
 
-  <Dialog bind:open={amendOpen} title="Sign the amendment?" icon="lock" tone="info"
-          description="The amended report is signed in your name and printed as “Amended”. The earlier version is kept.">
-    <form id="amend-form" class="stack" onsubmit={submitAmend} novalidate>
+  <FormDialog bind:open={amendOpen} title="Sign the amendment?" icon="lock" tone="info"
+          description="The amended report is signed in your name and printed as “Amended”. The earlier version is kept."
+              submitLabel="Sign amendment" cancelLabel="Back" busy={amendForm.submitting} busyLabel="Signing…" onsubmit={submitAmend}>
       <FormErrors form={amendForm} labels={{ reason: "Reason" }} />
       <Field id="reason" label="Reason for the change" required error={amendForm.error("reason")} tip="Shown in the version history and on the printed report.">
         {#snippet children({ invalid, describedby })}<textarea id="reason" class="textarea" style="min-height: 80px" bind:value={amendForm.values.reason}
           {...amendForm.field("reason")} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (amendOpen = false)}>Back</button>
-      <button class="btn btn-primary" type="submit" form="amend-form" disabled={amendForm.submitting}>{amendForm.submitting ? "Signing…" : "Sign amendment"}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 
   <Dialog open={!!viewing} onclose={() => (viewing = null)} wide title="Version {viewing?.version ?? ''}"
           description={viewing ? `${ACTIONS[viewing.action] ?? viewing.action} by ${viewing.saved_by_name || "—"} · ${dateTime(viewing.created_at)}` : ""}>

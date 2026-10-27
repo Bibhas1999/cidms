@@ -87,6 +87,12 @@
   let staffText = $state("");
 
   const set = (values: Record<string, string | null>) => setQuery({ ...values, page: null });
+  // The bill-total range, checked as soon as either box changes: no list can match "at least 5000, at most 500".
+  const rangeProblem = $derived.by(() => {
+    const lo = q.get("min_total"), hi = q.get("max_total");
+    if ((lo && Number(lo) < 0) || (hi && Number(hi) < 0)) return "Enter amounts of 0 or more.";
+    return lo && hi && Number(lo) > Number(hi) ? "The lowest total can't be more than the highest." : "";
+  });
 
   // Names as people write them: "PIU KOLEY" -> "Piu Koley".
   const nice = (n: string) => n.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -242,6 +248,7 @@
           <input id="f-max" class="input money" type="number" min="0" step="1" inputmode="decimal" placeholder="Max" value={q.get("max_total") ?? ""}
                  onchange={(e) => set({ max_total: e.currentTarget.value })} />
         </div>
+        {#if rangeProblem}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{rangeProblem}</p>{/if}
       </fieldset>
       {#if !dues}
         <div class="field">
@@ -253,7 +260,10 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <ExportMenu path="/api/exports/bills" kind="bills" query={filters} disabled={!data || data.total === 0} />
+      <ExportMenu path="/api/exports/bills" kind="bills" query={filters} disabled={!data || data.total === 0}
+                  workbook={{ path: "/api/exports/bills-by-doctor.xlsx", query: filters,
+                              label: "Workbook by referring doctor (.xlsx)",
+                              about: "A summary sheet, then one sheet per referring doctor with their bills and totals. Same filters." }} />
     {/snippet}
   </FilterBar>
 

@@ -1,10 +1,11 @@
 <script lang="ts">
-  import Dialog from "./Dialog.svelte";
+  import FormDialog from "./FormDialog.svelte";
   import Field from "./Field.svelte";
   import Icon from "./Icon.svelte";
   import InfoTip from "./InfoTip.svelte";
   import RowMenu, { type RowAction } from "./RowMenu.svelte";
-  import { get, post, put } from "../lib/api";
+  import { ApiError, get, post, put } from "../lib/api";
+  import PasswordInput from "./PasswordInput.svelte";
   import { count, dateTime } from "../lib/format";
   import { notify, notifyError } from "../lib/toast.svelte";
 
@@ -75,6 +76,8 @@
   let restoring = $state<Run | null>(null);
   let restoreOpen = $state(false);
   let typed = $state("");
+  let password = $state("");
+  let passwordError = $state("");
   let sending = $state(false);
 
   async function askRestore(e: Event) {
@@ -82,12 +85,13 @@
     if (!restoring || typed.trim() !== "RESTORE") return;
     sending = true;
     try {
-      load(await post<Overview>(`${base}/${restoring.id}/restore`, { confirm: typed.trim() }));
+      load(await post<Overview>(`${base}/${restoring.id}/restore`, { confirm: typed.trim(), password }));
       restoreOpen = false;
       notify(`Restoring now. A fresh copy is made first, then ${who === "your centre" ? "everyone at the centre signs in again" : "everyone there signs in again"}.`,
              { kind: "info", title: "Restore started" });
     } catch (err) {
-      notifyError(err, { title: "Couldn't start the restore" });
+      if (err instanceof ApiError && err.field === "password") passwordError = err.message;
+      else notifyError(err, { title: "Couldn't start the restore" });
     } finally {
       sending = false;
     }
@@ -103,7 +107,7 @@
       { label: "Download backup file", icon: "download", href: link("copy"), disabled: !r.available, hint: r.available ? "The copy itself, as CIDMS restores it" : gone },
       { label: "Restore…", icon: "refresh", tone: "danger", disabled: !r.restorable || !!data?.busy,
         hint: !r.available ? gone : !r.restorable ? "Made by an earlier version of CIDMS: download only" : data?.busy ? "A backup or restore is running" : "Put every record back to this copy",
-        onclick: () => { restoring = r; typed = ""; restoreOpen = true; } },
+        onclick: () => { restoring = r; typed = ""; password = ""; passwordError = ""; restoreOpen = true; } },
     ];
   }
 
@@ -195,9 +199,10 @@
   </div>
 </section>
 
-<Dialog bind:open={restoreOpen} title="Restore this copy?" icon="alert" tone="destructive"
-        description={restoring ? `Back to ${dateTime(restoring.started_at)}${what(restoring) ? ` (${what(restoring)})` : ""}` : ""}>
-  <form id="cb-restore-form" class="stack" onsubmit={askRestore} novalidate>
+<FormDialog bind:open={restoreOpen} title="Restore this copy?" icon="alert" tone="destructive"
+        description={restoring ? `Back to ${dateTime(restoring.started_at)}${what(restoring) ? ` (${what(restoring)})` : ""}` : ""}
+            submitLabel="Restore" submitVariant="destructive" busy={sending} busyLabel="Starting…" disabled={typed.trim() !== "RESTORE" || !password}
+            onsubmit={askRestore}>
     <ul class="restore-list text-sm">
       <li>Every record of {who} goes back to this moment: bills, payments, patients, reports, tests, doctors and settings made or changed since are gone.</li>
       <li>A fresh copy of the records as they are now is made first, so this can be undone by restoring that copy.</li>
@@ -208,12 +213,12 @@
         <input id="cb-restore-confirm" class="input mono" autocomplete="off" spellcheck="false" bind:value={typed} aria-describedby={describedby} />
       {/snippet}
     </Field>
-  </form>
-  {#snippet footer()}
-    <button type="button" class="btn btn-outline" onclick={() => (restoreOpen = false)}>Cancel</button>
-    <button type="submit" form="cb-restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE"}>{sending ? "Starting…" : "Restore"}</button>
-  {/snippet}
-</Dialog>
+    <Field id="cb-restore-password" label="Your password" required error={passwordError} hint="The one you sign in with: restoring is never one click away.">
+      {#snippet children({ invalid, describedby })}
+        <PasswordInput id="cb-restore-password" autocomplete="current-password" bind:value={password} oninput={() => (passwordError = "")} aria-invalid={invalid} aria-describedby={describedby} />
+      {/snippet}
+    </Field>
+</FormDialog>
 
 <style>
   .status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--muted); }

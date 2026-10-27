@@ -19,7 +19,6 @@ import string
 import threading
 import time
 import uuid
-from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -29,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import scoped_session
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound, TooManyRequests, Unauthorized
+from app.core.limits import RateLimiter
 from app.core.security import CurrentUser
 from app.core.tenancy import TenantRef
 from app.models import ApiKey, ApiRequest, utcnow
@@ -246,27 +246,16 @@ class RateLimited(TooManyRequests):
         self.retry_after = retry_after
 
 
-class KeyRateLimiter:
-    """Calls per key in a sliding window (in this process; a shared store replaces it with several processes)."""
+class KeyRateLimiter(RateLimiter):
+    """Calls per API key in a sliding minute, shared by every app process."""
 
     def __init__(self, limit: int, per_seconds: int = 60):
-        self.limit, self.per = limit, per_seconds
-        self._hits: dict[uuid.UUID, deque[float]] = {}
-        self._lock = threading.Lock()
+        super().__init__("api-key", limit, per_seconds)
 
-    def hit(self, key_id: uuid.UUID) -> None:
-        now = time.monotonic()
-        with self._lock:
-            q = self._hits.setdefault(key_id, deque())
-            while q and q[0] <= now - self.per:
-                q.popleft()
-            if len(q) >= self.limit:
-                raise RateLimited(max(1, int(q[0] + self.per - now + 0.999)))
-            q.append(now)
-
-    def reset(self) -> None:
-        with self._lock:
-            self._hits.clear()
+    def hit(self, key_id: uuid.UUID) -> None:  # type: ignore[override]
+        wait = self.wait_seconds(str(key_id))
+        if wait:
+            raise RateLimited(wait)
 
 
 rate_limiter = KeyRateLimiter(RATE_LIMIT_PER_MINUTE)

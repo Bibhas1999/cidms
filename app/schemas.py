@@ -128,7 +128,7 @@ class StaffCreateIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=200)
     mobile: str = Field(default="", max_length=20)
     role_ids: list[uuid.UUID] = Field(min_length=1)
-    temporary_password: str = Field(default="", max_length=200)  # empty: the centre's default temporary password
+    temporary_password: str = Field(default="", max_length=200)  # empty: a random one is made
 
     _m = field_validator("mobile")(_mobile)
 
@@ -143,7 +143,12 @@ class StaffUpdateIn(BaseModel):
 
 
 class PasswordResetIn(BaseModel):
-    temporary_password: str = Field(default="", max_length=200)  # empty: the default temporary password
+    temporary_password: str = Field(default="", max_length=200)  # empty: a random one is made
+
+
+class TemporaryPasswordOut(BaseModel):
+    """Shown once to whoever added the person or reset the password; never stored or shown again."""
+    temporary_password: str
 
 
 # ---------- centre settings ----------
@@ -234,6 +239,7 @@ class ClientErrorIn(BaseModel):
 
 class BackupRestoreIn(BaseModel):
     confirm: str = Field(max_length=20)
+    password: str = Field(default="", max_length=200)  # their own password again: a restore is never one click away
 
     @field_validator("confirm")
     @classmethod

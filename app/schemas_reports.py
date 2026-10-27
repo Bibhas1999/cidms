@@ -42,6 +42,14 @@ class ReportAmendIn(ReportSaveIn):
     _r = field_validator("reason")(lambda v: v.strip())
 
 
+class ReportAttachIn(BaseModel):
+    """Attach the report as a PDF sent with a resumable upload. version: the report's version when there is one;
+    reason: needed when replacing the PDF of a signed report (an amendment)."""
+    upload_id: uuid.UUID
+    version: int | None = None
+    reason: str = Field(default="", max_length=500)
+
+
 class ReportOut(Out):
     id: uuid.UUID
     invoice_item_id: uuid.UUID
@@ -60,6 +68,9 @@ class ReportOut(Out):
     amend_reason: str
     amendments: int
     imported: bool
+    attachment_name: str
+    attachment_pages: int
+    attachment_size: int
     version: int
     created_at: datetime
     updated_at: datetime
@@ -80,6 +91,7 @@ class ReportVersionFullOut(ReportVersionOut):
     modality: str
     findings: str
     impression: str
+    attachment_name: str = ""
 
 
 class StudyOut(Out):

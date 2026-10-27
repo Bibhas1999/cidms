@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from app.core.db import scoped_session
 from app.models import BackupSettings
 from app.services import backups
-from tests.conftest import browser, make_user
+from tests.conftest import PASSWORD, browser, make_user
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -119,12 +119,12 @@ def test_a_restore_is_asked_for_called_off_and_carried_out(tmp_path, monkeypatch
     c = browser("admin.localhost")
     c.login("boss@platform.in")
     assert c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "restore"}).status_code == 422
-    asked = c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE"})
+    asked = c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE", "password": PASSWORD})
     assert asked.status_code == 200 and asked.json()["restore"]["status"] == "requested", asked.text
-    assert c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE"}).status_code == 409
+    assert c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE", "password": PASSWORD}).status_code == 409
     assert c.post("/api/platform/backups/run").status_code == 409          # no backup while a restore waits
     assert c.delete("/api/platform/backups/restore").json()["restore"] is None
-    c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE"})
+    c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE", "password": PASSWORD})
 
     # what deploy/restore.sh does, around putting the copy back
     with scoped_session(platform=True) as db, db.begin():
@@ -153,5 +153,5 @@ def test_a_backup_whose_file_is_gone_cant_be_restored(tmp_path, monkeypatch):
     make_user(None, "boss@platform.in", ["platform_owner"])
     c = browser("admin.localhost")
     c.login("boss@platform.in")
-    assert c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE"}).status_code == 422
+    assert c.post(f"/api/platform/backups/{run_id}/restore", json={"confirm": "RESTORE", "password": PASSWORD}).status_code == 422
     assert c.get(f"/api/platform/backups/{run_id}/download").status_code == 404

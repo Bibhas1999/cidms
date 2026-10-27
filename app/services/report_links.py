@@ -33,11 +33,17 @@ LOCK = timedelta(minutes=15)
 GRANT_SECONDS = 15 * 60
 TOKEN = re.compile(r"^[A-Za-z0-9_-]{22}$")
 NOT_FOUND = "This link isn't valid or has expired. Ask the centre for a new one."
-public_check_limiter = RateLimiter(limit=20, per_seconds=900)  # wrong checks per IP
+public_check_limiter = RateLimiter("report-check-ip", limit=20, per_seconds=900)  # wrong checks per IP
+# Wrong checks per link in a day: with the 15-minute lock alone, a 4-digit check could be guessed in a few weeks.
+link_daily_limiter = RateLimiter("report-check-link", limit=15, per_seconds=24 * 3600)
 
 
 def _secret() -> bytes:
-    return get_settings().session_secret.encode()
+    """REPORT_LINK_SECRET signs the links printed on reports (the QR codes). Kept apart from SESSION_SECRET so that
+    changing the session secret doesn't break every printed report; unset, it falls back to SESSION_SECRET (as
+    before), so set REPORT_LINK_SECRET to the current SESSION_SECRET before ever changing that."""
+    settings = get_settings()
+    return (settings.report_link_secret or settings.session_secret).encode()
 
 
 def token_for(share_id: uuid.UUID) -> str:
@@ -123,6 +129,8 @@ def check(db: Session, tenant_id: uuid.UUID, token: str, answer: str, ip: str) -
     now = utcnow()
     if share.locked_until and share.locked_until > now:
         raise TooManyRequests("Too many wrong tries. Please try again in 15 minutes.")
+    if link_daily_limiter.wait_seconds(str(share.id), record=False):
+        raise TooManyRequests("Too many wrong tries for this link today. Please try again tomorrow, or ask the centre.")
     _kind, expected = check_kind(db, invoice)
     if not expected or not hmac.compare_digest(re.sub(r"\s", "", answer or ""), expected):
         share.failed_checks += 1
@@ -130,6 +138,7 @@ def check(db: Session, tenant_id: uuid.UUID, token: str, answer: str, ip: str) -
             share.locked_until, share.failed_checks = now + LOCK, 0
         audit.record(tenant_id, None, "report.public_check_failed", "test_report", report.id, {"share": str(share.id), "public": True})
         db.commit()  # the failed try counts even though the request fails
+        link_daily_limiter.wait_seconds(str(share.id))
         public_check_limiter.hit(f"ip:{ip}", "Too many wrong tries. Please try again in 15 minutes.")
         raise Forbidden("That doesn't match our records. Please check and try again.", "check")
     share.failed_checks, share.locked_until = 0, None

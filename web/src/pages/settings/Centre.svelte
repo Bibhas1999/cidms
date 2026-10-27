@@ -146,7 +146,7 @@
               <span class="centre-mark" style="width:72px;height:72px;border-radius:12px;display:grid;place-items:center;background:var(--muted);color:var(--muted-foreground)"><Icon name="building" /></span>
             {/if}
             <div class="stack-sm">
-              <label class="btn btn-outline" style="cursor: pointer">
+              <label class="btn btn-outline" style="cursor: pointer; align-self: flex-start">
                 <Icon name="download" size="sm" class="flip-v" /> {uploading ? "Uploading…" : saved.logo_file ? "Change logo" : "Upload logo"}
                 <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" onchange={uploadLogo} disabled={uploading} />
               </label>

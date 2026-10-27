@@ -22,6 +22,7 @@ export const CLIENT_NAV: NavSection[] = [
     items: [
       { href: "/", label: "Dashboard", icon: "dashboard" },
       { href: "/analytics", label: "Analytics", icon: "barChart", permission: "analytics.view" },
+      ...(import.meta.env.DEV ? [{ href: "/dev/monitor", label: "Dev monitor", icon: "activity" }] : []),
     ],
   },
   {
@@ -37,8 +38,8 @@ export const CLIENT_NAV: NavSection[] = [
   {
     heading: "Reports",
     items: [
-      // Test reports: scanned tests waiting for a report (the reporting dashboard replaces this when it lands).
-      ...(FEATURES.testReports ? [{ href: "/worklist?tab=scanned", label: "Test reports", icon: "fileText", permission: "reports.write" }] : []),
+      // Test reports: the reporting dashboard (work in hand, turnaround) and the full list at /test-reports/queue.
+      ...(FEATURES.testReports ? [{ href: "/test-reports", label: "Test reports", icon: "fileText" }] : []),
       { href: "/reports", label: "Billing reports", icon: "barChart", permission: "business_reports.view" },
     ],
   },
@@ -52,6 +53,7 @@ export const CLIENT_NAV: NavSection[] = [
 ];
 
 export const PLATFORM_NAV: NavSection[] = [
-  { heading: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
+  { heading: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" },
+                                 ...(import.meta.env.DEV ? [{ href: "/dev/monitor", label: "Dev monitor", icon: "activity" }] : [])] },
   { heading: "Clients", items: [{ href: "/clients", label: "Clients", icon: "building", permission: "platform.clients.view" }] },
 ];

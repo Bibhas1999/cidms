@@ -2,6 +2,7 @@
 from the migrations at the start of the run, with the same row-level security the app uses."""
 
 import os
+import time
 
 os.environ["ENVIRONMENT"] = "test"
 # TEST_DB picks another (existing, empty) database, so two test runs at once don't wipe each other's rows.
@@ -24,7 +25,7 @@ from app.models import Role, Tenant, TenantSettings, User, UserRole
 from app.seed import seed_reference
 
 PASSWORD = "Test-password-1"
-TABLES = "password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
+TABLES = "rate_limit_hits, password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -42,12 +43,29 @@ def _owner_connection():
     return create_engine(os.environ["MIGRATION_DATABASE_URL"]).connect()
 
 
+def _truncate(tries: int = 8) -> None:
+    """Empty every table. A browser test's server may still be finishing a request from the page just closed (the
+    live notification stream, a last save); TRUNCATE then deadlocks with it or waits on its lock. Wait a moment and
+    try again rather than fail the next test."""
+    from sqlalchemy.exc import OperationalError
+    for attempt in range(1, tries + 1):
+        with _owner_connection() as conn:
+            try:
+                conn.execute(text("SET lock_timeout = '3s'"))
+                conn.execute(text(f"TRUNCATE {TABLES} CASCADE"))
+                conn.commit()
+                return
+            except OperationalError:
+                conn.rollback()
+                if attempt == tries:
+                    raise
+        time.sleep(0.5 * attempt)
+
+
 @pytest.fixture(autouse=True)
 def clean(database):
     """Every test starts from the reference data alone."""
-    with _owner_connection() as conn:
-        conn.execute(text(f"TRUNCATE {TABLES} CASCADE"))
-        conn.commit()
+    _truncate()
     with scoped_session(platform=True) as db, db.begin():
         seed_reference(db)
     login_limiter.reset()

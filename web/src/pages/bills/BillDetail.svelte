@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { connection } from "../../lib/connection.svelte";
+  import { outbox } from "../../lib/outbox.svelte";
   import { FEATURES } from "../../lib/features";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import EditTestsDialog from "../../components/EditTestsDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -54,6 +56,18 @@
   let errors = $state<Record<string, string>>({});
   let busy = $state(false);
   let requestKey = "";
+  // Checked as the amount is typed: more than is due (a payment) or than has been paid (a refund) shows an error at
+  // once and the button stays off until it's put right.
+  function amountProblem(limit: number, words: string): string {
+    if (amount === "" || amount === null) return "";
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return "Enter an amount above ₹0.";
+    if (Math.abs(Math.round(n * 100) - n * 100) > 1e-6) return "Use at most two decimal places (paise).";
+    if (Math.round(n * 100) > Math.round(limit * 100)) return `Can't be more than ${words}, ${rupees(limit)}.`;
+    return "";
+  }
+  const payProblem = $derived(amountProblem(due, "what's due"));
+  const refundProblem = $derived(amountProblem(paid, "what's been paid"));
 
   function openPay() {
     amount = due.toFixed(2); mode = "cash"; reference = ""; note = ""; errors = {}; requestKey = newRequestKey(); payOpen = true;
@@ -63,19 +77,34 @@
   }
 
   async function submitMoney(kind: "payments" | "refunds") {
+    if (kind === "payments" ? payProblem : refundProblem) { document.getElementById(kind === "payments" ? "pay-amount" : "ref-amount")?.focus(); return; }
     busy = true; errors = {};
     try {
       const body = kind === "payments" ? { mode, amount, reference, note } : { mode, amount, note };
+      if (kind === "payments" && !connection.usable && (await keepPaymentOffline(body))) return;
       bill = await post<Bill>(`/api/bills/${bill!.id}/${kind}`, body, { "Idempotency-Key": requestKey });
       payOpen = refundOpen = false;
       notify(kind === "payments" ? `${rupees(amount)} received.${due - Number(amount) <= 0 ? " The bill is fully paid." : ""}` : `${rupees(amount)} refunded.`,
              { title: kind === "payments" ? "Payment saved" : "Refund saved" });
     } catch (e) {
+      if (kind === "payments" && e instanceof ApiError && e.transient && (await keepPaymentOffline({ mode, amount, reference, note }))) return;
       if (e instanceof ApiError && Object.keys(e.fieldErrors).length) errors = e.fieldErrors;
       else notifyError(e, { title: kind === "payments" ? "Couldn't save the payment" : "Couldn't save the refund" });
     } finally {
       busy = false;
     }
+  }
+
+  /** CIDMS can't be reached: keep the payment on this computer and send it when the connection is back. */
+  async function keepPaymentOffline(body: Record<string, unknown>): Promise<boolean> {
+    const b = bill!;
+    const kept = await outbox.add(requestKey, { method: "POST", path: `/api/bills/${b.id}/payments`, body },
+                                  `${rupees(String(body.amount))} from ${b.patient_name} on ${b.invoice_no}`, `/bills/${b.id}`);
+    if (!kept) return false;
+    payOpen = false;
+    notify(`${rupees(String(body.amount))} is kept on this computer and goes to CIDMS when the connection is back.`,
+           { kind: "info", title: "Payment saved offline", duration: 0 });
+    return true;
   }
 
   let editOpen = $state(false);
@@ -289,10 +318,11 @@
 
   <EditTestsDialog bind:open={editOpen} {bill} onsaved={(b) => (bill = b)} />
 
-  <Dialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}.">
-    <form id="pay-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("payments"); }} novalidate>
+  <FormDialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}."
+              submitLabel={`Receive ${rupees(amount || 0)}`} submitIcon="check" {busy} disabled={!Number(amount) || !!payProblem}
+              onsubmit={() => submitMoney("payments")}>
       <div class="grid-2">
-        <Field id="pay-amount" label="Amount (₹)" required error={errors.amount}>
+        <Field id="pay-amount" label="Amount (₹)" required error={payProblem || errors.amount}>
           {#snippet children({ invalid, describedby })}<input id="pay-amount" class="input money" type="number" min="0.01" step="0.01" max={due} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
         </Field>
         <Field id="pay-mode" label="Paid by" required error={errors.mode}>
@@ -304,17 +334,13 @@
           {#snippet children({ invalid, describedby })}<input id="pay-ref" class="input mono" bind:value={reference} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
         </Field>
       {/if}
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (payOpen = false)}>Cancel</button>
-      <button class="btn btn-primary" type="submit" form="pay-form" disabled={busy || !Number(amount)}><Icon name="check" /> {busy ? "Saving…" : `Receive ${rupees(amount || 0)}`}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 
-  <Dialog bind:open={refundOpen} title="Give money back" icon="alert" tone="destructive" description="{rupees(paid)} has been paid on this bill. A refund is recorded with its reason; nothing is deleted.">
-    <form id="refund-form" class="stack" onsubmit={(e) => { e.preventDefault(); submitMoney("refunds"); }} novalidate>
+  <FormDialog bind:open={refundOpen} title="Give money back" icon="alert" tone="destructive" description="{rupees(paid)} has been paid on this bill. A refund is recorded with its reason; nothing is deleted."
+              submitLabel="Save refund" submitVariant="destructive" {busy} disabled={!Number(amount) || !!refundProblem || note.trim().length < 3}
+              onsubmit={() => submitMoney("refunds")}>
       <div class="grid-2">
-        <Field id="ref-amount" label="Amount (₹)" required error={errors.amount}>
+        <Field id="ref-amount" label="Amount (₹)" required error={refundProblem || errors.amount}>
           {#snippet children({ invalid, describedby })}<input id="ref-amount" class="input money" type="number" min="0.01" step="0.01" max={paid} bind:value={amount} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
         </Field>
         <Field id="ref-mode" label="Given back by" required>
@@ -324,27 +350,18 @@
       <Field id="ref-note" label="Reason" required error={errors.note}>
         {#snippet children({ invalid, describedby })}<textarea id="ref-note" class="textarea" style="min-height: 72px" bind:value={note} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (refundOpen = false)}>Cancel</button>
-      <button class="btn btn-destructive" type="submit" form="refund-form" disabled={busy || !Number(amount) || note.trim().length < 3}>{busy ? "Saving…" : "Save refund"}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 
-  <Dialog open={reasonOpen !== ""} onclose={() => (reasonOpen = "")} title={reasonOpen === "cancel" ? "Cancel this bill?" : "Put this bill on hold?"}
+  <FormDialog open={reasonOpen !== ""} onclose={() => (reasonOpen = "")} title={reasonOpen === "cancel" ? "Cancel this bill?" : "Put this bill on hold?"}
           icon={reasonOpen === "cancel" ? "x" : "clock"} tone={reasonOpen === "cancel" ? "destructive" : "info"}
-          description={reasonOpen === "cancel" ? (paid > 0 ? `${rupees(paid)} has been paid. Refund it first, then cancel.` : "The bill stays on record, marked cancelled, with your reason.") : "It won't count as confirmed until someone confirms it."}>
-    <form id="reason-form" onsubmit={(e) => { e.preventDefault(); setStatus(reasonOpen as "hold" | "cancel"); }} novalidate>
+          description={reasonOpen === "cancel" ? (paid > 0 ? `${rupees(paid)} has been paid. Refund it first, then cancel.` : "The bill stays on record, marked cancelled, with your reason.") : "It won't count as confirmed until someone confirms it."}
+          submitLabel={reasonOpen === "cancel" ? "Cancel bill" : "Put on hold"} submitVariant={reasonOpen === "cancel" ? "destructive" : "primary"}
+          cancelLabel="Keep it" oncancel={() => (reasonOpen = "")} {busy} disabled={reason.trim().length < 3 || (reasonOpen === "cancel" && paid > 0)}
+          onsubmit={() => setStatus(reasonOpen as "hold" | "cancel")}>
       <Field id="reason" label="Reason" required error={errors.reason}>
         {#snippet children({ invalid, describedby })}<textarea id="reason" class="textarea" style="min-height: 72px" bind:value={reason} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
-    </form>
-    {#snippet footer()}
-      <button class="btn btn-outline" type="button" onclick={() => (reasonOpen = "")}>Keep it</button>
-      <button class="btn {reasonOpen === 'cancel' ? 'btn-destructive' : 'btn-primary'}" type="submit" form="reason-form"
-              disabled={busy || reason.trim().length < 3 || (reasonOpen === "cancel" && paid > 0)}>{reasonOpen === "cancel" ? "Cancel bill" : "Put on hold"}</button>
-    {/snippet}
-  </Dialog>
+  </FormDialog>
 {/if}
 
 <style>

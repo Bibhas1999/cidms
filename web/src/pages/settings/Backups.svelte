@@ -1,10 +1,11 @@
 <script lang="ts">
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import InfoTip from "../../components/InfoTip.svelte";
   import RowMenu, { type RowAction } from "../../components/RowMenu.svelte";
-  import { api, get, post, put } from "../../lib/api";
+  import { ApiError, api, get, post, put } from "../../lib/api";
+  import PasswordInput from "../../components/PasswordInput.svelte";
   import { dateTime } from "../../lib/format";
   import { notify, notifyError } from "../../lib/toast.svelte";
 
@@ -74,6 +75,8 @@
   let restoring = $state<Run | null>(null);
   let restoreOpen = $state(false);
   let typed = $state("");
+  let password = $state("");
+  let passwordError = $state("");
   let restoreError = $state("");
   let sending = $state(false);
 
@@ -87,7 +90,7 @@
         hint: r.sql ? "Plain SQL, to read or load anywhere" : r.dump ? "Backups from before 13 Oct 2026 have only the .dump" : gone },
       { label: "Restore…", icon: "refresh", tone: "danger", disabled: !r.dump || !!data?.restore,
         hint: !r.dump ? gone : data?.restore ? "A restore is already on its way" : "Put the whole database back to this backup",
-        onclick: () => { restoring = r; typed = ""; restoreError = ""; restoreOpen = true; } },
+        onclick: () => { restoring = r; typed = ""; password = ""; passwordError = ""; restoreError = ""; restoreOpen = true; } },
     ];
   }
 
@@ -97,11 +100,12 @@
     if (typed.trim() !== "RESTORE") { restoreError = "Type RESTORE in capitals to confirm."; return; }
     sending = true;
     try {
-      load(await post<Overview>(`/api/platform/backups/${restoring.id}/restore`, { confirm: typed.trim() }));
+      load(await post<Overview>(`/api/platform/backups/${restoring.id}/restore`, { confirm: typed.trim(), password }));
       restoreOpen = false;
       notify("The restore starts within a minute. You can still call it off until then.", { kind: "info", title: "Restore on its way" });
     } catch (err) {
-      notifyError(err, { title: "Couldn't ask for the restore" });
+      if (err instanceof ApiError && err.field === "password") passwordError = err.message;
+      else notifyError(err, { title: "Couldn't ask for the restore" });
     } finally {
       sending = false;
     }
@@ -217,9 +221,10 @@
   </div>
 </section>
 
-<Dialog bind:open={restoreOpen} title="Restore this backup?" icon="alert" tone="destructive"
-        description={restoring ? `Back to ${dateTime(restoring.started_at)} (${restoring.file})` : ""}>
-  <form id="restore-form" class="stack" onsubmit={askRestore} novalidate>
+<FormDialog bind:open={restoreOpen} title="Restore this backup?" icon="alert" tone="destructive"
+        description={restoring ? `Back to ${dateTime(restoring.started_at)} (${restoring.file})` : ""}
+            submitLabel="Restore" submitVariant="destructive" busy={sending} busyLabel="Asking…" disabled={typed.trim() !== "RESTORE" || !password}
+            onsubmit={askRestore}>
     <ul class="restore-list text-sm">
       <li>Everything in CIDMS goes back to this moment, for <strong>every centre</strong>: bills, payments, patients, staff and settings made since are gone.</li>
       <li>The data as it is now is backed up first, so this can be undone by restoring that copy.</li>
@@ -232,14 +237,12 @@
                oninput={() => (restoreError = "")} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
     </Field>
-  </form>
-  {#snippet footer()}
-    <button type="button" class="btn btn-outline" onclick={() => (restoreOpen = false)}>Cancel</button>
-    <button type="submit" form="restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE"}>
-      {sending ? "Asking…" : "Restore"}
-    </button>
-  {/snippet}
-</Dialog>
+    <Field id="restore-password" label="Your password" required error={passwordError} hint="The one you sign in with: restoring is never one click away.">
+      {#snippet children({ invalid, describedby })}
+        <PasswordInput id="restore-password" autocomplete="current-password" bind:value={password} oninput={() => (passwordError = "")} aria-invalid={invalid} aria-describedby={describedby} />
+      {/snippet}
+    </Field>
+</FormDialog>
 
 <style>
   .restore-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; }

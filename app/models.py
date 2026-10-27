@@ -173,6 +173,14 @@ class UserSession(Base):
     user: Mapped[User] = relationship(lazy="joined")
 
 
+class PayloadKey(Base):
+    """An AES key agreed with one browser tab (ECDH) for encrypted request and response bodies. Kept for a day."""
+    __tablename__ = "payload_keys"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+
+
 class PasswordReset(Base):
     """A "forgot password" link. The email carries a random token; only its SHA-256 hash is stored."""
     __tablename__ = "password_resets"
@@ -410,9 +418,29 @@ class TestReport(Base):
     amend_reason: Mapped[str] = mapped_column(Text, default="")
     amendments: Mapped[int] = mapped_column(Integer, default=0)
     imported: Mapped[bool] = mapped_column(Boolean, default=False)
+    # An uploaded PDF report (base64), instead of or as well as the typed findings. Loaded only when asked for.
+    attachment_name: Mapped[str] = mapped_column(String(200), default="")
+    attachment_pages: Mapped[int] = mapped_column(Integer, default=0)
+    attachment_size: Mapped[int] = mapped_column(Integer, default=0)
+    attachment_data: Mapped[str] = mapped_column(Text, default="", deferred=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
+
+
+class Upload(Base):
+    """A file being sent in pieces (resumable): base64 of what has arrived so far. Removed once used, or after a day."""
+    __tablename__ = "uploads"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    purpose: Mapped[str] = mapped_column(String(20))
+    filename: Mapped[str] = mapped_column(String(200))
+    size: Mapped[int] = mapped_column(Integer)
+    received: Mapped[int] = mapped_column(Integer, default=0)
+    data: Mapped[str] = mapped_column(Text, default="", deferred=True)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
 
 
 class TestReportVersion(Base):
@@ -431,6 +459,7 @@ class TestReportVersion(Base):
     findings: Mapped[str] = mapped_column(Text, default="")
     impression: Mapped[str] = mapped_column(Text, default="")
     reason: Mapped[str] = mapped_column(Text, default="")
+    attachment_name: Mapped[str] = mapped_column(String(200), default="")
     saved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     saved_by_name: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)

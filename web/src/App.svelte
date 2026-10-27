@@ -24,6 +24,9 @@
   import Reports from "./pages/reports/Reports.svelte";
   import ChangePassword from "./pages/ChangePassword.svelte";
   import Analytics from "./pages/Analytics.svelte";
+  import DevMonitor from "./pages/DevMonitor.svelte";
+  import ReportQueue from "./pages/reports/ReportQueue.svelte";
+  import ReportsDashboard from "./pages/reports/ReportsDashboard.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
   import ForgotPassword from "./pages/ForgotPassword.svelte";
   import Login from "./pages/Login.svelte";
@@ -53,7 +56,7 @@
     { path: "/analytics", component: Analytics, title: "Analytics", client: "analytics.view", platform: null },
     { path: "/bills", component: Bills, title: "Bills", ...CLIENT_ONLY },
     { path: "/bills/new", component: NewBill, title: "New bill", client: "billing.create", platform: null },
-    { path: "/bills/offline", component: OfflineBills, title: "Offline bills", client: "billing.create", platform: null },
+    { path: "/bills/offline", component: OfflineBills, title: "Offline", client: "billing.create", platform: null },
     { path: "/bills/offline/:offlineId/print", component: BillPrint, title: "Print bill", bare: true, client: "billing.create", platform: null },
     { path: "/bills/:id", component: BillDetail, title: "Bill", ...CLIENT_ONLY },
     { path: "/bills/:id/print", component: BillPrint, title: "Print bill", bare: true, ...CLIENT_ONLY },
@@ -61,7 +64,11 @@
     { path: "/patients", component: Patients, title: "Patients", ...CLIENT_ONLY },
     { path: "/patients/:id", component: PatientDetail, title: "Patient", ...CLIENT_ONLY },
     ...(FEATURES.worklist ? [{ path: "/worklist", component: Worklist, title: "Worklist", ...CLIENT_ONLY }] : []),
-    ...(FEATURES.testReports ? [{ path: "/test-reports/:itemId", component: TestReport, title: "Report", ...CLIENT_ONLY }] : []),
+    ...(FEATURES.testReports ? [
+      { path: "/test-reports", component: ReportsDashboard, title: "Test reports", ...CLIENT_ONLY },
+      { path: "/test-reports/queue", component: ReportQueue, title: "Test reports", ...CLIENT_ONLY },
+      { path: "/test-reports/:itemId", component: TestReport, title: "Report", ...CLIENT_ONLY },
+    ] : []),
     { path: "/reports", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/reports/:name", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
     { path: "/tests", component: Tests, title: "Tests & prices", ...CLIENT_ONLY },
@@ -73,6 +80,8 @@
     { path: "/clients", component: Clients, title: "Clients", client: null, platform: "platform.clients.view" },
     { path: "/change-password", component: ChangePassword, title: "Change password" },
     { path: "/notifications", component: Notifications, title: "Notifications" },
+    // Development only (npm run dev): the live server monitor. Not in production builds.
+    ...(import.meta.env.DEV ? [{ path: "/dev/monitor", component: DevMonitor, title: "Dev monitor" }] : []),
   ];
 
   function match(path: string): { route: Route; params: Record<string, string> } | null {

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import Paging, paging, require_any
 from app.core.db import DB
 from app.core.security import CurrentUser
-from app.schemas import Page, PasswordResetIn, StaffCreateIn, StaffOut, StaffUpdateIn
+from app.schemas import Page, PasswordResetIn, StaffCreateIn, StaffOut, StaffUpdateIn, TemporaryPasswordOut
 from app.schemas_roles import StaffRolesIn
 from app.services.staff import StaffService
 
@@ -25,9 +25,15 @@ def list_staff(search: str = Query("", max_length=100), active: bool | None = No
     return Page(items=out, total=total, page=p.page, size=p.size)
 
 
-@router.post("/staff", response_model=StaffOut, status_code=status.HTTP_201_CREATED)
+class StaffCreatedOut(StaffOut):
+    temporary_password: str  # shown once
+
+
+@router.post("/staff", response_model=StaffCreatedOut, status_code=status.HTTP_201_CREATED)
 def create_staff(data: StaffCreateIn, db: Session = DB, current: CurrentUser = Depends(manage_staff)):
-    return StaffService(db, current).create(data)
+    service = StaffService(db, current)
+    user = service.create(data)
+    return StaffCreatedOut(**StaffOut.model_validate(user).model_dump(), temporary_password=service.temporary_password)
 
 
 @router.patch("/staff/{user_id}", response_model=StaffOut)
@@ -35,9 +41,9 @@ def update_staff(user_id: uuid.UUID, data: StaffUpdateIn, db: Session = DB, curr
     return StaffService(db, current).update(user_id, data)
 
 
-@router.post("/staff/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/staff/{user_id}/reset-password", response_model=TemporaryPasswordOut)
 def reset_password(user_id: uuid.UUID, data: PasswordResetIn, db: Session = DB, current: CurrentUser = Depends(manage_staff)):
-    StaffService(db, current).reset_password(user_id, data.temporary_password)
+    return TemporaryPasswordOut(temporary_password=StaffService(db, current).reset_password(user_id, data.temporary_password))
 
 
 @router.put("/staff/{user_id}/roles", response_model=StaffOut)

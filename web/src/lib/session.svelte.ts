@@ -106,6 +106,7 @@ export const session = new Session();
 
 setApiHooks({
   csrf: () => session.me?.csrf_token ?? "",
+  user: () => session.me?.id ?? "",
   onUnauthorized: () => {
     // The session ended (signed out elsewhere, timed out): back to sign-in, then return here.
     if (session.me) session.me = null;

@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { confirmDialog } from "../../lib/confirm.svelte";
   import { z } from "zod";
   import Button from "../../components/Button.svelte";
   import Combobox from "../../components/Combobox.svelte";
   import DataTable from "../../components/DataTable.svelte";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -116,12 +117,19 @@
   // Ticking a test in the drop-down puts it on the bill straight away; unticking (or Remove) takes it off.
   function toggleTest(t: LabTest, on: boolean) {
     if (on && !onBill.has(t.id)) lines.push({ test: t, quantity: 1 });
-    if (!on) lines = lines.filter((l) => l.test.id !== t.id);
+    if (!on) { lines = lines.filter((l) => l.test.id !== t.id); const { [t.id]: _, ...rest } = qtyProblems; qtyProblems = rest; }
     errors = { ...errors, lines: "" };
   }
+  // A quantity outside 1–20 (or not a whole number) shows an error under the tests at once and the bill can't be
+  // saved until it's put right; the line keeps its last good quantity meanwhile.
+  let qtyProblems = $state<Record<string, string>>({});
   function setQty(id: string, n: number) {
     const l = lines.find((x) => x.test.id === id);
-    if (l) l.quantity = Math.max(1, Math.min(20, Math.round(n) || 1));
+    if (!l) return;
+    const { [id]: _, ...rest } = qtyProblems;
+    if (!Number.isInteger(n) || n < 1 || n > 20) { qtyProblems = { ...rest, [id]: `${l.test.name}: the quantity must be a whole number from 1 to 20.` }; return; }
+    qtyProblems = rest;
+    l.quantity = n;
   }
 
   // ---------- money ----------
@@ -149,6 +157,20 @@
   );
   const total = $derived(round2(subtotal - discount));
   const paying = $derived(Math.min(total, round2(Number(payNow) || 0)));
+  // Paid now can't be more than the bill. Typed above it (or the total drops below it after a test is taken off or
+  // the discount goes up), the amount stays as typed and an error shows under the box at once; the bill can't be
+  // saved until it's put right ("Full amount" sets it to the total).
+  // The discount box, checked as it's typed: a percentage above 100, rupees above the subtotal, or less than 0.
+  const discountProblem = $derived.by(() => {
+    if (discountValue === "" || discountValue === null) return "";
+    const n = Number(discountValue);
+    if (!Number.isFinite(n) || n < 0) return "Enter a discount of 0 or more.";
+    if (discountKind === "percent" && n > 100) return "A discount can't be more than 100%.";
+    if (discountKind === "amount" && round2(n) > subtotal) return `A discount can't be more than the subtotal, ${rupees(subtotal)}.`;
+    return "";
+  });
+  const payTooMuch = $derived(payNow !== "" && !Number.isNaN(Number(payNow)) && round2(Number(payNow)) > total);
+  $effect(() => { if (payNow !== "" && Number(payNow) < 0) payNow = ""; });
   const dueAfter = $derived(round2(total - paying));
   const overLimit = $derived(maxDiscount !== null && subtotal > 0 && discount * 100 > subtotal * maxDiscount);
 
@@ -161,6 +183,8 @@
   let errors = $state<Record<string, string>>({});
   let saving = $state(false);
   let requestKey: string = newRequestKey();
+  // The summary (discount, payment, hold, save) waits for the first test: until then there's nothing to price.
+  const noTests = $derived(!lines.length);
   const dirty = $derived(!!(patient || addingPatient || lines.length || doctorText.trim() || notes.trim() || discountValue || payNow));
 
   // ---------- draft ----------
@@ -196,6 +220,13 @@
     restored = waiting;
     waiting = null;
   }
+  /** "Clear draft": after asking, empty the form and forget the draft kept on this computer. */
+  async function clearTheDraft() {
+    if (!(await confirmDialog({ title: "Clear this draft?", tone: "danger", confirmLabel: "Clear draft",
+                                message: "Everything typed on this bill goes, and the draft kept on this computer is removed." }))) return;
+    startAfresh();
+    notify("Draft cleared.");
+  }
   function startAfresh() {
     clearDraft(DRAFT);
     patient = null; addingPatient = false; patientQuery = ""; np.reset();
@@ -229,6 +260,11 @@
 
   async function saveBill(print: boolean, newPatient: z.output<typeof patientSchema> | null) {
     if (!lines.length) { errors = { lines: "Add at least one test." }; document.getElementById("nb-test")?.focus(); return; }
+    // These errors are already showing next to their boxes: go to the first one.
+    const firstQty = Object.keys(qtyProblems)[0];
+    if (firstQty) { document.querySelector<HTMLInputElement>(`input[aria-label="Quantity of ${lines.find((l) => l.test.id === firstQty)?.test.name}"]`)?.focus(); return; }
+    if (discountProblem) { document.querySelector<HTMLInputElement>(".disc-value")?.focus(); return; }
+    if (payTooMuch) { document.getElementById("pay-now")?.focus(); return; }
     saving = true;
     const body = {
       patient_id: patient?.id ?? null,
@@ -316,12 +352,15 @@
 {#snippet testCell(l: Line)}<div class="cell-title">{l.test.name}</div><div class="cell-sub">{l.test.department.name}</div>{/snippet}
 {#snippet qtyCell(l: Line)}
   <input class="input tabular qty" type="number" min="1" max="20" inputmode="numeric" aria-label="Quantity of {l.test.name}" value={l.quantity}
-         onchange={(e) => setQty(l.test.id, e.currentTarget.valueAsNumber)} />
+         aria-invalid={!!qtyProblems[l.test.id]} onchange={(e) => setQty(l.test.id, e.currentTarget.valueAsNumber)} />
 {/snippet}
 {#snippet lineTotal(l: Line)}<span class="money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</span>{/snippet}
 
 <PageHeader eyebrow="Front desk" title="New bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
-  {#snippet actions()}<span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
+  {#snippet actions()}
+    {#if dirty}<span class="draft-saved text-sm text-muted" role="status"><Icon name="check" size="sm" />Draft saved on this computer</span>
+      <Button variant="ghost-destructive" size="sm" icon="trash" onclick={clearTheDraft} tooltip="Empty the form and remove the draft">Clear draft</Button>{/if}
+    <span class="text-sm text-muted hide-sm"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> saves · <span class="kbd">Ctrl</span> + <span class="kbd">P</span> saves and prints</span>{/snippet}
 </PageHeader>
 
 {#if !connection.usable}
@@ -336,7 +375,7 @@
   <div class="alert alert-info draft-note" role="status"><Icon name="info" />
     <div class="grow"><div class="alert-title">Your unsaved bill is back</div>From {savedAgo(restored.saved_at)}. It's kept on this computer until you save it.</div>
     <Button variant="ghost" size="sm" onclick={() => (restored = null)}>OK</Button>
-    <Button variant="outline" size="sm" onclick={startAfresh}>Start a new bill</Button>
+    <Button variant="outline" size="sm" icon="trash" onclick={clearTheDraft}>Clear draft</Button>
   </div>
 {:else if waiting}
   <div class="alert alert-warning draft-note" role="status"><Icon name="alert" />
@@ -464,6 +503,7 @@
           </div>
         </div>
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
+        {#each Object.entries(qtyProblems) as [id, message] (id)}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{message}</p>{/each}
       </div>
       <DataTable label="Tests on the bill" rows={lines} rowKey={(l) => l.test.id}
                  actionsInline minWidth={0}
@@ -489,21 +529,24 @@
 
   <aside class="card summary" aria-labelledby="s-title" id="bill-summary">
     <div class="card-header"><h2 class="card-title" id="s-title">Summary</h2><span class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</span></div>
-    <div class="card-content stack">
+    <div class="card-content stack" class:is-waiting={noTests}>
+      {#if noTests}<p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to set the discount and payment.</p>{/if}
       <div class="line"><span class="text-muted">Subtotal</span><span class="money">{rupees(subtotal)}</span></div>
       <div class="field">
         <div class="label-row"><span class="label" id="disc-label">Discount</span><InfoTip about="Discount" text={discountTip} /></div>
         <div class="row" role="group" aria-labelledby="disc-label">
           <div class="disc-kind" role="radiogroup" aria-label="Discount in">
-            <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} /> % Percent</label>
-            <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} /> ₹ Rupees</label>
+            <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} disabled={noTests} /> % Percent</label>
+            <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} disabled={noTests} /> ₹ Rupees</label>
           </div>
           <input class="input money disc-value" type="number" min="0" step={discountKind === "percent" ? "1" : "0.01"} max={discountKind === "percent" ? 100 : subtotal}
                  inputmode="decimal" placeholder={discountKind === "percent" ? "0 %" : "₹ 0"}
-                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value} />
+                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value || !!discountProblem}
+                 disabled={noTests} />
         </div>
         {#if overLimit && !overLimitOk}<p class="field-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
-        {#if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
+        {#if discountProblem}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{discountProblem}</p>
+        {:else if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
       </div>
       {#if discount > 0}<div class="line"><span class="text-muted">Discount</span><span class="money">− {rupees(discount)}</span></div>{/if}
       <div class="line grand"><span>Total</span><span class="money">{rupees(total)}</span></div>
@@ -512,22 +555,25 @@
       <div class="field">
         <div class="row-between"><div class="label-row"><label class="label" for="pay-now">Paid now (₹)</label>
           <InfoTip about="Paid now" text="What the patient pays at the desk now. Leave it empty if nothing is paid; the rest stays due and can be collected later from Dues, in as many instalments as needed." /></div>
-          {#if total > 0}<button class="link-button" type="button" onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
+          {#if total > 0}<button class="link-button" type="button" disabled={noTests} onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
         <div class="row pay-row">
-          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} />
+          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
+                 aria-invalid={payTooMuch} aria-describedby={payTooMuch ? "pay-capped" : undefined} />
           <label class="sr-only" for="pay-mode">Paid by</label>
-          <select id="pay-mode" class="select pay-mode" bind:value={payMode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
+          <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
           <InfoTip about="Paid by" text="How the money was taken. The day's collection is split by this (cash in the drawer, UPI, card…). Add the UPI or card reference so it can be matched with the bank." />
         </div>
-        {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} />{/if}
+        {#if payTooMuch}<p class="field-error" id="pay-capped" role="alert"><Icon name="alert" size="sm" />Paid now can't be more than the total, {rupees(total)}.</p>{/if}
+        {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} disabled={noTests} />{/if}
       </div>
       <div class="line {dueAfter > 0 ? 'is-due' : ''}"><span>{dueAfter > 0 ? "Due after this" : "Nothing due"}</span><span class="money">{rupees(dueAfter)}</span></div>
-      <div class="check-line"><label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} /> Put the bill on hold</label>
+      <div class="check-line"><label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} disabled={noTests} /> Put the bill on hold</label>
         <InfoTip about="On hold" text="Saves the bill without sending its tests to the worklist, e.g. while waiting for the doctor's slip. Confirm it later from the bill." /></div>
     </div>
     <div class="card-footer card-footer-stack summary-actions">
-      <Button variant="primary" size="lg" block icon="printer" loading={saving || np.submitting} loadingText="Saving…" onclick={() => save(true)}>Save and print</Button>
-      <Button block icon="check" disabled={saving || np.submitting} onclick={() => save(false)}>Save bill</Button>
+      <Button variant="primary" size="lg" block icon="printer" loading={saving || np.submitting} loadingText="Saving…" disabled={noTests}
+              tooltip={noTests ? "Add a test first" : ""} onclick={() => save(true)}>Save and print</Button>
+      <Button block icon="check" disabled={saving || np.submitting || noTests} tooltip={noTests ? "Add a test first" : ""} onclick={() => save(false)}>Save bill</Button>
     </div>
   </aside>
 </div>
@@ -539,14 +585,15 @@
     <strong class="money">{rupees(total)}</strong>
     {#if dueAfter > 0 && lines.length}<span class="text-xs money-due">{rupees(dueAfter)} due</span>{/if}
   </a>
-  <Button disabled={saving || np.submitting} onclick={() => save(false)} aria-label="Save bill">Save</Button>
-  <Button variant="primary" icon="printer" loading={saving || np.submitting} onclick={() => save(true)} aria-label="Save and print">Save & print</Button>
+  <Button disabled={saving || np.submitting || noTests} onclick={() => save(false)} aria-label="Save bill">Save</Button>
+  <Button variant="primary" icon="printer" loading={saving || np.submitting} disabled={noTests} onclick={() => save(true)} aria-label="Save and print">Save & print</Button>
 </div>
 <div class="savebar-space" aria-hidden="true"></div>
 
-<Dialog bind:open={addingDoctor} title="Add a referring doctor or hospital" icon="stethoscope" tone="info"
-        description="Added to your list of doctors and hospitals and chosen for this bill.">
-  <form id="doctor-form" class="stack" onsubmit={submitting(doctorForm, "Couldn't add it")} novalidate>
+<FormDialog bind:open={addingDoctor} title="Add a referring doctor or hospital" icon="stethoscope" tone="info"
+            description="Added to your list of doctors and hospitals and chosen for this bill."
+            submitLabel="Add" submitIcon="check" busy={doctorForm.submitting} busyLabel="Adding…"
+            onsubmit={submitting(doctorForm, "Couldn't add it")}>
     <FormErrors form={doctorForm} labels={{ name: "Name", qualification: "Qualification", phone: "Phone" }} idPrefix="nd-" />
     <Field id="nd-name" label="Doctor or hospital name" required error={doctorForm.error("name")} tip="As it should print on the bill, e.g. Dr. Kakali Sarkar or City Nursing Home.">
       {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" autocomplete="off" placeholder="e.g. Dr. Kakali Sarkar or City Nursing Home" bind:value={doctorForm.values.name} {...doctorForm.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
@@ -562,12 +609,7 @@
         {/snippet}
       </Field>
     </div>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (addingDoctor = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="doctor-form" icon="check" loading={doctorForm.submitting} loadingText="Adding…">Add</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <style>
   .nb-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
@@ -616,4 +658,11 @@
   }
   .draft-note { margin-bottom: 16px; align-items: center; }
   @media (max-width: 600px) { .draft-note { flex-wrap: wrap; } }
+  /* Until a test is added the summary's controls are switched off (the help buttons still work). */
+  .is-waiting .disc-kind label, .is-waiting .check-row { opacity: .55; cursor: not-allowed; }
+  .is-waiting .link-button:disabled { opacity: .5; cursor: not-allowed; text-decoration: none; }
+  .waiting-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 10px; border-radius: 8px;
+    background: var(--muted); color: var(--muted-foreground); }
+  .field-hint { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; font-size: 12.5px; color: var(--primary-text); }
+  .draft-saved { display: inline-flex; align-items: center; gap: 5px; }
 </style>

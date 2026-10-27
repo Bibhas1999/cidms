@@ -2,6 +2,7 @@
 so the HttpOnly session cookie works everywhere without CORS."""
 
 import logging
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -16,18 +17,22 @@ from app.api import (
     analytics,
     auth,
     billing,
+    catalogue_import,
     centre,
+    payload,
     platform,
     reports,
     staff,
     system,
     test_reports,  # test reports, imaging, DICOMweb proxy, viewer, WhatsApp
+    uploads,  # files sent in pieces, with pause and resume
 )
 from app.core.config import get_settings
 from app.core.db import is_transient
 from app.core.errors import DomainError
 from app.core.limits import BodySizeMiddleware
 from app.core.logging import RequestLogMiddleware, configure_logging, request_id
+from app.core.payload import PayloadCryptoMiddleware
 from app.core.tenancy import TenancyMiddleware
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
@@ -83,13 +88,18 @@ def _clean(msg: str) -> str:
         return "Enter a valid email address."
     if msg == "Field required":
         return "This is required."
+    # Pydantic's length limits, in plain words ("String should have at least 2 characters").
+    if m := re.fullmatch(r"String should have at least (\d+) characters?", msg):
+        return f"Use at least {m[1]} characters."
+    if m := re.fullmatch(r"String should have at most (\d+) characters?", msg):
+        return f"Use {m[1]} characters or fewer."
     return msg.removeprefix("Value error, ").removeprefix("Assertion failed, ")
 
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error(request: Request, exc: DomainError):
-        return _error(exc.status, exc.message, exc.field)
+        return _error(exc.status, exc.message, exc.field, exc.detail)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
@@ -140,6 +150,11 @@ def mount_web(app: FastAPI) -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
+    from app.core.alerts import init_error_tracking
+    init_error_tracking("web")
+    from app.core.db import web_limits
+    web_limits.update(statement_ms=settings.db_statement_timeout_s * 1000,
+                      idle_in_transaction_ms=settings.db_idle_in_transaction_timeout_s * 1000)
     app = FastAPI(
         title=settings.app_name,
         docs_url=None if settings.is_production else "/api/docs",
@@ -148,12 +163,19 @@ def create_app() -> FastAPI:
     )
     # The last added runs first: the request log wraps everything, so every line carries the request ID.
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(PayloadCryptoMiddleware)  # encrypted bodies: decrypted before, and encrypted after, everything else
     app.add_middleware(BodySizeMiddleware)
     app.add_middleware(TenancyMiddleware)
+    if settings.environment == "development":  # the Dev monitor (/dev/monitor): never in tests or production
+        from app.api import dev
+        from app.core.db import engine
+        from app.core.devmonitor import install as install_dev_monitor
+        install_dev_monitor(app, engine)  # inside the request log, so its entries carry the request ID
+        app.include_router(dev.router)
     app.add_middleware(RequestLogMiddleware)
     install_error_handlers(app)
 
-    for module in (system, auth, staff, centre, billing, platform, reports, analytics):
+    for module in (system, auth, payload, staff, centre, billing, catalogue_import, platform, reports, analytics, uploads):
         app.include_router(module.router)
     app.include_router(test_reports.router)
     from app.api.client_backups import router as client_backups_router  # Settings > Backups, per centre

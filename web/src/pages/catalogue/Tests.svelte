@@ -1,8 +1,9 @@
 <script lang="ts">
   import { z } from "zod";
   import Button from "../../components/Button.svelte";
+  import BulkAddDialog from "../../components/BulkAddDialog.svelte";
   import DataTable from "../../components/DataTable.svelte";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FilterBar from "../../components/FilterBar.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
@@ -81,6 +82,7 @@
   const labels = { name: "Name", code: "Short code", department_id: "Department", test_type_id: "Type", price: "Price" };
 
   let dialogOpen = $state(false);
+  let bulkOpen = $state(false);
   let editing = $state<LabTest | null>(null);
   const form = new Form({
     schema, initial: { name: "", code: "", department_id: "", test_type_id: "", price: null as number | null, is_active: true },
@@ -99,11 +101,6 @@
   const deptOptions = $derived(departments.filter((d) => d.is_active || d.id === form.values.department_id));
   const typeOptions = $derived(types.filter((t) => t.is_active || t.id === form.values.test_type_id));
 
-  function openAdd() {
-    editing = null;
-    form.reset({ name: "", code: "", department_id: department, test_type_id: "", price: null, is_active: true });
-    dialogOpen = true;
-  }
 
   function openEdit(t: LabTest) {
     editing = t;
@@ -145,7 +142,7 @@
 
 <PageHeader eyebrow="Catalogue" title="Tests & prices" description="The tests the centre offers, what each costs, and how they're grouped.">
   {#snippet actions()}
-    {#if canManage && tab === "tests"}<Button variant="primary" icon="plus" onclick={openAdd}>Add a test</Button>{/if}
+    {#if canManage && tab === "tests"}<Button variant="primary" icon="plus" onclick={() => (bulkOpen = true)}>Add tests</Button>{/if}
   {/snippet}
 </PageHeader>
 
@@ -188,9 +185,9 @@
   {/if}
 </section>
 
-<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a test"} icon={editing ? "edit" : "flask"} tone="info"
-        description={editing ? "A new price applies to new bills. Bills already made keep the price they were billed at." : ""}>
-  <form id="test-form" class="stack" onsubmit={submitting(form, "Couldn't save")} novalidate>
+<FormDialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a test"} icon={editing ? "edit" : "flask"} tone="info"
+        description={editing ? "A new price applies to new bills. Bills already made keep the price they were billed at." : ""}
+            submitLabel={editing ? "Save changes" : "Add test"} busy={form.submitting} onsubmit={submitting(form, "Couldn't save")}>
     <FormErrors {form} {labels} idPrefix="t_" />
     <div class="form-grid">
       <Field id="t_name" label="Name" required error={form.error("name")} tip="As it prints on the bill and the report.">
@@ -233,12 +230,9 @@
       <input class="checkbox" type="checkbox" bind:checked={form.values.is_active} />
       <span><span class="font-semibold">Active</span> <span class="text-muted">· switched-off tests can't be added to new bills.</span></span>
     </label>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="test-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add test"}</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
+
+<BulkAddDialog bind:open={bulkOpen} kind="tests" {departments} {types} onadded={() => reload++} />
 
 <style>
   .type-badges { flex-wrap: wrap; }

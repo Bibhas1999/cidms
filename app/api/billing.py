@@ -39,6 +39,7 @@ from app.schemas_billing import (
     TestTypeOut,
     WorklistRowOut,
 )
+from app.services.audit import AuditService
 from app.services.billing import BillFilters, BillingService, OverviewService, default_worklist_window
 from app.services.catalogue import CatalogueService
 from app.services.patients import PatientService
@@ -138,7 +139,9 @@ def add_patient(data: PatientIn, db: Session = DB, current: CurrentUser = Depend
 
 @router.get("/patients/{patient_id}", response_model=PatientOut)
 def patient(patient_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
-    return PatientService(db, current).get(patient_id)
+    found = PatientService(db, current).get(patient_id)
+    AuditService(db).viewed(current.user.tenant_id, current.id, "patient", found.id, {"patient_no": found.patient_no})
+    return found
 
 
 @router.put("/patients/{patient_id}", response_model=PatientOut)
@@ -188,7 +191,9 @@ def next_number(db: Session = DB, current: CurrentUser = Depends(client_user)):
 
 @router.get("/bills/{invoice_id}", response_model=BillOut)
 def bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
-    return BillingService(db, current).get(invoice_id)
+    invoice = BillingService(db, current).get(invoice_id)
+    AuditService(db).viewed(current.user.tenant_id, current.id, "invoice", invoice.id, {"invoice_no": invoice.invoice_no})
+    return invoice
 
 
 @router.put("/bills/{invoice_id}", response_model=BillOut)

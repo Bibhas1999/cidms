@@ -1,5 +1,7 @@
 """Permissions, staff rules, centre settings, and the platform's client management."""
 
+import re
+
 from sqlalchemy import select
 
 from app.core.db import scoped_session
@@ -74,19 +76,25 @@ def test_an_admin_cannot_create_owners(alpha):
     assert r.status_code == 403
 
 
-def test_the_default_temporary_password_is_supreme_at_123(alpha):
+def test_everyone_gets_their_own_random_temporary_password(alpha):
     make_user(alpha, "owner@alpha.in", ["owner"])
     c = browser("alpha.localhost")
     c.login("owner@alpha.in")
     r = c.post("/api/staff", json={"full_name": "Tapas Patra", "email": "tapas@alpha.in", "role_ids": _role_ids(c, "receptionist")})
     assert r.status_code == 201, r.text
-    first = browser("alpha.localhost")
-    assert first.login("tapas@alpha.in", "supreme@123").json()["must_change_password"] is True
-    # A reset without a password gives the same one, and they must choose their own again.
-    assert c.post(f"/api/staff/{r.json()['id']}/reset-password", json={}).status_code == 204
-    again = browser("alpha.localhost")
-    assert again.login("tapas@alpha.in", "supreme@123").json()["must_change_password"] is True
-
+    first_pw = r.json()["temporary_password"]
+    assert re.fullmatch(r"[A-Z][a-z]{3}-[2-9]{4}-[A-Z][a-z]{3}", first_pw)
+    assert browser("alpha.localhost").login("tapas@alpha.in", "supreme@123").status_code == 401  # no shared password any more
+    assert browser("alpha.localhost").login("tapas@alpha.in", first_pw).json()["must_change_password"] is True
+    other = c.post("/api/staff", json={"full_name": "Rina Das", "email": "rina@alpha.in", "role_ids": _role_ids(c, "receptionist")})
+    assert other.json()["temporary_password"] != first_pw
+    # A reset without a password makes a new random one, and they must choose their own again.
+    reset = c.post(f"/api/staff/{r.json()['id']}/reset-password", json={})
+    assert reset.status_code == 200
+    new_pw = reset.json()["temporary_password"]
+    assert new_pw != first_pw
+    assert browser("alpha.localhost").login("tapas@alpha.in", first_pw).status_code == 401
+    assert browser("alpha.localhost").login("tapas@alpha.in", new_pw).json()["must_change_password"] is True
 
 def test_deactivating_someone_signs_them_out(alpha):
     make_user(alpha, "owner@alpha.in", ["owner"])

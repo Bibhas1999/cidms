@@ -4,14 +4,56 @@
   import { confirmDialog } from "../../lib/confirm.svelte";
   import { connection } from "../../lib/connection.svelte";
   import { dateTime, rupees } from "../../lib/format";
-  import { offline, type OfflineBill } from "../../lib/offline.svelte";
+  import { offline, refreshOfflineData, type OfflineBill } from "../../lib/offline.svelte";
+  import { outbox, type OutboxItem } from "../../lib/outbox.svelte";
+  import { copyCount, forgetCopies } from "../../lib/response-cache.svelte";
+  import { persistStorage } from "../../lib/vault";
   import { router } from "../../lib/router.svelte";
-  import { notifyError } from "../../lib/toast.svelte";
+  import { notify, notifyError } from "../../lib/toast.svelte";
   import { tooltip } from "../../lib/tooltip";
 
   // Bills made on this computer while CIDMS couldn't be reached: waiting to go, sent (with their final number,
   // kept here a week to reprint), or needing a look (CIDMS couldn't take them as they are, and says why).
-  $effect(() => { void offline.reload(); });
+  $effect(() => { void offline.reload(); void outbox.reload(); void loadStorage(); });
+
+  // ---------- what this computer keeps ----------
+  let copies = $state(0);
+  let used = $state<number | null>(null);
+  let quota = $state<number | null>(null);
+  let persisted = $state(false);
+  let refreshing = $state(false);
+  async function loadStorage() {
+    copies = await copyCount();
+    try {
+      const e = await navigator.storage?.estimate?.();
+      used = e?.usage ?? null; quota = e?.quota ?? null;
+      persisted = (await navigator.storage?.persisted?.()) ?? false;
+    } catch { /* not offered */ }
+  }
+  const mb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+  async function refreshNow() {
+    refreshing = true;
+    await refreshOfflineData();
+    refreshing = false;
+    await loadStorage();
+    notify("Tests, prices, doctors and recent patients are saved as of now.");
+  }
+  async function clearCopies() {
+    if (!(await confirmDialog({ title: "Clear the saved screens?", confirmLabel: "Clear", tone: "danger",
+                                message: "The copies of screens you've opened go from this computer. Bills and payments waiting to be sent are kept." }))) return;
+    await forgetCopies();
+    await loadStorage();
+    notify("Saved screens cleared from this computer.");
+  }
+  async function keep() {
+    persisted = await persistStorage();
+    notify(persisted ? "The browser will keep these even when space runs low." : "The browser didn't agree; it may clear them if space runs low.",
+           { kind: persisted ? "success" : "warning" });
+  }
+  async function discardChange(i: OutboxItem) {
+    if (await confirmDialog({ title: "Discard this payment?", tone: "danger", confirmLabel: "Discard",
+                              message: `${i.label}. It was never sent to CIDMS, so it's gone for good.` })) await outbox.discard(i);
+  }
   const made = router.query.get("made");
 
   const printUrl = (b: OfflineBill) => (b.status === "sent" && b.sent?.id ? `/bills/${b.sent.id}/print` : `/bills/offline/${b.id}/print`);
@@ -29,10 +71,11 @@
   }
 </script>
 
-<PageHeader eyebrow="Front desk" title="Offline bills"
-            description="Bills made on this computer while CIDMS couldn't be reached. They're sent by themselves, oldest first, as soon as the connection is back.">
+<PageHeader eyebrow="Front desk" title="Offline"
+            description="What this computer keeps for working without the internet: bills and payments made offline (sent by themselves, oldest first, as soon as the connection is back) and saved copies of the screens you've opened.">
   {#snippet actions()}
-    <button class="btn btn-primary" type="button" onclick={() => offline.send()} disabled={!connection.usable || offline.sending || !offline.waiting}
+    <button class="btn btn-primary" type="button" onclick={() => { void offline.send(); void outbox.send(); }}
+            disabled={!connection.usable || offline.sending || outbox.sending || (!offline.waiting && !outbox.waiting)}
             use:tooltip={connection.usable ? "Send waiting bills now" : "Waiting for the connection"}>
       <Icon name="refresh" size="sm" />{offline.sending ? "Sending…" : "Send now"}
     </button>
@@ -44,7 +87,53 @@
     The bills below go to CIDMS by themselves when the connection is back. Keep this computer on; you can carry on billing.</div></div>
 {/if}
 
-<section class="card">
+<section class="card mb" aria-labelledby="kept-title">
+  <div class="card-header"><div><h2 class="card-title" id="kept-title">Saved on this computer</h2>
+    <p class="card-description">Encrypted; removed when you sign out (except bills and payments not yet sent).</p></div></div>
+  <div class="card-content kept">
+    <div><div class="text-sm text-muted">Screens saved</div><div class="font-semibold">{copies}</div></div>
+    <div><div class="text-sm text-muted">Offline bills</div><div class="font-semibold">{offline.bills.length}</div></div>
+    <div><div class="text-sm text-muted">Payments waiting</div><div class="font-semibold">{outbox.waiting}</div></div>
+    <div><div class="text-sm text-muted">Space used</div><div class="font-semibold">{used !== null ? `${mb(used)}${quota ? ` of ${mb(quota)}` : ""}` : "—"}</div></div>
+    <div><div class="text-sm text-muted">Catalogue saved</div><div class="font-semibold">{offline.readyAt ? dateTime(offline.readyAt) : "Not yet"}</div></div>
+    <div><div class="text-sm text-muted">Kept when space is low</div><div class="font-semibold">{persisted ? "Yes" : "Not guaranteed"}</div></div>
+  </div>
+  <div class="card-footer">
+    <button class="btn btn-outline btn-sm" type="button" disabled={!connection.usable || refreshing} onclick={refreshNow}><Icon name="refresh" size="sm" />{refreshing ? "Saving…" : "Save the catalogue now"}</button>
+    {#if !persisted}<button class="btn btn-outline btn-sm" type="button" onclick={keep}><Icon name="lock" size="sm" />Keep it when space is low</button>{/if}
+    <button class="btn btn-ghost-destructive btn-sm" type="button" disabled={!copies} onclick={clearCopies}><Icon name="trash" size="sm" />Clear saved screens</button>
+  </div>
+</section>
+
+{#if outbox.items.length}
+  <section class="card mb" aria-labelledby="changes-title">
+    <div class="card-header"><div><h2 class="card-title" id="changes-title">Payments made offline</h2></div></div>
+    <div class="table-wrap">
+      <table class="table" style="min-width: 0">
+        <thead><tr><th>What</th><th>Made</th><th>Status</th><th class="num"><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+          {#each outbox.items as i (i.id)}
+            <tr>
+              <td><a class="cell-title" href={i.link}>{i.label}</a></td>
+              <td class="text-sm nowrap">{dateTime(i.made_at)}</td>
+              <td>
+                {#if i.status === "sent"}<span class="badge badge-success"><Icon name="check" size="sm" />In CIDMS</span>
+                {:else if i.status === "waiting"}<span class="badge badge-info"><Icon name="clock" size="sm" />{outbox.sending ? "Sending" : "Waiting"}</span>
+                {:else}<span class="badge badge-destructive"><Icon name="alert" size="sm" />Needs a look</span><div class="cell-sub why">{i.error}</div>{/if}
+              </td>
+              <td class="num"><div class="acts">
+                {#if i.status === "attention"}<button class="btn btn-outline btn-sm" type="button" disabled={!connection.usable} onclick={() => outbox.retry(i)}>Try again</button>{/if}
+                {#if i.status !== "sent"}<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Discard" use:tooltip={"Discard this payment"} onclick={() => discardChange(i)}><Icon name="trash" size="sm" /></button>{/if}
+              </div></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{/if}
+
+<section class="card" aria-label="Offline bills">
   <div class="table-wrap">
     <table class="table" style="min-width: 0">
       <thead><tr><th>Bill</th><th>Patient</th><th class="num">Total</th><th>Status</th><th class="num"><span class="sr-only">Actions</span></th></tr></thead>
@@ -91,6 +180,8 @@
 
 <style>
   .mb { margin-bottom: 16px; }
+  .kept { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .card-footer { display: flex; gap: 8px; flex-wrap: wrap; }
   .acts { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .why { max-width: 320px; white-space: normal; color: var(--destructive); }
   tr.is-new td { background: color-mix(in srgb, var(--primary) 7%, transparent); }

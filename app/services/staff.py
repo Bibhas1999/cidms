@@ -5,9 +5,8 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.catalog import OWNER_ONLY_ROLES
-from app.core.config import get_settings
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound
-from app.core.passwords import check_strength, hash_password
+from app.core.passwords import check_strength, hash_password, random_temporary_password
 from app.core.security import CurrentUser, revoke_user_sessions
 from app.models import Tenant, User
 from app.repositories.users import RoleRepository, UserRepository
@@ -97,9 +96,10 @@ class StaffService:
         if self.users.by_email(self.tenant_id, email):
             raise Conflict("Someone here already uses that email.", "email")
         roles = self._resolve_roles(data.role_ids)
-        temporary = data.temporary_password.strip() or get_settings().default_temporary_password
+        temporary = data.temporary_password.strip() or random_temporary_password()
         check_strength(temporary, "temporary_password")
         self._check_user_limit()
+        self.temporary_password = temporary  # shown once to whoever added them
         user = User(tenant_id=self.tenant_id, email=email, full_name=data.full_name.strip(), mobile=data.mobile,
                     password_hash=hash_password(temporary), must_change_password=True)
         self.db.add(user)
@@ -141,11 +141,12 @@ class StaffService:
             self.audit.record(self.tenant_id, self.current.id, "staff.updated", "user", user.id, changes)
         return user
 
-    def reset_password(self, user_id: uuid.UUID, temporary_password: str) -> None:
+    def reset_password(self, user_id: uuid.UUID, temporary_password: str) -> str:
+        """Returns the temporary password (random unless one was given), to show once to whoever reset it."""
         user = self._get(user_id)
         if self._is_owner(user) and not self._is_owner(self.current.user):
             raise Forbidden("Only an owner can reset an owner's password.")
-        temporary_password = temporary_password.strip() or get_settings().default_temporary_password
+        temporary_password = temporary_password.strip() or random_temporary_password()
         check_strength(temporary_password, "temporary_password")
         user.password_hash = hash_password(temporary_password)
         user.must_change_password = True
@@ -153,6 +154,7 @@ class StaffService:
         user.locked_until = None
         revoke_user_sessions(self.db, user.id)
         self.audit.record(self.tenant_id, self.current.id, "staff.password_reset", "user", user.id)
+        return temporary_password
 
     def _keep_an_owner(self, user: User) -> None:
         if self.tenant_id is not None and self.users.count_with_role(self.tenant_id, "owner", exclude=user.id) == 0:

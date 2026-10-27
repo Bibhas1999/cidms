@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import AuthLayout from "../components/AuthLayout.svelte";
   import { post } from "../lib/api";
   import { router } from "../lib/router.svelte";
@@ -31,14 +32,14 @@
 
     {#if sent}
       <div class="sent" role="status">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg>
+        <Icon name="mail" />
         <p>{sent} Check your spam folder if it doesn't arrive in a few minutes.</p>
       </div>
     {:else}
       <label class="field">
         <span>Email</span>
         <span class="control">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg>
+          <Icon name="mail" />
           <input type="email" autocomplete="username" placeholder="you@example.com" bind:value={email} required />
         </span>
       </label>
@@ -54,5 +55,5 @@
 <style>
   .sent { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 10px; background: var(--success-tint); color: var(--text); }
   .sent p { margin: 0; line-height: 1.5; }
-  .sent svg { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sent :global(svg.icon) { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 </style>
