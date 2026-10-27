@@ -4,7 +4,7 @@
   import Button from "../../components/Button.svelte";
   import Combobox from "../../components/Combobox.svelte";
   import DataTable from "../../components/DataTable.svelte";
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -590,9 +590,10 @@
 </div>
 <div class="savebar-space" aria-hidden="true"></div>
 
-<Dialog bind:open={addingDoctor} title="Add a referring doctor or hospital" icon="stethoscope" tone="info"
-        description="Added to your list of doctors and hospitals and chosen for this bill.">
-  <form id="doctor-form" class="stack" onsubmit={submitting(doctorForm, "Couldn't add it")} novalidate>
+<FormDialog bind:open={addingDoctor} title="Add a referring doctor or hospital" icon="stethoscope" tone="info"
+            description="Added to your list of doctors and hospitals and chosen for this bill."
+            submitLabel="Add" submitIcon="check" busy={doctorForm.submitting} busyLabel="Adding…"
+            onsubmit={submitting(doctorForm, "Couldn't add it")}>
     <FormErrors form={doctorForm} labels={{ name: "Name", qualification: "Qualification", phone: "Phone" }} idPrefix="nd-" />
     <Field id="nd-name" label="Doctor or hospital name" required error={doctorForm.error("name")} tip="As it should print on the bill, e.g. Dr. Kakali Sarkar or City Nursing Home.">
       {#snippet children({ invalid, describedby })}<input id="nd-name" class="input" autocomplete="off" placeholder="e.g. Dr. Kakali Sarkar or City Nursing Home" bind:value={doctorForm.values.name} {...doctorForm.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
@@ -608,12 +609,7 @@
         {/snippet}
       </Field>
     </div>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (addingDoctor = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="doctor-form" icon="check" loading={doctorForm.submitting} loadingText="Adding…">Add</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <style>
   .nb-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }

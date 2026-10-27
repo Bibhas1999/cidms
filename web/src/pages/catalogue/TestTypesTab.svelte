@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Button from "../../components/Button.svelte";
   import BulkAddDialog from "../../components/BulkAddDialog.svelte";
@@ -85,9 +85,9 @@
              { key: "status", label: "Status", cell: statusCell, mobile: "end" },
            ]} />
 
-<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a test type"} icon={editing ? "edit" : "tag"} tone="info"
-        description="Types group tests, such as X-ray, Blood test or ECG. Types with images go through scanning on the worklist.">
-  <form id="type-form" class="stack" onsubmit={(e) => { e.preventDefault(); save(); }} novalidate>
+<FormDialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a test type"} icon={editing ? "edit" : "tag"} tone="info"
+        description="Types group tests, such as X-ray, Blood test or ECG. Types with images go through scanning on the worklist."
+            submitLabel={editing ? "Save changes" : "Add test type"} busy={saving} onsubmit={save}>
     <Field id="type_name" label="Name" required error={errors.name} tip="What kind of test, e.g. X-ray, Blood test or ECG. Tick Has images for scans, so they go through scanning on the worklist.">
       {#snippet children({ invalid, describedby })}
         <input id="type_name" class="input" bind:value={form.name} aria-invalid={invalid} aria-describedby={describedby} />
@@ -101,11 +101,6 @@
       <input class="checkbox" type="checkbox" bind:checked={form.is_active} />
       <span><span class="font-semibold">Active</span> <span class="text-muted">· switched-off types can't be chosen for new tests.</span></span>
     </label>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="type-form" loading={saving} loadingText="Saving…">{editing ? "Save changes" : "Add test type"}</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <BulkAddDialog bind:open={bulkOpen} kind="test-types" onadded={onchanged} />

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
   import InfoTip from "../../components/InfoTip.svelte";
@@ -221,9 +221,10 @@
   </div>
 </section>
 
-<Dialog bind:open={restoreOpen} title="Restore this backup?" icon="alert" tone="destructive"
-        description={restoring ? `Back to ${dateTime(restoring.started_at)} (${restoring.file})` : ""}>
-  <form id="restore-form" class="stack" onsubmit={askRestore} novalidate>
+<FormDialog bind:open={restoreOpen} title="Restore this backup?" icon="alert" tone="destructive"
+        description={restoring ? `Back to ${dateTime(restoring.started_at)} (${restoring.file})` : ""}
+            submitLabel="Restore" submitVariant="destructive" busy={sending} busyLabel="Asking…" disabled={typed.trim() !== "RESTORE" || !password}
+            onsubmit={askRestore}>
     <ul class="restore-list text-sm">
       <li>Everything in CIDMS goes back to this moment, for <strong>every centre</strong>: bills, payments, patients, staff and settings made since are gone.</li>
       <li>The data as it is now is backed up first, so this can be undone by restoring that copy.</li>
@@ -241,14 +242,7 @@
         <PasswordInput id="restore-password" autocomplete="current-password" bind:value={password} oninput={() => (passwordError = "")} aria-invalid={invalid} aria-describedby={describedby} />
       {/snippet}
     </Field>
-  </form>
-  {#snippet footer()}
-    <button type="button" class="btn btn-outline" onclick={() => (restoreOpen = false)}>Cancel</button>
-    <button type="submit" form="restore-form" class="btn btn-destructive" disabled={sending || typed.trim() !== "RESTORE" || !password}>
-      {sending ? "Asking…" : "Restore"}
-    </button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <style>
   .restore-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; }

@@ -3,6 +3,7 @@
   import Button from "../../components/Button.svelte";
   import DataTable from "../../components/DataTable.svelte";
   import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -287,9 +288,9 @@
   </div>
 </section>
 
-<Dialog bind:open={createOpen} title="Create API key" icon="lock" tone="info" wide
-        description="Make a separate key for each system, so you can see and stop each one on its own.">
-  <form id="key-form" class="stack" onsubmit={submitting(form, "Couldn't create the key")} novalidate>
+<FormDialog bind:open={createOpen} title="Create API key" icon="lock" tone="info" wide
+        description="Make a separate key for each system, so you can see and stop each one on its own."
+            submitLabel="Create key" busy={form.submitting} busyLabel="Creating…" onsubmit={submitting(form, "Couldn't create the key")}>
     <FormErrors {form} {labels} idPrefix="k_" />
     <Field id="k_name" label="Name" required error={form.error("name")}
            tip="Which system will use it, e.g. City Hospital HIS. Shown in the key list and the request log.">
@@ -330,12 +331,7 @@
         {/snippet}
       </Field>
     </div>
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (createOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="key-form" loading={form.submitting} loadingText="Creating…">Create key</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <Dialog open={!!shown} onclose={() => (shown = null)} title={shown?.rolled ? "Your new key" : "Your API key"} icon="check" tone="success"
         description={shown ? `For ${shown.name}. Copy it now and keep it somewhere safe.` : ""}>

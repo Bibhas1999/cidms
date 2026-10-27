@@ -4,6 +4,7 @@
   import DataTable from "../../components/DataTable.svelte";
   import ClientBackupsPanel from "../../components/ClientBackupsPanel.svelte";
   import Dialog from "../../components/Dialog.svelte";
+  import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FilterBar from "../../components/FilterBar.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
@@ -174,9 +175,10 @@
              ]} />
 </section>
 
-<Dialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a client"} icon={editing ? "edit" : "building"} tone="info" wide
-        description={editing ? "The address can't be changed: staff and printed QR codes use it." : "The owner gets a temporary password and chooses their own at first sign-in."}>
-  <form id="client-form" class="stack" onsubmit={submitting(form, "Couldn't save")} novalidate>
+<FormDialog bind:open={dialogOpen} title={editing ? `Edit ${editing.name}` : "Add a client"} icon={editing ? "edit" : "building"} tone="info" wide
+        description={editing ? "The address can't be changed: staff and printed QR codes use it." : "The owner gets a temporary password and chooses their own at first sign-in."}
+            submitLabel={editing ? "Save changes" : "Add client"} busy={form.submitting} busyLabel={editing ? "Saving…" : "Adding…"}
+            onsubmit={submitting(form, "Couldn't save")}>
     <FormErrors {form} {labels} idPrefix="c_" />
     <div class="form-grid">
       <Field id="c_name" label="Centre name" required error={form.error("name")} tip="As it appears on bills, reports and the sign-in page.">
@@ -220,12 +222,7 @@
         </div>
       </div>
     {/if}
-  </form>
-  {#snippet footer()}
-    <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="client-form" loading={form.submitting} loadingText={editing ? "Saving…" : "Adding…"}>{editing ? "Save changes" : "Add client"}</Button>
-  {/snippet}
-</Dialog>
+</FormDialog>
 
 <Dialog bind:open={backupsOpen} title={backupsOf ? `Backups · ${backupsOf.name}` : "Backups"} icon="download" tone="info" wide
         onclose={() => (backupsOf = null)}>
