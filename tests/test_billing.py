@@ -17,7 +17,6 @@ def centre(alpha):
     """Alpha with an owner, a receptionist, a technician and a small catalogue."""
     make_user(alpha, "owner@alpha.in", ["owner"])
     make_user(alpha, "front@alpha.in", ["receptionist"])
-    make_user(alpha, "tech@alpha.in", ["technician"])
     owner = browser("alpha.localhost")
     owner.login("owner@alpha.in")
     radiology = owner.post("/api/departments", json={"name": "Radiology"}).json()["id"]
@@ -30,9 +29,11 @@ def centre(alpha):
         r = owner.post("/api/tests", json={"name": name, "department_id": dept, "test_type_id": kind, "price": price})
         assert r.status_code == 201, r.text
         tests[name] = r.json()["id"]
+    make_user(alpha, "tech@alpha.in", ["technician"])  # works in both departments
     front = browser("alpha.localhost")
     front.login("front@alpha.in")
-    return {"owner": owner, "front": front, "tests": tests, "tenant": alpha}
+    return {"owner": owner, "front": front, "tests": tests, "tenant": alpha,
+            "departments": {"Radiology": radiology, "Pathology": pathology}}
 
 
 NEW_PATIENT = {"name": "Ramen  Kumar Dey", "guardian_name": "Self", "age_years": 61, "gender": "male", "mobile": "9000012345",
@@ -189,17 +190,21 @@ def test_worklist_progress(centre):
     cbc = next(i for i in b["items"] if not i["is_imaging"])
     tech = browser("alpha.localhost")
     tech.login("tech@alpha.in")
-    rows = tech.get("/api/worklist").json()
-    assert rows["total"] == 2
+    radiology = {"department_id": centre["departments"]["Radiology"]}
+    # A department's worklist: without a department only the owner and admins (areas.all) see every one.
+    missing = tech.get("/api/worklist")
+    assert missing.status_code == 422 and missing.json()["field"] == "department_id"
+    assert centre["owner"].get("/api/worklist").json()["total"] == 2
+    assert [r["test_name"] for r in tech.get("/api/worklist", params=radiology).json()["items"]] == ["Chest X-ray PA"]
     make_user(centre["tenant"], "acc@alpha.in", ["accounts"])
     acc = browser("alpha.localhost")
     acc.login("acc@alpha.in")
     assert acc.post(f"/api/worklist/{xray['id']}/status", json={"status": "scanned"}).status_code == 403  # no progress rights
-    assert tech.post(f"/api/worklist/{cbc['id']}/status", json={"status": "scanned"}).status_code == 422  # not a scan
+    assert tech.post(f"/api/worklist/{cbc['id']}/status", json={"status": "scanned"}).status_code == 204  # "in progress": any test
     assert tech.post(f"/api/worklist/{xray['id']}/status", json={"status": "scanned"}).status_code == 204
     assert tech.post(f"/api/worklist/{xray['id']}/status", json={"status": "delivered"}).status_code == 204
-    assert [r["test_name"] for r in tech.get("/api/worklist").json()["items"]] == ["CBC"]
-    assert tech.get("/api/worklist", params={"status": "delivered"}).json()["items"][0]["test_name"] == "Chest X-ray PA"
+    assert tech.get("/api/worklist", params=radiology).json()["total"] == 0
+    assert tech.get("/api/worklist", params={**radiology, "status": "delivered"}).json()["items"][0]["test_name"] == "Chest X-ray PA"
 
 
 def test_the_days_summary_adds_up(centre):

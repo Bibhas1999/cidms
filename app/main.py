@@ -182,6 +182,8 @@ def create_app() -> FastAPI:
     app.include_router(client_backups_router)
     from app.api.roles import router as roles_router  # Settings > Roles & permissions
     app.include_router(roles_router)
+    from app.api.opd import router as opd_router  # the OPD: its doctors and the day's queue
+    app.include_router(opd_router)
     from app.api.integrations import install as install_integrations  # API keys, and the integration API at /api/v1
     install_integrations(app)
     from app.api.notifications import router as notifications_router  # the bell, live stream, background job results

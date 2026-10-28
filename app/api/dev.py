@@ -13,7 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.config import get_settings
 from app.core.db import engine, scoped_session
 from app.core.devmonitor import monitor
-from app.core.errors import NotFound
+from app.core.errors import Forbidden, NotFound
 from app.core.security import CurrentUser, get_current_user
 from app.models import Job, Upload
 
@@ -24,6 +24,8 @@ MAX_STREAM_S = 30 * 60
 def developer(current: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if get_settings().environment != "development":
         raise NotFound("Not found.")
+    if not (current.can("dev.monitor") or current.can("platform.dev.monitor")):
+        raise Forbidden("Only the owner, admins and developers can open the dev monitor.")
     return current
 
 
