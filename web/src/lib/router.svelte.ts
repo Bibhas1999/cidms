@@ -17,6 +17,23 @@ class RouterState {
 
 export const router = new RouterState();
 
+// Where someone was headed before they were bounced to sign in (or a forced password change): carried as
+// ?next=, so they land back there instead of always on the home page. Read from the real address bar, not
+// `router.query`, so it works the same from an event handler as from a derived value.
+const NEXT_BLOCKED = ["/login", "/change-password", "/forgot-password", "/reset-password"];
+
+/** Only ever a path inside this app, and never back into the sign-in/password-change chain (which would loop). */
+export function safeNext(fallback = "/"): string {
+  const next = new URLSearchParams(location.search).get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return fallback;
+  return NEXT_BLOCKED.includes(next.split(/[?#]/)[0]) ? fallback : next;
+}
+
+/** `base`, with `next` carried forward as its own ?next= (e.g. from /login's onto /change-password's). */
+export function withNext(base: string, next: string): string {
+  return next && next !== "/" ? `${base}?next=${encodeURIComponent(next)}` : base;
+}
+
 type LeaveCheck = () => boolean | Promise<boolean>;
 let beforeLeave: LeaveCheck | null = null;
 let here = location.pathname + location.search;   // where we are, to come back to if a Back press is cancelled

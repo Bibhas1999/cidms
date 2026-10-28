@@ -654,6 +654,10 @@ a.card.stat:hover { border-color: var(--primary); }
 .textarea-xl { min-height: 260px; max-height: 60vh; field-sizing: content; font-size: 15px; line-height: 1.55; }
 @media (max-width: 560px) { .dialog-lg { padding: 20px; } .textarea-xl { min-height: 200px; } }
 
+/* Fullscreen dialog (an expanded live panel): fills almost the whole viewport instead of sizing to its content. */
+.dialog-full { width: calc(100vw - 32px); height: calc(100vh - 32px); max-height: calc(100vh - 32px); max-width: none; }
+@media (max-width: 560px) { .dialog-full { width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; margin: 0; } }
+
 /* Scrollable dialogs: header and footer stay put, the body scrolls when the content is long. */
 .dialog { max-height: calc(100vh - 32px); overflow: auto; }
 .dialog-scroll[open] { display: flex; flex-direction: column; padding: 0; overflow: hidden; }

@@ -6,13 +6,15 @@
   import FormErrors from "../components/FormErrors.svelte";
   import { post } from "../lib/api";
   import { Form } from "../lib/form.svelte";
-  import { navigate } from "../lib/router.svelte";
+  import { navigate, safeNext } from "../lib/router.svelte";
   import { submitting } from "../lib/schemas";
   import { session } from "../lib/session.svelte";
   import { notify } from "../lib/toast.svelte";
   import type { Me } from "../lib/types";
 
   const forced = $derived(session.me?.must_change_password ?? false);
+  // Where "Cancel" (and Save, once it's done) goes back to: wherever sent them here, Settings included.
+  const cancelHref = safeNext();
 
   const schema = z.object({
     current: z.string().min(1, "Enter your current password."),
@@ -32,7 +34,7 @@
     onSubmit: async (v) => {
       session.setMe(await post<Me>("/api/auth/password", { current_password: v.current, new_password: v.next }));
       notify("Password changed. You've been signed out on your other devices.");
-      navigate("/", { replace: true });
+      navigate(safeNext(), { replace: true });
     },
   });
 </script>
@@ -68,7 +70,7 @@
     </div>
     <div class="card-footer">
       {#if forced}<Button onclick={() => session.logout()}>Sign out</Button>
-      {:else}<Button href="/">Cancel</Button>{/if}
+      {:else}<Button href={cancelHref}>Cancel</Button>{/if}
       <Button variant="primary" type="submit" loading={form.submitting} loadingText="Saving…">Save password</Button>
     </div>
   </form>
