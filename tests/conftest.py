@@ -3,7 +3,6 @@ from the migrations at the start of the run, with the same row-level security th
 
 import os
 import time
-import uuid
 
 os.environ["ENVIRONMENT"] = "test"
 # TEST_DB picks another (existing, empty) database, so two test runs at once don't wipe each other's rows.
@@ -26,7 +25,7 @@ from app.models import Role, Tenant, TenantSettings, User, UserRole
 from app.seed import seed_reference
 
 PASSWORD = "Test-password-1"
-TABLES = "opd_visits, opd_doctors, staff_areas, rate_limit_hits, password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
+TABLES = "rate_limit_hits, password_resets, payments, invoice_items, invoices, patients, referring_doctors, tests, test_types, departments, operations, counters, activity_log, sessions, user_roles, users, role_permissions, roles, permissions, tenant_settings, tenants, plans"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -86,12 +85,7 @@ def make_tenant(slug: str, name: str | None = None, status: str = "active") -> T
 
 
 def make_user(tenant: Tenant | None, email: str, roles: list[str], password: str = PASSWORD,
-              must_change: bool = False, password_hash: str | None = None, areas: list | None = None) -> User:
-    """areas: where they work, as "reception", "opd" or a department's id. Left out, they get what migration 0020
-    gave existing staff: reception if a role bills, the OPD if a role runs appointments, every department there
-    is now if a role updates the worklist (owners and admins none: they work everywhere)."""
-    from app.catalog import ROLES
-    from app.models import Department, StaffArea
+              must_change: bool = False, password_hash: str | None = None) -> User:
     with scoped_session(platform=True) as db, db.begin():
         u = User(tenant_id=tenant.id if tenant else None, email=email, full_name=email.split("@")[0].title(),
                  password_hash=password_hash or hash_password(password), must_change_password=must_change)
@@ -100,18 +94,6 @@ def make_user(tenant: Tenant | None, email: str, roles: list[str], password: str
         for code in roles:
             role = db.query(Role).filter(Role.tenant_id.is_(None), Role.code == code).one()
             db.add(UserRole(user_id=u.id, role_id=role.id, tenant_id=u.tenant_id))
-        if tenant is not None:
-            perms = set().union(*(ROLES[c][3] for c in roles if c in ROLES))
-            if areas is None and "areas.all" not in perms:
-                areas = (["reception"] if {"billing.create", "payments.collect"} & perms else []) + (["opd"] if "appointments.manage" in perms else [])
-                if "worklist.update" in perms:
-                    areas += [d.id for d in db.query(Department).filter(Department.tenant_id == tenant.id)]
-            for a in areas or []:
-                if a in ("reception", "opd"):
-                    db.add(StaffArea(tenant_id=tenant.id, user_id=u.id, area=a))
-                else:
-                    db.add(StaffArea(tenant_id=tenant.id, user_id=u.id, area="department",
-                                     department_id=uuid.UUID(str(a))))
         return u
 
 

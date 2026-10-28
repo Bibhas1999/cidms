@@ -10,8 +10,7 @@ import type { Me, Workspace } from "./types";
 // The last answers about the workspace and the person, kept so the app still opens without the internet
 // (billing goes on offline: lib/offline.svelte.ts). Forgotten on signing out.
 const BOOT = `cidms:boot:${location.hostname}`;
-/** "login": they just signed in; "load": the app opened (or reloaded) with someone already signed in. */
-type Listener = (how: "login" | "load") => void;
+type Listener = () => void;
 
 class Session {
   me = $state<Me | null>(null);
@@ -20,10 +19,10 @@ class Session {
   /** Opened from the saved copy because CIDMS couldn't be reached. */
   offlineStart = $state(false);
   #signedIn = new Set<Listener>();
-  #signedOut = new Set<() => void>();
+  #signedOut = new Set<Listener>();
 
   onSignedIn(fn: Listener): void { this.#signedIn.add(fn); }
-  onSignedOut(fn: () => void): void { this.#signedOut.add(fn); }
+  onSignedOut(fn: Listener): void { this.#signedOut.add(fn); }
 
   get isPlatform(): boolean {
     return this.workspace?.kind === "platform";
@@ -58,7 +57,7 @@ class Session {
       this.offlineStart = true;
     }
     this.ready = true;
-    if (this.me && this.me.id !== before) this.#signedIn.forEach((fn) => fn("load"));
+    if (this.me && this.me.id !== before) this.#signedIn.forEach((fn) => fn());
   }
 
   /** Ask CIDMS again who's signed in (when the connection is back: a fresh CSRF token). Quiet on failure. */
@@ -81,7 +80,7 @@ class Session {
     this.me = await post<Me>("/api/auth/login", { email, password, remember });
     rememberAccount({ email: this.me.email, name: this.me.full_name });
     this.#keep();
-    this.#signedIn.forEach((fn) => fn("login"));
+    this.#signedIn.forEach((fn) => fn());
     return this.me;
   }
 

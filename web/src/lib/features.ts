@@ -6,9 +6,10 @@
 //                (11 Oct 2026; confirmed 18 Oct): the app is billing only for now. Everything stays built and tested;
 //                turning this on also brings the /test-reports dashboard and list into the menu.
 
-// The lab Worklist is always on now: it's each department's own screen (work areas, lib/area.svelte.ts). Reception
-// still marks tests Pending / Ready / Delivered on the bill as well.
+//   worklist:    the lab Worklist page. Off: each test's report is marked Pending / Ready / Delivered on
+//                its bill instead (owner's request, 11 Oct 2026).
 
 export const FEATURES = {
   testReports: false,
+  worklist: false,
 } as const;

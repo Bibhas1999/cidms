@@ -2,7 +2,6 @@
 Skipped when the build or Edge isn't available."""
 
 import os
-import re
 import threading
 import time
 from pathlib import Path
@@ -59,14 +58,6 @@ def page(edge, live_server):
     context.close()
 
 
-def pick_area(page, live_server, name="Reception"):
-    """After every sign-in the area chooser shows every area; pick one (Reception by default) and land on its page."""
-    page.wait_for_url("**/choose-area**")
-    page.get_by_role("button", name=name).first.click()
-    page.wait_for_url(f"http://alpha.{live_server}/**")
-    page.wait_for_function("() => !location.pathname.startsWith('/choose-area')")
-
-
 def test_first_sign_in_forces_a_new_password_then_opens_the_dashboard(page, alpha, live_server):
     make_user(alpha, "owner@alpha.in", ["owner"], must_change=True)
     page.goto(f"http://alpha.{live_server}/staff")
@@ -88,7 +79,7 @@ def test_first_sign_in_forces_a_new_password_then_opens_the_dashboard(page, alph
     page.locator("#next").fill("My-own-pass-2026")
     page.locator("#confirm").fill("My-own-pass-2026")
     page.get_by_role("button", name="Save password").click()
-    pick_area(page, live_server)
+    page.wait_for_url(f"http://alpha.{live_server}/")
     assert page.get_by_role("heading", name="Good", exact=False).is_visible()
     assert page.errors == []
 
@@ -99,7 +90,6 @@ def test_owner_adds_a_receptionist(page, alpha, live_server):
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    pick_area(page, live_server)
     page.get_by_role("button", name="Account menu", exact=False).click()
     page.get_by_role("link", name="Settings").click()
     page.get_by_role("link", name="Staff and roles").click()
@@ -108,7 +98,6 @@ def test_owner_adds_a_receptionist(page, alpha, live_server):
     dialog.get_by_label("Full name").fill("Piu Koley")
     dialog.get_by_label("Email").fill("piu@alpha.in")
     dialog.get_by_label("Receptionist").check()
-    dialog.get_by_role("checkbox", name=re.compile(r"^Reception ·")).check()   # where they work
     dialog.page.get_by_role("button", name="Add person").click()
     row = page.get_by_role("row", name="Piu Koley")
     row.wait_for()
@@ -124,7 +113,7 @@ def test_a_screen_that_crashes_shows_a_fallback_and_reports_it(page, alpha, live
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    pick_area(page, live_server)
+    page.wait_for_url(f"http://alpha.{live_server}/")
     # The server sends something the screen can't draw (roles missing): the error boundary takes over.
     page.route("**/api/staff?*", lambda route: route.fulfill(json={"items": [{"id": "1", "full_name": "X", "email": "x", "mobile": "",
                                                                              "is_active": True, "must_change_password": False,
@@ -145,7 +134,7 @@ def test_an_ended_session_returns_to_sign_in(page, alpha, live_server):
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    pick_area(page, live_server)
+    page.wait_for_url(f"http://alpha.{live_server}/")
     page.wait_for_load_state("networkidle")  # the dashboard has finished loading
     page.context.clear_cookies()  # as if signed out elsewhere or timed out
     page.get_by_role("link", name="Bills", exact=True).click()
@@ -161,7 +150,7 @@ def test_the_dashboard_asks_the_server_once(page, alpha, live_server):
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    pick_area(page, live_server)
+    page.wait_for_url(f"http://alpha.{live_server}/")
     asked: dict[str, int] = {}
     page.on("request", lambda r: asked.update({r.url.split("?")[0]: asked.get(r.url.split("?")[0], 0) + 1}))
     page.wait_for_timeout(3000)
@@ -182,7 +171,7 @@ def test_screens_and_payments_work_offline_from_encrypted_saved_copies(page, alp
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    pick_area(page, live_server)
+    page.wait_for_url(f"http://alpha.{live_server}/")
     page.goto(f"http://alpha.{live_server}/bills")                     # opened once while online: saved
     page.get_by_text(bill["invoice_no"]).first.wait_for()
     page.goto(f"http://alpha.{live_server}/bills/{bill['id']}")
@@ -238,7 +227,7 @@ def test_new_bill_waits_for_a_test_caps_the_payment_and_clears_its_draft(page, a
     page.get_by_label("Email").fill("owner@alpha.in")
     page.get_by_label("Password", exact=True).fill("Test-password-1")
     page.get_by_role("button", name="Sign in").click()
-    pick_area(page, live_server)
+    page.wait_for_url(f"http://alpha.{live_server}/")
     page.goto(f"http://alpha.{live_server}/bills/new")
 
     def add_cbc():

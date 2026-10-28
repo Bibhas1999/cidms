@@ -24,10 +24,7 @@
   import { session } from "../lib/session.svelte";
   import { notify, notifyError } from "../lib/toast.svelte";
   import { tooltip } from "../lib/tooltip";
-  import type { AreaIn, Department, Page, Role, Staff } from "../lib/types";
-
-  // Roles as /api/roles gives them here: with their permissions (to tell who works everywhere: areas.all).
-  type RoleRow = Role & { permissions?: string[] };
+  import type { Page, Role, Staff } from "../lib/types";
 
   const SIZE = $derived(Math.min(100, Number(router.query.get("size")) || 25));
   const page = $derived(Number(router.query.get("page") ?? 1) || 1);
@@ -38,10 +35,7 @@
   let loadError = $state("");
   let loading = $state(false);
   let reload = $state(0);
-  let roles = $state<RoleRow[]>([]);
-  let departments = $state<Department[]>([]);
-  /** Where people work (Reception, OPD, departments): only in a centre. */
-  const withAreas = $derived(!session.isPlatform);
+  let roles = $state<Role[]>([]);
 
   $effect(() => {
     const ctrl = new AbortController();
@@ -56,21 +50,8 @@
   });
 
   $effect(() => {
-    get<RoleRow[]>("/api/roles").then((r) => (roles = r)).catch((e) => notifyError(e));
+    get<Role[]>("/api/roles").then((r) => (roles = r)).catch((e) => notifyError(e));
   });
-  $effect(() => {
-    if (!withAreas) return;
-    get<Department[]>("/api/departments").then((d) => (departments = d)).catch((e) => notifyError(e));
-  });
-
-  // ---------- where they work ----------
-  // Saved as { area, department_id }; ticked in the form as keys: "reception", "opd", "department:<id>".
-  const areaKey = (a: AreaIn) => (a.area === "department" ? `department:${a.department_id}` : a.area);
-  const fromKey = (k: string): AreaIn =>
-    k.startsWith("department:") ? { area: "department", department_id: k.slice(11) } : { area: k as "reception" | "opd", department_id: null };
-  const deptName = (id: string | null) => departments.find((d) => d.id === id)?.name ?? "A department";
-  const areaLabel = (a: AreaIn) => (a.area === "reception" ? "Reception" : a.area === "opd" ? "OPD" : deptName(a.department_id));
-  const AREAS_TIP = "The areas they may work in. After signing in they pick one and see only its menu and pages. Owners and centre admins work everywhere.";
 
   const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -83,28 +64,15 @@
     email: z.string(),
     mobile: phone(false),
     role_ids: z.array(z.string()).min(1, "Choose at least one role."),
-    areas: z.array(z.string()),
     temporary_password: z.string(),
     is_active: z.boolean(),
   });
-  const labels = { full_name: "Full name", email: "Email", mobile: "Mobile", role_ids: "Roles", areas: "Where they work", temporary_password: "Temporary password", is_active: "Active" };
-  const blank = { full_name: "", email: "", mobile: "", role_ids: [] as string[], areas: [] as string[], temporary_password: "", is_active: true };
-
-  /** A chosen role that works in every area (owner, centre admin): then nothing needs ticking. */
-  const everywhereRole = (ids: string[]) => roles.find((r) => ids.includes(r.id) && r.permissions?.includes("areas.all")) ?? null;
-  const everywhere = $derived.by(() => everywhereRole(form.values.role_ids));
-  // The areas that can be ticked: Reception, the OPD, and each active department (plus any switched-off one still ticked).
-  const areaOptions = $derived([
-    { key: "reception", name: "Reception", line: "Billing: new bills, payments, dues and patients." },
-    { key: "opd", name: "OPD", line: "The OPD queue: visits, tokens and consultation fees." },
-    ...departments.filter((d) => d.is_active || form.values.areas.includes(`department:${d.id}`))
-      .map((d) => ({ key: `department:${d.id}`, name: d.name, line: `${d.name}'s worklist${d.is_active ? "" : " (switched off)"}.` })),
-  ]);
+  const labels = { full_name: "Full name", email: "Email", mobile: "Mobile", role_ids: "Roles", temporary_password: "Temporary password", is_active: "Active" };
+  const blank = { full_name: "", email: "", mobile: "", role_ids: [] as string[], temporary_password: "", is_active: true };
 
   const form = new Form({
     schema, initial: blank,
     rules: (v, add) => {
-      if (withAreas && !v.areas.length && !everywhereRole(v.role_ids)) add("areas", "Choose where they work: reception, the OPD or a department.");
       if (editing) return;
       const e = email().safeParse(v.email);
       if (!e.success) add("email", e.error.issues[0].message);
@@ -112,13 +80,11 @@
     },
     onSubmit: async (v) => {
       if (editing) {
-        await patch(`/api/staff/${editing.id}`, { full_name: v.full_name, mobile: v.mobile, role_ids: v.role_ids, is_active: v.is_active,
-                                                  ...(withAreas ? { areas: v.areas.map(fromKey) } : {}) });
+        await patch(`/api/staff/${editing.id}`, { full_name: v.full_name, mobile: v.mobile, role_ids: v.role_ids, is_active: v.is_active });
         notify(`${v.full_name} updated.`);
       } else {
         const made = await post<{ temporary_password: string }>("/api/staff", { full_name: v.full_name, email: v.email.trim(), mobile: v.mobile,
-                                                                                role_ids: v.role_ids, temporary_password: v.temporary_password,
-                                                                                ...(withAreas ? { areas: v.areas.map(fromKey) } : {}) });
+                                                                                role_ids: v.role_ids, temporary_password: v.temporary_password });
         notify(`Give them this temporary password: ${made.temporary_password}. It's shown only now. They choose their own when they first sign in.`,
                { kind: "info", title: `${v.full_name} added`, duration: 0 });
       }
@@ -142,21 +108,13 @@
 
   function openEdit(s: Staff) {
     editing = s;
-    form.reset({ full_name: s.full_name, email: s.email, mobile: s.mobile, role_ids: s.roles.map((r) => r.id), areas: (s.areas ?? []).map(areaKey),
-                 temporary_password: "", is_active: s.is_active });
+    form.reset({ full_name: s.full_name, email: s.email, mobile: s.mobile, role_ids: s.roles.map((r) => r.id), temporary_password: "", is_active: s.is_active });
     dialogOpen = true;
   }
 
   function toggleRole(id: string, on: boolean) {
     form.values.role_ids = on ? [...form.values.role_ids, id] : form.values.role_ids.filter((r) => r !== id);
     form.touched.role_ids = true;
-    form.validate();
-  }
-
-  // Checked at once: unticking the last area shows the error straight away.
-  function toggleArea(key: string, on: boolean) {
-    form.values.areas = on ? [...form.values.areas, key] : form.values.areas.filter((k) => k !== key);
-    form.touched.areas = true;
     form.validate();
   }
 
@@ -206,11 +164,6 @@
 {#snippet rolesCell(s: Staff)}
   <div class="row-wrap roles">{#each s.roles as r (r.id)}<span class="badge badge-navy badge-plain" use:tooltip={r.description}>{r.name}</span>{/each}</div>
 {/snippet}
-{#snippet areasCell(s: Staff)}
-  {#if s.roles.some((r) => everywhereRole([r.id]))}<span class="text-sm text-muted">Everywhere</span>
-  {:else if (s.areas ?? []).length}<div class="row-wrap roles">{#each s.areas as a (areaKey(a))}<span class="badge badge-info badge-plain">{areaLabel(a)}</span>{/each}</div>
-  {:else}<span class="text-sm text-muted">Nowhere yet</span>{/if}
-{/snippet}
 {#snippet statusCell(s: Staff)}
   {#if !s.is_active}<StatusBadge tone="destructive" label="Deactivated" help="Can't sign in. Their history stays." />
   {:else if s.must_change_password}<StatusBadge tone="warning" label="Temporary password" help="Hasn't chosen their own password yet." />
@@ -240,7 +193,6 @@
                { key: "person", label: "Person", cell: personCell, mobile: "title" },
                { key: "mobile", label: "Mobile", value: (s) => formatPhone(s.mobile) || "—", class: "tabular", nowrap: true },
                { key: "roles", label: "Roles", cell: rolesCell, mobile: "sub", tip: ROLE_TIP },
-               ...(withAreas ? [{ key: "areas", label: "Where they work", cell: areasCell, tip: AREAS_TIP, optional: true }] : []),
                { key: "status", label: "Status", cell: statusCell, mobile: "end" },
                { key: "last", label: "Last sign-in", value: (s) => dateTime(s.last_login_at), optional: true, class: "text-sm" },
              ]} />
@@ -279,24 +231,6 @@
       {/each}
       {#if form.error("role_ids")}<p class="field-error"><Icon name="alert" size="sm" />{form.error("role_ids")}</p>{/if}
     </fieldset>
-    {#if withAreas}
-      <fieldset class="field roles-field" id="s_areas" tabindex="-1" aria-describedby={form.error("areas") ? "s_areas-error" : undefined}>
-        <legend class="label roles-legend">Where they work{#if !everywhere}<span class="req" aria-hidden="true">*</span>{/if} <InfoTip text={AREAS_TIP} about="where they work" /></legend>
-        {#if everywhere}
-          <div class="alert alert-info"><Icon name="info" /><div>As {everywhere.name} they work everywhere: Admin, Reception, the OPD and every department.</div></div>
-        {:else}
-          <div class="areas-grid">
-            {#each areaOptions as o (o.key)}
-              <label class="check-row check-top">
-                <input class="checkbox" type="checkbox" checked={form.values.areas.includes(o.key)} onchange={(e) => toggleArea(o.key, e.currentTarget.checked)} />
-                <span><span class="font-semibold">{o.name}</span> <span class="text-muted">· {o.line}</span></span>
-              </label>
-            {/each}
-          </div>
-          {#if form.error("areas")}<p class="field-error" id="s_areas-error"><Icon name="alert" size="sm" />{form.error("areas")}</p>{/if}
-        {/if}
-      </fieldset>
-    {/if}
     {#if !editing}
       <Field id="s_temporary_password" label="Temporary password" required error={form.error("temporary_password")}
              tip="A random password, different for each person. Tell them this password: it works once, and at their first sign-in they must choose their own.">
@@ -327,8 +261,6 @@
   .person { gap: 10px; min-width: 0; }
   .roles { gap: 6px; }
   .roles-field { border: 0; padding: 0; margin: 0; outline: none; }
-  .areas-grid { display: grid; gap: 2px 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 640px) { .areas-grid { grid-template-columns: minmax(0, 1fr); } }
   .roles-legend { display: inline-flex; align-items: center; gap: 2px; margin-bottom: 6px; padding: 0; }
   :global(.push-left) { margin-right: auto; }
   @media (max-width: 640px) { :global(.push-left) { margin-right: 0; flex: 1 1 100% !important; } }
