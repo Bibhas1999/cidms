@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 T = TypeVar("T")
 
@@ -88,33 +88,6 @@ class RoleOut(Out):
     description: str
 
 
-# ---------- where people work (app/services/areas.py) ----------
-
-class AreaOut(BaseModel):
-    """One place a person may work: "admin", "reception", "opd" or "department:<id>"."""
-    key: str
-    kind: Literal["admin", "reception", "opd", "department"]
-    department_id: uuid.UUID | None = None
-    name: str
-    # Every area is listed, so the chooser shows them all; one the person doesn't work in has allowed=False and
-    # the screen says so when it's picked.
-    allowed: bool = True
-
-
-class AreaIn(Out):
-    """Where a member of staff works: reception, the OPD, or one department."""
-    area: Literal["reception", "opd", "department"]
-    department_id: uuid.UUID | None = None
-
-    @model_validator(mode="after")
-    def _department(self) -> "AreaIn":
-        if self.area == "department" and self.department_id is None:
-            raise ValueError("Choose the department.")
-        if self.area != "department":
-            self.department_id = None
-        return self
-
-
 class MeOut(BaseModel):
     id: uuid.UUID
     email: str
@@ -127,7 +100,6 @@ class MeOut(BaseModel):
     manage_own_account: bool = False  # may change their own email and password (owner, centre admin, platform staff)
     csrf_token: str
     workspace: WorkspaceOut
-    areas: list[AreaOut] = []  # where they may work, in menu order (none in the platform workspace)
 
 
 # ---------- staff ----------
@@ -143,7 +115,6 @@ class StaffOut(Out):
     last_login_at: datetime | None
     created_at: datetime
     roles: list[RoleOut]
-    areas: list[AreaIn] = []
 
 
 def _mobile(v: str) -> str:
@@ -157,7 +128,6 @@ class StaffCreateIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=200)
     mobile: str = Field(default="", max_length=20)
     role_ids: list[uuid.UUID] = Field(min_length=1)
-    areas: list[AreaIn] = Field(default_factory=list, max_length=100)  # not needed when a role works everywhere
     temporary_password: str = Field(default="", max_length=200)  # empty: a random one is made
 
     _m = field_validator("mobile")(_mobile)
@@ -167,7 +137,6 @@ class StaffUpdateIn(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=200)
     mobile: str | None = Field(default=None, max_length=20)
     role_ids: list[uuid.UUID] | None = Field(default=None, min_length=1)
-    areas: list[AreaIn] | None = Field(default=None, max_length=100)
     is_active: bool | None = None
 
     _m = field_validator("mobile")(lambda v: _mobile(v) if v is not None else v)

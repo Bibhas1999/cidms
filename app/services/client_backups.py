@@ -2,8 +2,8 @@
 downloadable as an Excel workbook, as SQL, or as the copy itself, and restorable by the owner (or the platform).
 
 What a copy holds: the centre's settings and running numbers, its catalogue, doctors and hospitals, patients,
-bills, payments, test reports (with their versions, share links and deliveries), image records, doctors'
-signatures, where each person works (staff areas) and the OPD's doctors and visits. Not in it: staff accounts, roles and API keys (who may sign in is access control, not records, and a
+bills, payments, test reports (with their versions, share links and deliveries), image records and doctors'
+signatures. Not in it: staff accounts, roles and API keys (who may sign in is access control, not records, and a
 restore must never lock the owner out), the activity log (kept as it is; a restore adds to it), sessions and jobs.
 The images themselves live in Orthanc, not here.
 
@@ -39,7 +39,7 @@ FORMAT = "cidms-client-backup"
 # Put back parents first; deleted in the reverse order.
 TABLES = ["tenant_settings", "counters", "departments", "test_types", "tests", "report_templates", "referring_doctors",
           "patients", "invoices", "invoice_items", "payments", "test_reports", "test_report_versions", "report_shares",
-          "message_deliveries", "imaging_studies", "doctor_signatures", "staff_areas", "opd_doctors", "opd_visits"]
+          "message_deliveries", "imaging_studies", "doctor_signatures"]
 STALE = timedelta(hours=2)   # a copy still "running" this long was cut off
 CHUNK = 1000                 # rows per INSERT when restoring
 

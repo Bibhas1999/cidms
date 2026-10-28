@@ -19,7 +19,6 @@ from app.core.errors import Forbidden
 from app.core.money import local_today
 from app.core.security import CurrentUser
 from app.models import TenantSettings
-from app.services.areas import reception_area
 from app.services.audit import AuditService
 from app.services.billing import BillFilters
 from app.services.exports import to_pdf, to_xlsx, to_xlsx_book
@@ -68,17 +67,17 @@ def _bills_file(fmt: str, f: BillFilters, db: Session, current: CurrentUser) -> 
     return _file(db, current, report, fmt, file_name("bills", f.date_from, f.date_to, fmt))
 
 
-@router.get("/api/exports/bills.xlsx", dependencies=[Depends(reception_area)])
+@router.get("/api/exports/bills.xlsx")
 def bills_xlsx(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
     return _bills_file("xlsx", f, db, current)
 
 
-@router.get("/api/exports/bills.pdf", dependencies=[Depends(reception_area)])
+@router.get("/api/exports/bills.pdf")
 def bills_pdf(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
     return _bills_file("pdf", f, db, current)
 
 
-@router.get("/api/exports/bills-by-doctor.xlsx", dependencies=[Depends(reception_area)])
+@router.get("/api/exports/bills-by-doctor.xlsx")
 def bills_by_doctor_xlsx(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
     """The bills list as a workbook: a summary sheet, then one sheet per referring doctor (same filters as the screen)."""
     report = bills_report(db, current, f)
@@ -97,7 +96,7 @@ def dues_viewer(current: CurrentUser = Depends(client_user)) -> CurrentUser:
     return current
 
 
-@router.get("/api/dues/workbook", dependencies=[Depends(reception_area)])
+@router.get("/api/dues/workbook")
 def dues_book(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
               db: Session = DB, current: CurrentUser = Depends(dues_viewer)):
     """Bills still owing: a summary by referring doctor and a sheet for each doctor (oldest first)."""
@@ -105,7 +104,7 @@ def dues_book(date_from: date | None = Query(None, alias="from"), date_to: date 
     return {**summary.as_json(), "sheets": [s.as_json() for s in sheets]}
 
 
-@router.get("/api/dues/workbook.xlsx", dependencies=[Depends(reception_area)])
+@router.get("/api/dues/workbook.xlsx")
 def dues_book_xlsx(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
                    db: Session = DB, current: CurrentUser = Depends(dues_viewer)):
     summary, sheets = dues_workbook(db, current, date_from, date_to)

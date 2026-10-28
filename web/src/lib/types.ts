@@ -30,28 +30,6 @@ export interface Me {
   manage_own_account: boolean;
   csrf_token: string;
   workspace: Workspace;
-  /** Where they may work (lib/area.svelte.ts). Missing from a server or saved copy older than work areas. */
-  areas: Area[];
-}
-
-// ---------- work areas ----------
-
-export type AreaKind = "admin" | "reception" | "opd" | "department";
-
-/** One place someone may work: Admin, Reception, the OPD or one department. key: "admin", "opd", "department:<id>". */
-export interface Area {
-  key: string;
-  kind: AreaKind;
-  department_id: string | null;
-  name: string;
-  /** False for an area they don't work in: shown in the chooser, refused when picked. Missing = allowed. */
-  allowed?: boolean;
-}
-
-/** Where a member of staff works, as saved on them (admin isn't given: it comes with the areas.all permission). */
-export interface AreaIn {
-  area: "reception" | "opd" | "department";
-  department_id: string | null;
 }
 
 export interface Page<T> {
@@ -79,7 +57,6 @@ export interface Staff {
   last_login_at: string | null;
   created_at: string;
   roles: Role[];
-  areas: AreaIn[];
 }
 
 export interface CentreSettings {
@@ -288,35 +265,4 @@ export function ageGender(p: Pick<Patient, "age_years" | "date_of_birth" | "gend
   }
   const g = GENDER_LABELS[p.gender] ?? p.gender;
   return [age === null ? "" : `${age} y`, g].filter(Boolean).join(" · ") || "—";
-}
-
-// ---------- OPD ----------
-
-export interface OpdDoctor {
-  id: string;
-  name: string;
-  qualification: string;
-  fee: string;
-  is_active: boolean;
-}
-
-export type VisitStatus = "waiting" | "with_doctor" | "done" | "cancelled";
-
-export interface OpdVisit {
-  id: string;
-  token_no: number;
-  visit_date: string;
-  status: VisitStatus;
-  fee: string;
-  paid: string;
-  due: string;
-  cancel_reason: string;
-  created_at: string;
-  called_at: string | null;
-  done_at: string | null;
-  created_by_name: string;
-  doctor: { id: string; name: string };
-  patient: { id: string; patient_no: string; name: string; age_years: number | null; gender: string; mobile: string };
-  invoice_id: string | null;
-  invoice_no: string | null;
 }
