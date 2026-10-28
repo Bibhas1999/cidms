@@ -7,7 +7,7 @@
   import OfflineBanner from "./components/OfflineBanner.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { reportError } from "./lib/errors";
-  import { navigate, router } from "./lib/router.svelte";
+  import { navigate, router, withNext } from "./lib/router.svelte";
   import { FEATURES } from "./lib/features";
   import { session } from "./lib/session.svelte";
   import BillDetail from "./pages/bills/BillDetail.svelte";
@@ -134,10 +134,11 @@
     if (!session.ready || session.workspace?.kind === "none") return;
     const path = router.path;
     if (OPEN.includes(path)) return;
+    const here = path === "/" ? "" : path + router.search;
     if (!session.me) {
-      if (!PUBLIC.includes(path)) navigate(`/login${path === "/" ? "" : `?next=${encodeURIComponent(path + router.search)}`}`, { replace: true });
+      if (!PUBLIC.includes(path)) navigate(withNext("/login", here), { replace: true });
     } else if (session.me.must_change_password && path !== "/change-password") {
-      navigate("/change-password", { replace: true });
+      navigate(withNext("/change-password", here), { replace: true });
     } else if (path === "/change-password" && !session.me.must_change_password && !session.me.manage_own_account) {
       navigate("/", { replace: true }); // staff only choose a password at first sign-in; after that it's their owner's or admin's job
     } else if (PUBLIC.includes(path)) {
