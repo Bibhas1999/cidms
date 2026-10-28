@@ -4,7 +4,7 @@
   import AuthLayout from "../components/AuthLayout.svelte";
   import { forgetAccount, recentAccounts, type RecentAccount } from "../lib/accounts";
   import { ApiError } from "../lib/api";
-  import { navigate, router } from "../lib/router.svelte";
+  import { navigate, router, safeNext, withNext } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
   import { notifyError } from "../lib/toast.svelte";
 
@@ -47,12 +47,6 @@
   const ws = $derived(session.workspace);
   const isPlatform = $derived(ws?.kind === "platform");
 
-  /** Only return to an address inside the app, never to another site. */
-  function safeNext(): string {
-    const next = router.query.get("next") ?? "/";
-    return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/";
-  }
-
   function onKey(e: KeyboardEvent) {
     capsLock = e.getModifierState?.("CapsLock") ?? false;
   }
@@ -63,7 +57,7 @@
     failed = false;
     try {
       const me = await session.login(email, password, remember);
-      navigate(me.must_change_password ? "/change-password" : safeNext(), { replace: true });
+      navigate(me.must_change_password ? withNext("/change-password", router.query.get("next") ?? "") : safeNext(), { replace: true });
     } catch (err) {
       failed = err instanceof ApiError && err.status === 401;
       notifyError(err, { title: "Sign-in failed", fallback: "Couldn't sign in. Please try again." });
