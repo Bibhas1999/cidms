@@ -34,7 +34,6 @@ GROUPS: dict[str, tuple[str, str, dict[str, str]]] = {
     }),
     "staff_settings": ("Staff & settings", "People, roles, the centre's settings and its activity log", {
         "staff.manage": "Manage staff",
-        "areas.all": "Work in every area",
         "roles.manage": "Manage roles & permissions",
         "settings.manage": "Centre settings",
         "activity.view": "Activity log",
@@ -47,7 +46,6 @@ GROUPS: dict[str, tuple[str, str, dict[str, str]]] = {
     }),
     "integrations": ("Integrations", "Connections to other systems", {
         "integrations.manage": "API keys",
-        "dev.monitor": "Dev monitor",
     }),
     "platform": ("Platform", "Running the CIDMS platform (platform staff only)", {
         "platform.clients.view": "See clients",
@@ -55,7 +53,6 @@ GROUPS: dict[str, tuple[str, str, dict[str, str]]] = {
         "platform.subscriptions.manage": "Subscriptions",
         "platform.staff.manage": "Platform staff",
         "platform.activity.view": "Platform activity log",
-        "platform.dev.monitor": "Dev monitor",
     }),
 }
 

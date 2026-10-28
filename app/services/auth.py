@@ -63,14 +63,9 @@ def branding(tenant: TenantRef) -> dict:
 
 
 def me_out(request: Request, user: User, sess: UserSession, permissions: set[str], roles: list[str]) -> MeOut:
-    from sqlalchemy.orm import object_session
-
-    from app.services.areas import areas_of
-    db = object_session(user)
     return MeOut(id=user.id, email=user.email, full_name=user.full_name, mobile=user.mobile, avatar_url=avatar_url(user),
                  roles=roles, permissions=sorted(permissions), manage_own_account=manages_own_account(user, permissions),
-                 must_change_password=user.must_change_password, csrf_token=sess.csrf_token, workspace=workspace_of(request),
-                 areas=areas_of(db, user, permissions) if db is not None else [])
+                 must_change_password=user.must_change_password, csrf_token=sess.csrf_token, workspace=workspace_of(request))
 
 
 def avatar_url(user: User) -> str:

@@ -7,12 +7,10 @@ PLATFORM_PERMISSIONS = {
     "platform.staff.manage": "Add and remove platform staff",
     "platform.activity.view": "See the platform activity log",
     "platform.backups.manage": "Choose when the database is backed up, and back it up now",
-    "platform.dev.monitor": "See the dev monitor: live requests, errors and slow queries (development only)",
 }
 
 CLIENT_PERMISSIONS = {
     "staff.manage": "Add staff, set their roles, deactivate them",
-    "areas.all": "Work in every area: reception, OPD and every department",
     "roles.manage": "Create and change the centre's own roles and what each can do",
     "settings.manage": "Change the centre's details, branding and numbering",
     "activity.view": "See the centre's activity log",
@@ -33,7 +31,6 @@ CLIENT_PERMISSIONS = {
     "account.manage_own": "Change their own sign-in email and password",
     "integrations.manage": "Create and revoke API keys for other systems (never financial data)",
     "backups.manage": "Back up the centre's data, download copies and restore one",
-    "dev.monitor": "See the dev monitor: live requests, errors and slow queries (development only)",
 }
 
 ALL_CLIENT = set(CLIENT_PERMISSIONS)
@@ -53,10 +50,8 @@ ROLES: dict[str, tuple[str, str, str, set[str]]] = {
     "doctor": ("Doctor / radiologist", "client", "Reports and consultations",
                {"reports.write", "reports.sign", "consultations.write", "worklist.update", "reports.deliver"}),
     "accounts": ("Accounts", "client", "Business reports and dues", {"business_reports.view", "payments.collect"}),
-    "opd": ("OPD desk", "client", "The OPD queue: patients, visits and consultation fees",
-            {"patients.manage", "appointments.manage", "payments.collect"}),
     "developer": ("Developer", "client", "API keys and integrations, and the activity log; no billing or money",
-                  {"integrations.manage", "activity.view", "dev.monitor"}),
+                  {"integrations.manage", "activity.view"}),
 }
 
 # Only an owner can make someone an owner.

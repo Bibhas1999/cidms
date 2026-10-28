@@ -25,7 +25,6 @@ from app.repositories.common import contains
 from app.repositories.counters import next_number
 from app.schemas_billing import BillIn, BillLineIn, BillUpdateIn, PaymentIn, RefundIn
 from app.services import events
-from app.services.areas import may_progress
 from app.services.audit import AuditService
 from app.services.catalogue import CatalogueService
 from app.services.patients import PatientService, age_text
@@ -318,36 +317,6 @@ class BillingService:
             events.discount_over_limit(self.db, invoice, self.current, self._over_limit)
         return invoice
 
-    def create_consultation(self, patient: Patient, doctor_name: str, fee: Decimal, payment: PaymentIn | None) -> Invoice:
-        """The bill for an OPD visit's fee: one line that isn't from the catalogue ("Consultation – Dr X"),
-        numbered, paid and logged like every other bill."""
-        self._check_bill_limit()
-        settings = self._settings()
-        today = local_today()
-        fy = financial_year(today)
-        number = next_number(self.db, self.tenant_id, f"invoice:{fy}")
-        invoice = Invoice(
-            tenant_id=self.tenant_id, invoice_no=f"{settings.invoice_prefix}/{fy}/{number:06d}", bill_date=today,
-            patient_id=patient.id, patient_name=patient.name, patient_age=age_text(patient, today), patient_gender=patient.gender,
-            patient_mobile=patient.mobile, patient_address=patient.address, guardian_name=patient.guardian_name,
-            status="confirmed", created_by=self.current.id, created_by_name=self.current.user.full_name,
-            subtotal=ZERO, total=ZERO, due=ZERO, items=[], payments=[],
-        )
-        invoice.items.append(InvoiceItem(
-            tenant_id=self.tenant_id, position=1, test_id=None, test_name=f"Consultation – {doctor_name}"[:200], department_id=None,
-            department_name="OPD", is_imaging=False, unit_price=q2(fee), quantity=1, amount=q2(fee), status="billed"))
-        self._price(invoice, "none", ZERO)
-        if payment is not None:
-            if payment.amount > invoice.total:
-                raise Invalid(f"Paid now can't be more than the fee, {rupees(invoice.total)}.", "payment.amount")
-            self._take(invoice, "payment", payment.mode, payment.amount, payment.reference, payment.note)
-        self.db.add(invoice)
-        self.db.flush()
-        self.audit.record(self.tenant_id, self.current.id, "bill.created", "invoice", invoice.id, {
-            "invoice_no": invoice.invoice_no, "patient": patient.patient_no, "total": str(invoice.total), "paid": str(invoice.paid),
-            "discount": str(invoice.discount_amount), "status": invoice.status, "opd": doctor_name})
-        return invoice
-
     def _fully_paid(self, invoice: Invoice) -> bool:
         return invoice.total > 0 and invoice.due <= 0
 
@@ -471,10 +440,10 @@ class BillingService:
         self._not_cancelled(invoice)
         if item.status == status:
             return item
-        if not may_progress(self.current, item.department_id):
-            raise Forbidden(f"{item.test_name} is done in {item.department_name or 'another department'}, where you don't work.")
         if status not in ITEM_FLOW.get(item.status, set()):
             raise Conflict(f"{item.test_name} is {item.status}; it can't be marked {status}.")
+        if status == "scanned" and not item.is_imaging:
+            raise Invalid(f"{item.test_name} isn't a scan.", "status")
         if status in ("billed", "scanned") and self._has_signed_report(item.id):
             raise Conflict(f"{item.test_name} has a signed report, so it can't go back to pending.")
         old = item.status

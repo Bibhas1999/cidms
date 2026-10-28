@@ -4,8 +4,7 @@
   import { confirmDialog } from "../lib/confirm.svelte";
   import { install } from "../lib/install.svelte";
   import { notify } from "../lib/toast.svelte";
-  import { area, AREA_HOME, AREA_INFO } from "../lib/area.svelte";
-  import { areaNav, PLATFORM_NAV } from "../lib/nav";
+  import { CLIENT_NAV, PLATFORM_NAV } from "../lib/nav";
   import { router } from "../lib/router.svelte";
   import { session } from "../lib/session.svelte";
   import { applyTheme, getTheme, type Theme } from "../lib/theme";
@@ -19,7 +18,7 @@
   let { title, available, children }: { title: string; available: Set<string>; children: Snippet } = $props();
 
   const sections = $derived(
-    (session.isPlatform ? PLATFORM_NAV : areaNav(area.current?.kind ?? null, area.current?.name))
+    (session.isPlatform ? PLATFORM_NAV : CLIENT_NAV)
       .map((s) => ({ ...s, items: s.items.filter((i) => available.has(i.href.split("?")[0]) && (!i.permission || session.can(i.permission))) }))
       .filter((s) => s.items.length),
   );
@@ -38,8 +37,6 @@
   };
 
   const ws = $derived(session.workspace);
-  /** The work area's first page (the dashboard for Admin and Reception). */
-  const home = $derived(area.current ? AREA_HOME[area.current.kind] : "/");
   const local = location.hostname.endsWith(".localhost");
 
   let navOpen = $state(false);
@@ -47,35 +44,12 @@
   let theme = $state<Theme>(getTheme());
   let menuButton = $state<HTMLButtonElement>();
   let menu = $state<HTMLElement>();
-  let areaOpen = $state(false);
-  let areaButton = $state<HTMLButtonElement>();
-  let areaMenu = $state<HTMLElement>();
 
   $effect(() => {
     router.path; // close menus after moving to another page
     navOpen = false;
     menuOpen = false;
-    areaOpen = false;
   });
-
-  // The area switcher closes the same way: a click outside it, or Esc (focus back to its button).
-  $effect(() => {
-    if (!areaOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (!areaMenu?.contains(e.target as Node) && !areaButton?.contains(e.target as Node)) areaOpen = false;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { areaOpen = false; areaButton?.focus(); }
-    };
-    document.addEventListener("click", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("click", onClick); document.removeEventListener("keydown", onKey); };
-  });
-
-  function switchArea(key: string) {
-    areaOpen = false;
-    if (key !== area.current?.key) area.switchTo(key);
-  }
 
   // Close the profile menu on a click outside it or Esc, and give focus back to its button.
   $effect(() => {
@@ -128,11 +102,11 @@
   <aside class="sidebar" aria-label="Main navigation">
     <div class="sidebar-brand">
       {#if !session.isPlatform && ws?.wordmark_url}
-        <a href={home} class="link-reset brand-link wordmark-link" aria-label="{ws.name}: {area.current?.name ?? 'dashboard'}">
+        <a href="/" class="link-reset brand-link wordmark-link" aria-label="{ws.name}: dashboard">
           <img class="centre-wordmark" src={ws.wordmark_url} alt={ws.name} />
         </a>
       {:else}
-      <a href={home} class="link-reset row brand-link" style="gap: 10px">
+      <a href="/" class="link-reset row brand-link" style="gap: 10px">
         {#if ws?.logo_url}
           <img class="centre-logo" src={ws.logo_url} alt="" width="34" height="34" />
         {:else}
@@ -164,38 +138,12 @@
       <button class="btn btn-ghost btn-icon menu-toggle" type="button" aria-label={navOpen ? "Close menu" : "Open menu"} use:tooltip={navOpen ? "Close menu" : "Open menu"}
               aria-expanded={navOpen} onclick={() => (navOpen = !navOpen)}><Icon name="menu" /></button>
       <nav class="breadcrumbs grow" aria-label="Breadcrumb">
-        <a href={home} class="text-muted">{session.isPlatform ? "Platform" : ws?.name}</a>
+        <a href="/" class="text-muted">{session.isPlatform ? "Platform" : ws?.name}</a>
         <Icon name="chevronRight" size="sm" />
         <strong aria-current="page">{title}</strong>
       </nav>
       {#if local}<span class="badge badge-info badge-plain hide-sm" use:tooltip={"Running on this computer"}>Local</span>{/if}
       <div class="topbar-actions">
-        {#if area.current}
-          {@const cur = area.current}
-          {#if area.canSwitch}
-            <div class="popover-anchor">
-              <button class="btn btn-outline btn-sm area-button" type="button" bind:this={areaButton} aria-haspopup="true" aria-expanded={areaOpen}
-                      use:tooltip={"Where you're working. Switch to another area here."} onclick={() => (areaOpen = !areaOpen)}>
-                <Icon name={AREA_INFO[cur.kind].icon} size="sm" /><span class="area-name truncate">{cur.name}</span><Icon name="chevronDown" size="sm" />
-                <span class="sr-only">: switch area</span>
-              </button>
-              {#if areaOpen}
-                <section class="popover area-menu" aria-label="Switch area" bind:this={areaMenu}>
-                  <div class="area-menu-head text-xs text-muted">Working in</div>
-                  {#each area.list as a (a.key)}
-                    <button class="btn btn-ghost btn-block menu-item area-item" type="button" aria-current={a.key === cur.key ? "true" : undefined}
-                            onclick={() => switchArea(a.key)}>
-                      <Icon name={AREA_INFO[a.kind].icon} /><span class="grow truncate">{a.name}</span>
-                      {#if a.key === cur.key}<Icon name="check" size="sm" />{/if}
-                    </button>
-                  {/each}
-                </section>
-              {/if}
-            </div>
-          {:else}
-            <span class="badge badge-info badge-plain area-badge hide-sm" use:tooltip={"Where you work"}><Icon name={AREA_INFO[cur.kind].icon} size="sm" /> {cur.name}</span>
-          {/if}
-        {/if}
         <NotificationBell />
         <div class="popover-anchor">
           <button class="profile-button" type="button" bind:this={menuButton} aria-haspopup="true" aria-expanded={menuOpen}
@@ -229,7 +177,6 @@
                 </div>
               </fieldset>
               <div class="profile-signout">
-                {#if area.canSwitch}<a class="btn btn-ghost btn-block menu-item" href="/choose-area"><Icon name="layers" /> Switch area</a>{/if}
                 <a class="btn btn-ghost btn-block menu-item" href="/settings"><Icon name="settings" /> Settings</a>
                 {#if install.available}
                   <button class="btn btn-ghost btn-block menu-item" type="button" onclick={installApp}><Icon name="download" /> Install app</button>
@@ -253,14 +200,4 @@
   .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
   .terms-link:hover { color: var(--foreground); text-decoration: underline; }
-  .area-button { gap: 6px; max-width: 220px; }
-  .area-name { min-width: 0; }
-  .area-badge { gap: 4px; display: inline-flex; align-items: center; }
-  .area-menu { right: 0; left: auto; min-width: 240px; padding: 6px; }
-  .area-menu-head { padding: 6px 10px 4px; }
-  .area-item { justify-content: flex-start; gap: 10px; }
-  .area-item[aria-current="true"] { color: var(--primary-text); font-weight: 600; }
-  @media (max-width: 640px) {
-    .area-button { max-width: 140px; }
-  }
 </style>

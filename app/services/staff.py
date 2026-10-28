@@ -2,16 +2,15 @@
 
 import uuid
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.catalog import OWNER_ONLY_ROLES
 from app.core.errors import Conflict, Forbidden, Invalid, NotFound
 from app.core.passwords import check_strength, hash_password, random_temporary_password
 from app.core.security import CurrentUser, revoke_user_sessions
-from app.models import Department, StaffArea, Tenant, User
+from app.models import Tenant, User
 from app.repositories.users import RoleRepository, UserRepository
-from app.schemas import AreaIn, StaffCreateIn, StaffUpdateIn
+from app.schemas import StaffCreateIn, StaffUpdateIn
 from app.services.audit import AuditService
 from app.services.roles import RoleService, permission_diff
 
@@ -74,46 +73,6 @@ class StaffService:
                 "role_names": [sorted(r.name for r in old), sorted(r.name for r in roles)],
                 "permission_changes": permission_diff(before, after)}
 
-    # ---------- where they work ----------
-    def _works_everywhere(self, roles: list) -> bool:
-        perms = RoleService(self.db, self.current).permissions_of([r.id for r in roles])
-        return any("areas.all" in perms[r.id] for r in roles)
-
-    def _resolve_areas(self, areas: list[AreaIn], roles: list) -> list[tuple[str, uuid.UUID | None]]:
-        """The chosen areas, checked: departments of this centre that are switched on, and at least one place
-        unless one of their roles works everywhere (areas.all)."""
-        wanted = list(dict.fromkeys((a.area, a.department_id) for a in areas))
-        ids = {d for _, d in wanted if d}
-        if ids:
-            found = {d.id: d for d in self.db.scalars(select(Department).where(Department.tenant_id == self.tenant_id,
-                                                                               Department.id.in_(ids)))}
-            if len(found) != len(ids):
-                raise Invalid("Choose departments from the list.", "areas")
-            off = sorted(d.name for d in found.values() if not d.is_active)
-            if off:
-                raise Invalid(f"{', '.join(off)} is switched off, so nobody can work there.", "areas")
-        if not wanted and not self._works_everywhere(roles):
-            raise Invalid("Choose where they work: reception, the OPD or a department.", "areas")
-        return wanted
-
-    def _area_names(self, pairs) -> list[str]:
-        ids = {d for _, d in pairs if d}
-        names = dict(self.db.execute(select(Department.id, Department.name).where(Department.id.in_(ids))).all()) if ids else {}
-        labels = {"reception": "Reception", "opd": "OPD"}
-        return sorted(labels.get(a) or names.get(d, "Department") for a, d in pairs)
-
-    def _set_areas(self, user: User, wanted: list[tuple[str, uuid.UUID | None]]) -> list | None:
-        """Give someone exactly these areas. Returns [before, after] (names) for the activity log, or None."""
-        old = [(a.area, a.department_id) for a in user.areas]
-        if set(old) == set(wanted):
-            return None
-        keep = [a for a in user.areas if (a.area, a.department_id) in wanted]
-        have = {(a.area, a.department_id) for a in keep}
-        user.areas = keep + [StaffArea(tenant_id=self.tenant_id, user_id=user.id, area=a, department_id=d)
-                             for a, d in wanted if (a, d) not in have]
-        self.db.flush()
-        return [self._area_names(old), self._area_names(wanted)]
-
     def set_roles(self, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> User:
         user = self._get(user_id)
         roles = self._resolve_roles(role_ids, list(user.roles))
@@ -137,7 +96,6 @@ class StaffService:
         if self.users.by_email(self.tenant_id, email):
             raise Conflict("Someone here already uses that email.", "email")
         roles = self._resolve_roles(data.role_ids)
-        areas = self._resolve_areas(data.areas, roles) if self.scope == "client" else []
         temporary = data.temporary_password.strip() or random_temporary_password()
         check_strength(temporary, "temporary_password")
         self._check_user_limit()
@@ -147,10 +105,8 @@ class StaffService:
         self.db.add(user)
         self.db.flush()
         self.users.set_roles(user, roles)
-        if areas:
-            self._set_areas(user, areas)
         self.audit.record(self.tenant_id, self.current.id, "staff.created", "user", user.id,
-                          {"email": email, "roles": [r.code for r in roles], "areas": self._area_names(areas)})
+                          {"email": email, "roles": [r.code for r in roles]})
         from app.services import events  # notifications: owners and admins hear about new staff
         events.staff_added(self.db, user, self.current)
         return user
@@ -170,11 +126,6 @@ class StaffService:
             change = self._role_change(user, roles)
             if change:
                 changes.update(change)
-        if self.scope == "client" and (data.areas is not None or data.role_ids is not None):
-            chosen = data.areas if data.areas is not None else [AreaIn(area=a.area, department_id=a.department_id) for a in user.areas]
-            area_change = self._set_areas(user, self._resolve_areas(chosen, list(user.roles)))
-            if area_change:
-                changes["areas"] = area_change
         if data.is_active is not None and data.is_active != user.is_active:
             if user.id == self.current.id:
                 raise Invalid("You can't deactivate yourself.", "is_active")

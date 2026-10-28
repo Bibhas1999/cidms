@@ -147,19 +147,6 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
 
     roles: Mapped[list[Role]] = relationship(secondary="user_roles", lazy="selectin", order_by=Role.name)
-    # Where they work (reception, the OPD, departments). Owners and admins (areas.all) work everywhere without any.
-    areas: Mapped[list["StaffArea"]] = relationship(lazy="selectin", cascade="all, delete-orphan",
-                                                    order_by="StaffArea.area")
-
-
-class StaffArea(Base):
-    """One place a person works: reception, the OPD, or one department (department_id set)."""
-    __tablename__ = "staff_areas"
-    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    area: Mapped[str] = mapped_column(String(12))  # reception | opd | department
-    department_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("departments.id", ondelete="CASCADE"))
 
 
 class UserRole(Base):
@@ -402,44 +389,6 @@ class Payment(Base):
     legacy_id: Mapped[int | None] = mapped_column(Integer)
 
     invoice: Mapped[Invoice] = relationship(back_populates="payments")
-
-
-# ---------- the OPD: doctors seeing patients at the centre, and the day's queue -----------------------------
-
-class OpdDoctor(Base):
-    """A doctor who sees patients in the centre's OPD, with their consultation fee."""
-    __tablename__ = "opd_doctors"
-    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(String(200))
-    qualification: Mapped[str] = mapped_column(String(200), default="")
-    fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
-
-
-class OpdVisit(Base):
-    """One patient waiting to see one OPD doctor on one day, with their token number. The fee is a bill."""
-    __tablename__ = "opd_visits"
-    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
-    visit_date: Mapped[date] = mapped_column(Date)  # the centre's local day
-    token_no: Mapped[int] = mapped_column(Integer)
-    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opd_doctors.id"))
-    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patients.id"))
-    invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"))  # NULL when there's no fee
-    fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    status: Mapped[str] = mapped_column(String(12), default="waiting")  # waiting | with_doctor | done | cancelled
-    cancel_reason: Mapped[str] = mapped_column(String(300), default="")
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
-    called_at: Mapped[datetime | None] = mapped_column(Timestamp)
-    done_at: Mapped[datetime | None] = mapped_column(Timestamp)
-
-    doctor: Mapped[OpdDoctor] = relationship(lazy="joined")
-    patient: Mapped[Patient] = relationship(lazy="joined")
-    invoice: Mapped[Invoice | None] = relationship(lazy="joined")
-    creator: Mapped[User | None] = relationship(lazy="joined")
 
 
 # ---------- phase 4: test reports and images ------------------------------------------------------------

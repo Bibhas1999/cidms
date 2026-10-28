@@ -28,7 +28,7 @@ def clinic(alpha):
     """Alpha with an owner, an admin, a receptionist and an accounts person, a small catalogue and a few bills."""
     for email, role in [("owner@alpha.in", "owner"), ("admin@alpha.in", "admin"), ("front@alpha.in", "receptionist"),
                         ("accounts@alpha.in", "accounts")]:
-        make_user(alpha, email, [role])  # accounts work in reception (they collect payments)
+        make_user(alpha, email, [role])
     people = {}
     for name in ["owner", "admin", "front", "accounts"]:
         people[name] = browser("alpha.localhost")

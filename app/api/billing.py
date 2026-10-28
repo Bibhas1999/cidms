@@ -39,7 +39,6 @@ from app.schemas_billing import (
     TestTypeOut,
     WorklistRowOut,
 )
-from app.services.areas import has_department, reception_area, reception_or_opd_area
 from app.services.audit import AuditService
 from app.services.billing import BillFilters, BillingService, OverviewService, default_worklist_window
 from app.services.catalogue import CatalogueService
@@ -47,9 +46,6 @@ from app.services.patients import PatientService
 
 router = APIRouter(prefix="/api", tags=["billing"])
 manage_catalogue = require("catalogue.manage")
-# Work areas (app/services/areas.py), checked on top of each route's permission.
-IN_RECEPTION = [Depends(reception_area)]
-IN_RECEPTION_OR_OPD = [Depends(reception_or_opd_area)]
 
 
 # ---------- catalogue (everyone in the centre reads it; catalogue.manage changes it) ----------
@@ -123,32 +119,32 @@ def edit_doctor(doctor_id: uuid.UUID, data: DoctorIn, db: Session = DB, current:
 
 # ---------- patients ----------
 
-@router.get("/patients", response_model=Page[PatientOut], dependencies=IN_RECEPTION_OR_OPD)
+@router.get("/patients", response_model=Page[PatientOut])
 def patients(search: str = Query("", max_length=100), p: Paging = Depends(paging), db: Session = DB,
              current: CurrentUser = Depends(client_user)):
     items, total = PatientService(db, current).page(search, p.page, p.size)
     return Page(items=items, total=total, page=p.page, size=p.size)
 
 
-@router.get("/patients/same-mobile", response_model=list[PatientOut], dependencies=IN_RECEPTION_OR_OPD)
+@router.get("/patients/same-mobile", response_model=list[PatientOut])
 def same_mobile(mobile: str = Query(max_length=20), exclude: uuid.UUID | None = None, db: Session = DB,
                 current: CurrentUser = Depends(client_user)):
     return PatientService(db, current).same_mobile(mobile, exclude)
 
 
-@router.post("/patients", response_model=PatientOut, status_code=status.HTTP_201_CREATED, dependencies=IN_RECEPTION_OR_OPD)
+@router.post("/patients", response_model=PatientOut, status_code=status.HTTP_201_CREATED)
 def add_patient(data: PatientIn, db: Session = DB, current: CurrentUser = Depends(require("patients.manage"))):
     return PatientService(db, current).create(data)
 
 
-@router.get("/patients/{patient_id}", response_model=PatientOut, dependencies=IN_RECEPTION_OR_OPD)
+@router.get("/patients/{patient_id}", response_model=PatientOut)
 def patient(patient_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
     found = PatientService(db, current).get(patient_id)
     AuditService(db).viewed(current.user.tenant_id, current.id, "patient", found.id, {"patient_no": found.patient_no})
     return found
 
 
-@router.put("/patients/{patient_id}", response_model=PatientOut, dependencies=IN_RECEPTION_OR_OPD)
+@router.put("/patients/{patient_id}", response_model=PatientOut)
 def edit_patient(patient_id: uuid.UUID, data: PatientIn, db: Session = DB, current: CurrentUser = Depends(require("patients.manage"))):
     return PatientService(db, current).update(patient_id, data)
 
@@ -175,59 +171,59 @@ def bill_filters(search: str = Query("", max_length=100), date_from: date | None
                        oldest_first=sort == "oldest")
 
 
-@router.get("/bills", response_model=BillPage, dependencies=IN_RECEPTION_OR_OPD)
+@router.get("/bills", response_model=BillPage)
 def bills(f: BillFilters = Depends(bill_filters), p: Paging = Depends(paging), db: Session = DB,
           current: CurrentUser = Depends(client_user)):
     items, total, sums = BillingService(db, current).page(f, p.page, p.size)
     return BillPage(items=items, total=total, page=p.page, size=p.size, sums=sums)
 
 
-@router.post("/bills", response_model=BillOut, status_code=status.HTTP_201_CREATED, dependencies=IN_RECEPTION)
+@router.post("/bills", response_model=BillOut, status_code=status.HTTP_201_CREATED)
 def create_bill(data: BillIn, request: Request, db: Session = DB, current: CurrentUser = Depends(require("billing.create"))):
     svc = BillingService(db, current)
     return run_once(request, db, current, "bill.create", lambda: BillOut.model_validate(svc.create(data)), status.HTTP_201_CREATED)
 
 
-@router.get("/bills/next-number", dependencies=IN_RECEPTION)
+@router.get("/bills/next-number")
 def next_number(db: Session = DB, current: CurrentUser = Depends(client_user)):
     return {"invoice_no": BillingService(db, current).next_invoice_no(), "date": local_today()}
 
 
-@router.get("/bills/{invoice_id}", response_model=BillOut, dependencies=IN_RECEPTION_OR_OPD)
+@router.get("/bills/{invoice_id}", response_model=BillOut)
 def bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
     invoice = BillingService(db, current).get(invoice_id)
     AuditService(db).viewed(current.user.tenant_id, current.id, "invoice", invoice.id, {"invoice_no": invoice.invoice_no})
     return invoice
 
 
-@router.put("/bills/{invoice_id}", response_model=BillOut, dependencies=IN_RECEPTION)
+@router.put("/bills/{invoice_id}", response_model=BillOut)
 def edit_bill(invoice_id: uuid.UUID, data: BillUpdateIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
     return BillingService(db, current).update(invoice_id, data)
 
 
-@router.post("/bills/{invoice_id}/hold", response_model=BillOut, dependencies=IN_RECEPTION)
+@router.post("/bills/{invoice_id}/hold", response_model=BillOut)
 def hold_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
     return BillingService(db, current).hold(invoice_id, data.reason)
 
 
-@router.post("/bills/{invoice_id}/confirm", response_model=BillOut, dependencies=IN_RECEPTION)
+@router.post("/bills/{invoice_id}/confirm", response_model=BillOut)
 def confirm_bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
     return BillingService(db, current).confirm(invoice_id)
 
 
-@router.post("/bills/{invoice_id}/cancel", response_model=BillOut, dependencies=IN_RECEPTION)
+@router.post("/bills/{invoice_id}/cancel", response_model=BillOut)
 def cancel_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
     return BillingService(db, current).cancel(invoice_id, data.reason)
 
 
-@router.post("/bills/{invoice_id}/payments", response_model=BillOut, dependencies=IN_RECEPTION)
+@router.post("/bills/{invoice_id}/payments", response_model=BillOut)
 def take_payment(invoice_id: uuid.UUID, data: PaymentIn, request: Request, db: Session = DB,
                  current: CurrentUser = Depends(require("payments.collect"))):
     svc = BillingService(db, current)
     return run_once(request, db, current, "payment.take", lambda: BillOut.model_validate(svc.pay(invoice_id, data)))
 
 
-@router.post("/bills/{invoice_id}/refunds", response_model=BillOut, dependencies=IN_RECEPTION)
+@router.post("/bills/{invoice_id}/refunds", response_model=BillOut)
 def refund(invoice_id: uuid.UUID, data: RefundIn, request: Request, db: Session = DB,
            current: CurrentUser = Depends(require("payments.collect"))):
     svc = BillingService(db, current)
@@ -241,12 +237,6 @@ def worklist(department_id: uuid.UUID | None = None, status_: list[str] = Query(
              date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
              search: str = Query("", max_length=100), p: Paging = Depends(paging), db: Session = DB,
              current: CurrentUser = Depends(client_user)):
-    # A department's worklist: the person must work there. Every department at once is for areas.all only.
-    if department_id is None:
-        if not current.can("areas.all"):
-            raise Invalid("Choose the department.", field="department_id")
-    elif not has_department(current, department_id):
-        raise Forbidden("You don't work in that department.")
     if date_from is None and date_to is None:
         date_from, date_to = default_worklist_window()
     rows, total = BillingService(db, current).worklist(department_id, status_, date_from, date_to, search, p.page, p.size)
