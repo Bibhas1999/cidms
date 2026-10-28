@@ -11,18 +11,24 @@
   import { session } from "../lib/session.svelte";
   import { tooltip } from "../lib/tooltip";
   import { notify, notifyError } from "../lib/toast.svelte";
-  import type { Department, Page, WorklistRow } from "../lib/types";
+  import { area } from "../lib/area.svelte";
+  import InfoTip from "../components/InfoTip.svelte";
+  import StatusBadge from "../components/StatusBadge.svelte";
+  import { LINE_STATUS } from "../lib/bill-types";
+  import type { Department, ItemStatus, Page, WorklistRow } from "../lib/types";
 
+  // A department's own screen: its tests as they move along, Pending -> In progress -> Ready -> Delivered.
+  // In a department's work area the department is fixed; in Admin (or a server without work areas) any can be chosen.
   const TABS = [
-    { key: "scan", label: "To scan", statuses: ["billed"] },
-    { key: "scanned", label: "Scanned", statuses: ["scanned"] },
-    { key: "delivered", label: "Delivered", statuses: ["delivered"] },
-    { key: "open", label: "All open", statuses: ["billed", "scanned"] },
+    { key: "pending", label: "Pending", status: "billed" },
+    { key: "progress", label: "In progress", status: "scanned" },
+    { key: "ready", label: "Ready", status: "reported" },
+    { key: "delivered", label: "Delivered", status: "delivered" },
   ] as const;
+  const TAB_TIP = "Pending: billed, not started. In progress: started (being done or scanned). Ready: the report is ready to hand over. Delivered: handed over to the patient.";
 
-  const STATUS: Record<string, [string, string]> = {
-    billed: ["badge-info", "Waiting"], scanned: ["badge-warning", "Scanned"], reported: ["badge-navy", "Reported"], delivered: ["badge-success", "Delivered"],
-  };
+  /** Words for a status, as on the bill page. */
+  const statusWord = (s: ItemStatus) => (LINE_STATUS[s]?.[1] ?? s).toLowerCase();
 
   // The server shows the last 7 days (Indian time) when no dates are given; the inputs show the same.
   const istToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
@@ -32,10 +38,14 @@
   const tab = $derived(TABS.find((t) => t.key === router.query.get("tab")) ?? TABS[0]);
   const page = $derived(Number(router.query.get("page") ?? 1) || 1);
   const search = $derived(router.query.get("search") ?? "");
-  const department = $derived(router.query.get("department") ?? "");
+  /** The department of the work area they're in, when it's a department (fixed: no filter). */
+  const fixed = $derived(area.current?.kind === "department" ? area.current : null);
+  const department = $derived(fixed?.department_id ?? router.query.get("department") ?? "");
+  // A bill opens at Reception; in a department or Admin the bill number is shown without a link.
+  const billLinks = $derived(!area.inUse || !area.current || area.current.kind === "reception");
   const from = $derived(router.query.get("from") ?? "");
   const to = $derived(router.query.get("to") ?? "");
-  const canUpdate = $derived(session.can("worklist.update"));
+  const canUpdate = $derived(session.can("worklist.update") || session.can("reports.deliver"));
 
   let data = $state<Page<WorklistRow> | null>(null);
   let loadError = $state("");
@@ -49,7 +59,7 @@
     const ctrl = new AbortController();
     // status repeats (?status=billed&status=scanned), so the address is built here rather than from a query object.
     const qs = new URLSearchParams();
-    for (const s of tab.statuses) qs.append("status", s);
+    qs.append("status", tab.status);
     const extra: Record<string, string | number> = { page, size: SIZE, search, department_id: department, from, to };
     for (const [k, v] of Object.entries(extra)) if (v !== "") qs.set(k, String(v));
     reload;
@@ -62,6 +72,7 @@
   });
 
   $effect(() => {
+    if (fixed) return;
     get<Department[]>("/api/departments").then((d) => (departments = d)).catch((e) => notifyError(e));
   });
 
@@ -97,10 +108,11 @@
   }
 
   const hasDue = (r: WorklistRow) => Number(r.due) > 0;
-  const undoTarget = (r: WorklistRow): "billed" | "scanned" | null =>
-    r.status === "scanned" ? "billed" : r.status === "delivered" ? (r.is_imaging ? "scanned" : "billed") : null;
+  /** One step back along the tabs. */
+  const undoTarget = (r: WorklistRow): ItemStatus | null =>
+    r.status === "scanned" ? "billed" : r.status === "reported" ? "scanned" : r.status === "delivered" ? "reported" : null;
 
-  async function setStatus(r: WorklistRow, status: "billed" | "scanned" | "delivered", message: string) {
+  async function setStatus(r: WorklistRow, status: ItemStatus, message: string) {
     busy = r.item_id;
     try {
       await post(`/api/worklist/${r.item_id}/status`, { status });
@@ -125,18 +137,22 @@
   async function undo(r: WorklistRow) {
     const target = undoTarget(r);
     if (!target) return;
-    await setStatus(r, target, `${r.test_name} for ${r.patient_name} moved back to ${STATUS[target][1].toLowerCase()}.`);
+    await setStatus(r, target, `${r.test_name} for ${r.patient_name} moved back to ${statusWord(target)}.`);
   }
 </script>
 
-<PageHeader eyebrow="Lab" title="Worklist"
-            description="Tests waiting to be scanned and reports waiting to be handed over. Mark each one as it moves along." />
+<PageHeader eyebrow={fixed ? "Department" : "Lab"} title={fixed ? `${fixed.name} worklist` : "Worklist"}
+            description={fixed ? `The tests billed for ${fixed.name}. Start each one, mark it ready, then hand it over.`
+                               : "Every department's tests as they move along: start each one, mark it ready, then hand it over."} />
 
 <section class="card">
-  <div class="tabs" role="tablist" aria-label="Which tests">
-    {#each TABS as t (t.key)}
-      <button class="tab" role="tab" aria-selected={tab.key === t.key} onclick={() => setQuery({ tab: t.key === "scan" ? null : t.key, page: null })}>{t.label}</button>
-    {/each}
+  <div class="row wl-tabs">
+    <div class="tabs grow" role="tablist" aria-label="Which tests">
+      {#each TABS as t (t.key)}
+        <button class="tab" role="tab" aria-selected={tab.key === t.key} onclick={() => setQuery({ tab: t.key === "pending" ? null : t.key, page: null })}>{t.label}</button>
+      {/each}
+    </div>
+    <InfoTip text={TAB_TIP} about="the tabs" />
   </div>
 
   <div class="toolbar">
@@ -145,11 +161,13 @@
       <label class="sr-only" for="search">Search the worklist</label>
       <input id="search" class="input" type="search" placeholder="Search by patient, bill number or accession number…" bind:value={searchText} oninput={onSearch} />
     </div>
-    <label class="sr-only" for="department">Department</label>
-    <select id="department" class="select" value={department} onchange={(e) => setQuery({ department: e.currentTarget.value, page: null })}>
-      <option value="">All departments</option>
-      {#each departments as d (d.id)}<option value={d.id}>{d.name}{d.is_active ? "" : " (switched off)"}</option>{/each}
-    </select>
+    {#if !fixed}
+      <label class="sr-only" for="department">Department</label>
+      <select id="department" class="select" value={department} onchange={(e) => setQuery({ department: e.currentTarget.value, page: null })}>
+        <option value="">All departments</option>
+        {#each departments as d (d.id)}<option value={d.id}>{d.name}{d.is_active ? "" : " (switched off)"}</option>{/each}
+      </select>
+    {/if}
     <DateRange id="worklist" from={from || weekAgo} to={to || istToday}
                onchange={(f, t) => setQuery({ from: f || null, to: t || null, page: null })} />
   </div>
@@ -162,9 +180,8 @@
         <thead><tr><th>Bill</th><th>Patient</th><th>Test</th><th>Status</th><th class="num">Due</th>{#if canUpdate}<th><span class="sr-only">Actions</span></th>{/if}</tr></thead>
         <tbody>
           {#each data.items as r (r.item_id)}
-            {@const st = STATUS[r.status] ?? ["badge-info", r.status]}
             <tr>
-              <td><div class="cell-title mono"><a href="/bills/{r.invoice_id}">{r.invoice_no}</a></div><div class="cell-sub">{date(r.bill_date)}</div></td>
+              <td><div class="cell-title mono">{#if billLinks}<a href="/bills/{r.invoice_id}">{r.invoice_no}</a>{:else}{r.invoice_no}{/if}</div><div class="cell-sub">{date(r.bill_date)}</div></td>
               <td><div class="cell-title">{r.patient_name}</div><div class="cell-sub">{[r.patient_age, r.patient_gender].filter(Boolean).join(" · ")}</div></td>
               <td><div class="cell-title">{r.test_name}</div>
                 <div class="cell-sub">{r.department_name}{#if r.accession_no} · <span class="mono">{r.accession_no}</span>{/if}</div>
@@ -178,7 +195,7 @@
                             use:tooltip={"Opens the image viewer in a new tab"} onclick={() => viewImages(r)}><Icon name="eye" size="sm" /> View images</button>
                   {/if}
                 </div></td>
-              <td><span class="badge {st[0]}" title={r.status_changed_at ? `Since ${dateTime(r.status_changed_at)}` : undefined}>{st[1]}</span></td>
+              <td><StatusBadge line={r.status} help={r.status_changed_at ? `Since ${dateTime(r.status_changed_at)}` : ""} /></td>
               <td class="num">
                 {#if hasDue(r)}<div class="row justify-end gap-sm"><span class="badge badge-destructive badge-plain">Due</span><span class="money money-due">{rupees(r.due)}</span></div>
                 {:else}<span class="money text-muted">{rupees(r.due)}</span>{/if}
@@ -186,13 +203,20 @@
               {#if canUpdate}
                 <td class="num">
                   <div class="row justify-end gap-sm nowrap">
-                    {#if r.status === "billed" && r.is_imaging}
-                      <button class="btn btn-outline btn-sm" disabled={busy === r.item_id} aria-label="Mark {r.test_name} for {r.patient_name} scanned"
-                              onclick={() => setStatus(r, "scanned", `${r.test_name} for ${r.patient_name} marked scanned.`)}><Icon name="scan" size="sm" /> Mark scanned</button>
+                    {#if r.status === "billed"}
+                      <button class="btn btn-outline btn-sm" disabled={busy === r.item_id} aria-label="Start {r.test_name} for {r.patient_name}"
+                              use:tooltip={"Moves it to In progress"}
+                              onclick={() => setStatus(r, "scanned", `${r.test_name} for ${r.patient_name} is in progress.`)}><Icon name="play" size="sm" /> Start</button>
+                    {/if}
+                    {#if r.status === "billed" || r.status === "scanned"}
+                      <button class="btn btn-outline btn-sm" disabled={busy === r.item_id} aria-label="Mark {r.test_name} for {r.patient_name} ready"
+                              use:tooltip={"The report is ready to hand over"}
+                              onclick={() => setStatus(r, "reported", `${r.test_name} for ${r.patient_name} is ready.`)}><Icon name="fileText" size="sm" /> Ready</button>
                     {/if}
                     {#if r.status === "billed" || r.status === "scanned" || r.status === "reported"}
                       <button class="btn btn-outline btn-sm" disabled={busy === r.item_id} aria-label="Mark {r.test_name} for {r.patient_name} delivered"
-                              onclick={() => markDelivered(r)}><Icon name="check" size="sm" /> Mark delivered</button>
+                              use:tooltip={"Handed over to the patient"}
+                              onclick={() => markDelivered(r)}><Icon name="check" size="sm" /> Delivered</button>
                     {/if}
                     {#if undoTarget(r)}
                       <button class="btn btn-ghost btn-sm" disabled={busy === r.item_id} aria-label="Undo the last step for {r.test_name} for {r.patient_name}"
@@ -203,7 +227,7 @@
               {/if}
             </tr>
           {:else}
-            <tr><td colspan={canUpdate ? 6 : 5}><div class="empty"><Icon name="clipboard" />{search || department ? "No tests match these filters." : "Nothing here for these dates."}</div></td></tr>
+            <tr><td colspan={canUpdate ? 6 : 5}><div class="empty"><Icon name="clipboard" />{search || (department && !fixed) ? "No tests match these filters." : `No ${tab.label.toLowerCase()} tests for these dates.`}</div></td></tr>
           {/each}
         </tbody>
       </table>
@@ -213,3 +237,8 @@
     <div class="empty" aria-busy="true">Loading…</div>
   {/if}
 </section>
+
+<style>
+  .wl-tabs { gap: 4px; align-items: center; padding-right: 12px; }
+  .wl-tabs .tabs { min-width: 0; }
+</style>
