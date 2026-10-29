@@ -73,10 +73,9 @@
   --font-heading: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif; /* the brand brand font, titles only */
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 
-  /* Measured, not guessed: the longest current label ("Doctors & hospitals") at 13.5px Inter is ~125px; plus the
-     18px icon, the 10px gap, the link's 20px and the nav list's 20px of horizontal padding, with a small buffer
-     (Playwright-checked down to 190px before it wraps to two lines). */
-  --sidebar-width: 196px;
+  /* Sized to its own content (the widest menu label, or the centre's logo if that's wider) rather than a fixed
+     guess, so it's never wrong when a label or a logo changes. */
+  --sidebar-width: max-content;
   --topbar-height: 60px;
 }
 
