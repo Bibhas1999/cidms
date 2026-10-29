@@ -530,7 +530,7 @@
   <aside class="card summary" aria-labelledby="s-title" id="bill-summary">
     <div class="card-header"><h2 class="card-title" id="s-title">Summary</h2><span class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</span></div>
     <div class="card-content stack" class:is-waiting={noTests}>
-      {#if noTests}<p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to set the discount and payment.</p>{/if}
+      {#if noTests}<p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to continue.</p>{/if}
       <div class="line"><span class="text-muted">Subtotal</span><span class="money">{rupees(subtotal)}</span></div>
       <div class="field">
         <div class="label-row"><span class="label" id="disc-label">Discount</span><InfoTip about="Discount" text={discountTip} /></div>
@@ -612,7 +612,7 @@
 </FormDialog>
 
 <style>
-  .nb-grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+  .nb-grid { display: grid; grid-template-columns: minmax(0, 9fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
   .nb-main { min-width: 0; }
   .picked { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
   .summary { position: sticky; top: calc(var(--topbar-height) + 16px); }
@@ -634,7 +634,8 @@
   .disc-kind label:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
   .disc-value { flex: 1 1 0; min-width: 0; }
   .pay-row { gap: 8px; }
-  .pay-mode { flex: none; width: 140px; }
+  .pay-row .money { flex: 1 1 0; min-width: 0; }
+  .pay-mode { flex: none; width: 96px; }
   .qty { width: 72px; margin-left: auto; text-align: right; }
   .savebar, .savebar-space { display: none; }
   @media (max-width: 900px) {
