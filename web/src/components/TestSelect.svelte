@@ -92,7 +92,7 @@
       </ul>
       <div class="ts-foot">
         <span>{selected.size} on the bill · Enter ticks the highlighted test</span>
-        <button type="button" class="link-button" onclick={() => { open = false; query = ""; }}>Done</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick={() => { open = false; query = ""; }}>Done</button>
       </div>
     </div>
   {/if}
@@ -122,7 +122,7 @@
     .ts-dept { order: 3; flex: 1 1 100%; padding-left: 24px; }
     .ts-price { width: auto; }
     .ts-foot { padding: 6px 10px; }
-    .ts-foot .link-button { min-height: 40px; padding: 0 8px; }
+    .ts-foot .btn { min-height: 40px; }
   }
   @media (pointer: coarse) { .ts-row { min-height: 44px; } }
 </style>

@@ -246,7 +246,7 @@ def test_new_bill_waits_for_a_test_caps_the_payment_and_clears_its_draft(page, a
     page.locator("#pay-now").fill("900")
     assert "more than the total" in page.locator("#pay-now-error").inner_text()
     assert page.locator("#pay-now").get_attribute("aria-invalid") == "true"
-    page.get_by_role("button", name="Full amount").click()
+    page.locator("#pay-now").fill("250")
     assert page.locator("#pay-now-error").count() == 0
 
     # The draft is kept, and can be cleared.
