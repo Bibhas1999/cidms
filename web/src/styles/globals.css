@@ -448,7 +448,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
 .app { display: grid; grid-template-columns: var(--sidebar-width) 1fr; min-height: 100vh; }
 
 .sidebar {
-  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; width: var(--sidebar-width); display: flex; flex-direction: column;
   background: var(--background); border-right: 1px solid var(--border);
 }
 .sidebar-brand { height: var(--topbar-height); display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--border); }
