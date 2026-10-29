@@ -40,11 +40,11 @@
       <tr>
         <td><span class="k">Patient Name :</span> <strong class="up">{title(bill.patient_gender)}{bill.patient_name}</strong>
           <span class="gap"></span><span class="up">{ageText}/{bill.patient_gender}</span></td>
-        <td rowspan="5" class="qr">{#if qr}<img src={qr} alt="" width="70" height="70" />{/if}</td>
+        <td rowspan="4" class="qr">{#if qr}<img src={qr} alt="" width="70" height="70" />{/if}</td>
       </tr>
       <tr><td><span class="k">Patient ID</span><span class="pad"></span>: {patientNo}</td></tr>
-      <tr><td><span class="k">Mobile</span><span class="pad2"></span>: {bill.patient_mobile ? `+91${bill.patient_mobile.replace(/\D/g, "").slice(-10)}` : ""}</td></tr>
-      <tr><td><span class="k">Consultant</span><span class="pad"></span>: {bill.referring_doctor_name || "SELF"}</td></tr>
+      <tr><td><span class="k">Mobile</span><span class="pad2"></span>: {bill.patient_mobile ? `+91${bill.patient_mobile.replace(/\D/g, "").slice(-10)}` : ""}
+        <span class="gap2"></span><span class="k">Consultant :</span> {bill.referring_doctor_name || "SELF"}</td></tr>
       <tr><td><span class="k">Address</span><span class="pad"></span>: {bill.patient_address}</td></tr>
     </tbody>
   </table>
@@ -89,13 +89,15 @@
   .top .l { text-align: left; width: 30%; } .top .c { text-align: center; font-size: 18px; width: 40%; } .top .r { text-align: right; font-size: 12px; width: 30%; }
   hr { margin: 0; border: 0; border-top: 1px solid #000; }
   .provisional { margin: 4px 0 0; font-size: 11px; font-style: italic; text-align: center; }
-  .patient td { padding: 3px 0; font-size: 13px; vertical-align: top; }
+  .patient td { padding: 3px 0; font-size: 13px; line-height: 1.5; vertical-align: top; overflow-wrap: break-word; }
   .patient .k { font-weight: bold; }
   .up { text-transform: uppercase; }
   .gap { display: inline-block; width: 40px; }
+  .gap2 { display: inline-block; width: 24px; }
   .pad { display: inline-block; width: 40px; } .pad2 { display: inline-block; width: 66px; }
   .patient td:first-child { padding-right: 14px; }
   .qr { text-align: right; width: 100px; padding-left: 14px; vertical-align: top; }
+  .qr img { display: block; margin-left: auto; }
   .items { margin-top: 6px; border-top: 1px solid #000; }
   .items th { text-align: left; font-size: 13px; font-family: Verdana; border-bottom: 1px solid #000; padding: 2px; color: #000; background: none; font-weight: bold; }
   .items td { font-size: 13px; padding: 7px 2px 5px; }
@@ -117,7 +119,7 @@
     .head p { font-size: 12px; }
     .top .c { font-size: 15px; } .top .l, .top .r { font-size: 11px; }
     .patient td, .items td, .items th { font-size: 12px; }
-    .gap { width: 12px; } .pad { width: 12px; } .pad2 { width: 24px; }
+    .gap { width: 12px; } .gap2 { width: 8px; } .pad { width: 12px; } .pad2 { width: 24px; }
     .due { font-size: 14px; padding-right: 8px !important; }
     :global(body.is-printout) { background: var(--muted) !important; }
   }
