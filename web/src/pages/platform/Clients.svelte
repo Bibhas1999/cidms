@@ -20,6 +20,7 @@
   import { email, submitting, text } from "../../lib/schemas";
   import { session } from "../../lib/session.svelte";
   import { notify, toastError } from "../../lib/toast.svelte";
+  import { tooltip } from "../../lib/tooltip";
   import type { Client, Page, Plan } from "../../lib/types";
 
   const SIZE = $derived(Math.min(100, Number(router.query.get("size")) || 25));
@@ -60,6 +61,18 @@
   let dialogOpen = $state(false);
   let editing = $state<Client | null>(null);
   let slugEdited = false;
+  let shownPassword = $state<{ password: string; slug: string; name: string } | null>(null);
+  let pwCopied = $state(false);
+
+  async function copyPassword() {
+    try {
+      await navigator.clipboard.writeText(shownPassword!.password);
+      pwCopied = true;
+      notify("Password copied.");
+    } catch {
+      notify("Couldn't copy. Select the text and copy it yourself.", { kind: "warning" });
+    }
+  }
 
   const schema = z.object({
     name: text("Enter the centre's name.", 200, 2),
@@ -93,7 +106,8 @@
         notify(`${v.name} saved.`);
       } else {
         const c = await post<Client>("/api/platform/clients", { ...v, plan_id: v.plan_id || null });
-        notify(`The owner signs in at ${c.slug}.${host} with the temporary password ${v.owner_temporary_password}.`, { kind: "info", title: `${c.name} added`, duration: 0 });
+        pwCopied = false;
+        shownPassword = { password: v.owner_temporary_password, slug: c.slug, name: c.name };
       }
       dialogOpen = false;
       reload++;
@@ -223,6 +237,21 @@
       </div>
     {/if}
 </FormDialog>
+
+<Dialog open={!!shownPassword} onclose={() => (shownPassword = null)} title="Centre added" icon="check" tone="success"
+        description={shownPassword ? `The owner signs in at ${shownPassword.slug}.${host} with this temporary password. Copy it now and give it to them.` : ""}>
+  {#if shownPassword}
+    <div class="stack-sm">
+      <div class="alert alert-warning" role="alert"><Icon name="alert" /><div>This password won't be shown again. They choose their own the first time they sign in.</div></div>
+      <div class="code-box">
+        <pre class="mono" aria-label="Temporary password">{shownPassword.password}</pre>
+        <button type="button" class="btn btn-outline btn-icon btn-sm" aria-label="Copy the password" use:tooltip={pwCopied ? "Copied" : "Copy the password"}
+                onclick={copyPassword}><Icon name={pwCopied ? "check" : "clipboard"} size="sm" /></button>
+      </div>
+    </div>
+  {/if}
+  {#snippet footer()}<Button variant="primary" onclick={() => (shownPassword = null)}>{pwCopied ? "Done" : "I've saved it"}</Button>{/snippet}
+</Dialog>
 
 <Dialog bind:open={backupsOpen} title={backupsOf ? `Backups · ${backupsOf.name}` : "Backups"} icon="download" tone="info" wide
         onclose={() => (backupsOf = null)}>

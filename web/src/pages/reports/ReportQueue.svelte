@@ -1,9 +1,9 @@
 <script lang="ts">
+  import DataTable, { type Column } from "../../components/DataTable.svelte";
   import DateRange from "../../components/DateRange.svelte";
   import Icon from "../../components/Icon.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
-  import Pagination from "../../components/Pagination.svelte";
-  import RowMenu, { type RowAction } from "../../components/RowMenu.svelte";
+  import type { RowAction } from "../../components/RowMenu.svelte";
   import { get } from "../../lib/api";
   import { date, dateTime } from "../../lib/format";
   import { REPORT_STATUS, type ReportRow } from "../../lib/report-types";
@@ -91,41 +91,35 @@
     <DateRange id="rq" {from} {to} anyLabel="Any bill date" onchange={(f, t) => setQuery({ from: f || null, to: t || null, page: null })} />
   </div>
 
-  {#if loadError}
-    <div class="card-content"><div class="alert alert-destructive" role="alert"><Icon name="alert" /><div>{loadError} <button class="link-button" onclick={() => reload++}>Try again</button></div></div></div>
-  {:else if data}
-    <div class="table-wrap" aria-busy={loading}>
-      <table class="table">
-        <thead><tr><th>Bill</th><th>Patient</th><th>Test</th><th>Report</th><th>Images</th><th><span class="sr-only">Actions</span></th></tr></thead>
-        <tbody>
-          {#each data.items as r (r.item_id)}
-            <tr>
-              <td><div class="cell-title mono">{r.invoice_no}</div><div class="cell-sub">{date(r.bill_date)}</div></td>
-              <td><div class="cell-title">{r.patient_name}</div><div class="cell-sub">{[r.patient_age, r.patient_gender].filter(Boolean).join(" · ")}</div></td>
-              <td><div class="cell-title"><a href="/test-reports/{r.item_id}">{r.test_name}</a></div>
-                <div class="cell-sub">{r.department_name}{#if r.accession_no} · <span class="mono">{r.accession_no}</span>{/if}</div></td>
-              <td>
-                {#if r.report_status}
-                  <span class="badge {REPORT_STATUS[r.report_status][0]}">{REPORT_STATUS[r.report_status][1]}</span>
-                  <div class="cell-sub">{r.report_status === "signed" || r.report_status === "amended" ? `${r.signer_name || "—"} · ${dateTime(r.signed_at)}` : `${r.reported_by_name || "—"} · ${dateTime(r.updated_at)}`}</div>
-                {:else}
-                  <span class="badge badge-plain">Not started</span>
-                {/if}
-              </td>
-              <td class="tabular">{r.is_imaging ? (r.study_count ? `${r.study_count} stud${r.study_count === 1 ? "y" : "ies"}` : "None yet") : "—"}</td>
-              <td class="num"><RowMenu actions={actions(r)} label="Actions for {r.test_name}, {r.patient_name}" /></td>
-            </tr>
-          {:else}
-            <tr><td colspan="6"><div class="empty"><Icon name="clipboard" />{search || department || from || to ? "No reports match these filters." : tab.key === "pending" ? "Nothing is waiting for a report." : "Nothing here yet."}</div></td></tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    {#if data.total > 0}<Pagination page={data.page} size={data.size} total={data.total} onchange={(p) => setQuery({ page: p }, { replace: false })} />{/if}
-  {:else}
-    <div class="empty" aria-busy="true">Loading…</div>
-  {/if}
+  <DataTable label="Reports" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
+             actions={actions} actionsLabel={(r) => `Actions for ${r.test_name}, ${r.patient_name}`}
+             empty={{ icon: "clipboard",
+                      title: search || department || from || to ? "No reports match these filters." : tab.key === "pending" ? "Nothing is waiting for a report." : "Nothing here yet.",
+                      text: search || department || from || to ? "Try a longer date range, or clear the filters." : "" }}
+             columns={[
+               { key: "bill", label: "Bill", cell: billCell, mobile: "sub" },
+               { key: "patient", label: "Patient", cell: patientCell, mobile: "title" },
+               { key: "test", label: "Test", cell: testCell },
+               { key: "report", label: "Report", cell: reportCell, mobile: "field" },
+               { key: "images", label: "Images", cell: imagesCell, align: "right", optional: true, mobile: "hide" },
+             ] satisfies Column<ReportRow>[]} />
 </section>
+
+{#snippet billCell(r: ReportRow)}<span class="cell-title mono">{r.invoice_no}</span><div class="cell-sub">{date(r.bill_date)}</div>{/snippet}
+{#snippet patientCell(r: ReportRow)}<div class="cell-title">{r.patient_name}</div><div class="cell-sub">{[r.patient_age, r.patient_gender].filter(Boolean).join(" · ")}</div>{/snippet}
+{#snippet testCell(r: ReportRow)}
+  <div class="cell-title"><a href="/test-reports/{r.item_id}">{r.test_name}</a></div>
+  <div class="cell-sub">{r.department_name}{#if r.accession_no} · <span class="mono">{r.accession_no}</span>{/if}</div>
+{/snippet}
+{#snippet reportCell(r: ReportRow)}
+  {#if r.report_status}
+    <span class="badge {REPORT_STATUS[r.report_status][0]}">{REPORT_STATUS[r.report_status][1]}</span>
+    <div class="cell-sub">{r.report_status === "signed" || r.report_status === "amended" ? `${r.signer_name || "—"} · ${dateTime(r.signed_at)}` : `${r.reported_by_name || "—"} · ${dateTime(r.updated_at)}`}</div>
+  {:else}
+    <span class="badge badge-plain">Not started</span>
+  {/if}
+{/snippet}
+{#snippet imagesCell(r: ReportRow)}{r.is_imaging ? (r.study_count ? `${r.study_count} stud${r.study_count === 1 ? "y" : "ies"}` : "None yet") : "—"}{/snippet}
 
 {#if sendFor?.report_id}
   {#key sendFor.report_id}<SendWhatsApp reportId={sendFor.report_id} patientName={sendFor.patient_name} button={false} bind:open={sendOpen} />{/key}

@@ -204,7 +204,9 @@
       else if (!(err instanceof ApiError && Object.keys(err.fieldErrors).length)) notifyError(err, { title: "Couldn't amend the report" });
     }
   }
-  function cancelAmend() {
+  async function cancelAmend() {
+    if (dirty && !(await confirmDialog({ title: "Discard your changes?", message: "What's been typed since amending started is lost.",
+                                         confirmLabel: "Discard", tone: "danger" }))) return;
     amending = false;
     form.reset({ ...saved });
   }
@@ -276,7 +278,7 @@
       {#if report && (signedLike || canWrite)}
         <a class="btn btn-outline" href="/test-reports/{item.item_id}/print" target="_blank" rel="noopener"><Icon name="printer" /> Print</a>
       {/if}
-      {#if report && signedLike}<SendWhatsApp reportId={report.id} patientName={item.patient_name} />{/if}
+      {#if report && signedLike && canWrite}<SendWhatsApp reportId={report.id} patientName={item.patient_name} />{/if}
     </div>
   </div>
 

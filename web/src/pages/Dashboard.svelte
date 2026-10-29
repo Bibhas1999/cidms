@@ -296,8 +296,8 @@
             <thead><tr><th>Bill</th><th>Patient</th><th class="num">Due</th></tr></thead>
             <tbody>
               {#each data.oldest_dues as b (b.id)}
-                <tr class="is-clickable" onclick={() => navigate(`/bills/${b.id}`)}>
-                  <td><span class="cell-title mono nowrap">{b.invoice_no}</span><div class="cell-sub">{date(b.bill_date)}</div></td>
+                <tr class="is-clickable" onclick={(e) => { if (!(e.target as Element).closest("a")) navigate(`/bills/${b.id}`); }}>
+                  <td><a class="cell-title mono nowrap" href="/bills/{b.id}">{b.invoice_no}</a><div class="cell-sub">{date(b.bill_date)}</div></td>
                   <td><div class="cell-title">{b.patient_name}</div><div class="cell-sub">{b.patient_mobile || "—"}</div></td>
                   <td class="num money money-due">{rupees(b.due)}</td>
                 </tr>
