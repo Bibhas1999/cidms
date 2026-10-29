@@ -14,6 +14,19 @@ export function date(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: TZ }).format(d);
 }
 
+/** Just the time, Indian time, e.g. "6:03 PM" — for showing it beside a date already shown on its own line. */
+export function timeOf(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("en-IN", { timeStyle: "short", timeZone: TZ }).format(new Date(iso));
+}
+
+/** "Oct 29, 2026" — month spelled out (short), for a date shown on its own rather than packed into a table row. */
+export function longDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: TZ }).format(d);
+}
+
 export function shortDate(iso: string): string {
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
 }
