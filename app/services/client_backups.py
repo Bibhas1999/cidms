@@ -38,8 +38,8 @@ from app.services.backups import CYCLES, KEEP, plan_next
 FORMAT = "cidms-client-backup"
 # Put back parents first; deleted in the reverse order.
 TABLES = ["tenant_settings", "counters", "departments", "test_types", "tests", "report_templates", "referring_doctors",
-          "patients", "invoices", "invoice_items", "payments", "test_reports", "test_report_versions", "report_shares",
-          "message_deliveries", "imaging_studies", "doctor_signatures"]
+          "patients", "invoices", "invoice_items", "payments", "invoice_shares", "test_reports", "test_report_versions",
+          "report_shares", "message_deliveries", "imaging_studies", "doctor_signatures"]
 STALE = timedelta(hours=2)   # a copy still "running" this long was cut off
 CHUNK = 1000                 # rows per INSERT when restoring
 

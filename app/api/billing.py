@@ -4,21 +4,24 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import Paging, client_user, paging
 from app.core.db import DB
-from app.core.errors import Forbidden, Invalid
+from app.core.errors import Forbidden, Invalid, NotFound
 from app.core.idempotency import run_once
+from app.core.logging import client_ip
 from app.core.money import local_today
 from app.core.security import CurrentUser, require
+from app.models import Patient, TenantSettings
 from app.schemas import Page
 from app.schemas_billing import (
     BillIn,
     BillItemsStatusIn,
     BillOut,
     BillPage,
+    BillShareOut,
     BillUpdateIn,
     DaySummaryOut,
     DepartmentIn,
@@ -33,12 +36,17 @@ from app.schemas_billing import (
     PatientIn,
     PatientOut,
     PaymentIn,
+    PublicBillCentreOut,
+    PublicBillCheckIn,
+    PublicBillInfoOut,
+    PublicBillOut,
     ReasonIn,
     RefundIn,
     TestTypeIn,
     TestTypeOut,
     WorklistRowOut,
 )
+from app.services import bill_links
 from app.services.audit import AuditService
 from app.services.billing import BillFilters, BillingService, OverviewService, default_worklist_window
 from app.services.catalogue import CatalogueService
@@ -46,6 +54,11 @@ from app.services.patients import PatientService
 
 router = APIRouter(prefix="/api", tags=["billing"])
 manage_catalogue = require("catalogue.manage")
+
+
+def base_url(request: Request) -> str:
+    """This centre's address as the browser used it (for the patient's link)."""
+    return f"{request.url.scheme}://{request.headers.get('host', '')}"
 
 
 # ---------- catalogue (everyone in the centre reads it; catalogue.manage changes it) ----------
@@ -201,6 +214,38 @@ def edit_bill(invoice_id: uuid.UUID, data: BillUpdateIn, db: Session = DB, curre
     return BillingService(db, current).update(invoice_id, data)
 
 
+def _share_out(share, request: Request) -> BillShareOut:
+    if share is None:
+        return BillShareOut(exists=False, active=False, url="", created_at=None, expires_at=None, revoked_at=None, views=0, last_viewed_at=None)
+    active = bill_links.is_active(share)
+    return BillShareOut(exists=True, active=active, url=bill_links.public_url(base_url(request), share) if active else "",
+                        created_at=share.created_at, expires_at=share.expires_at, revoked_at=share.revoked_at, views=share.views,
+                        last_viewed_at=share.last_viewed_at)
+
+
+@router.get("/bills/{invoice_id}/share", response_model=BillShareOut)
+def bill_share_status(invoice_id: uuid.UUID, request: Request, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    BillingService(db, current).get(invoice_id)
+    return _share_out(bill_links.current_share(db, current.user.tenant_id, invoice_id), request)
+
+
+@router.post("/bills/{invoice_id}/share", response_model=BillShareOut)
+def bill_share_issue(invoice_id: uuid.UUID, request: Request, replace: bool = Query(False), db: Session = DB,
+                     current: CurrentUser = Depends(client_user)):
+    """The bill's QR link: whatever is already active, or a new one. `replace=true` makes a fresh one (the old
+    one, and any printed QR with it, stops working)."""
+    BillingService(db, current).get(invoice_id)
+    share = bill_links.issue(db, current.user.tenant_id, invoice_id, current.id, replace=replace)
+    return _share_out(share, request)
+
+
+@router.delete("/bills/{invoice_id}/share", response_model=BillShareOut)
+def bill_share_revoke(invoice_id: uuid.UUID, request: Request, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
+    BillingService(db, current).get(invoice_id)
+    bill_links.revoke(db, current.user.tenant_id, invoice_id, current.id)
+    return _share_out(None, request)
+
+
 @router.post("/bills/{invoice_id}/hold", response_model=BillOut)
 def hold_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
     return BillingService(db, current).hold(invoice_id, data.reason)
@@ -289,3 +334,44 @@ def overview(date_from: date | None = Query(None, alias="from"), date_to: date |
     if date_from and date_to and date_from > date_to:
         raise Invalid("The start date is after the end date.", field="from")
     return OverviewService(db, current).overview(local_today(), date_from, date_to)
+
+
+# ---------- the patient's page (no sign-in; the link's token and a check instead) ----------
+
+public_bills = APIRouter(prefix="/public/bills", tags=["public"])  # router already has prefix="/api"
+PUBLIC_HEADERS = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer"}
+
+
+def _public_tenant(request: Request) -> uuid.UUID:
+    tenant = getattr(request.state, "tenant", None)
+    if tenant is None or not tenant.is_active:
+        raise NotFound(bill_links.NOT_FOUND)
+    return tenant.id
+
+
+@public_bills.get("/{token}", response_model=PublicBillInfoOut)
+def public_bill_info(token: str, request: Request, response: Response, db: Session = DB):
+    """The centre's name and what the patient is asked for. Nothing about the bill or the patient."""
+    response.headers.update(PUBLIC_HEADERS)
+    tenant_id = _public_tenant(request)
+    _share, invoice = bill_links.find(db, tenant_id, token)
+    settings = db.get(TenantSettings, tenant_id)
+    kind, _answer = bill_links.check_kind(db, invoice)
+    return PublicBillInfoOut(centre_name=(settings.legal_name if settings else "") or request.state.tenant.name,
+                            has_logo=bool(settings and settings.logo_data), check=kind)
+
+
+@public_bills.post("/{token}/open", response_model=PublicBillOut)
+def public_bill_open(token: str, data: PublicBillCheckIn, request: Request, response: Response, db: Session = DB):
+    response.headers.update(PUBLIC_HEADERS)
+    tenant_id = _public_tenant(request)
+    _share, invoice = bill_links.check(db, tenant_id, token, data.check, client_ip(request) or "")
+    patient = db.get(Patient, invoice.patient_id)
+    settings = db.get(TenantSettings, tenant_id)
+    centre = PublicBillCentreOut(legal_name=(settings.legal_name if settings else "") or request.state.tenant.name,
+                                 address=settings.address if settings else "", phones=settings.phones if settings else "",
+                                 bill_footer=settings.bill_footer if settings else "")
+    return PublicBillOut(bill=BillOut.model_validate(invoice), patient_no=patient.patient_no if patient else "", centre=centre)
+
+
+router.include_router(public_bills)

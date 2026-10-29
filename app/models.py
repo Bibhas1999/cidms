@@ -537,6 +537,23 @@ class MessageDelivery(Base):
     updated_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow, onupdate=utcnow)
 
 
+class InvoiceShare(Base):
+    """A link to a bill for the patient (the QR code on it). Only the token's SHA-256 is stored."""
+    __tablename__ = "invoice_shares"
+    id: Mapped[uuid.UUID] = mapped_column(Id, primary_key=True, default=new_id)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    invoice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(Timestamp, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(Timestamp)
+    revoked_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    views: Mapped[int] = mapped_column(Integer, default=0)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    failed_checks: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(Timestamp)
+
+
 class ReportShare(Base):
     """A link to a signed report for the patient (the QR code on it). Only the token's SHA-256 is stored."""
     __tablename__ = "report_shares"
