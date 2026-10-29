@@ -7,10 +7,14 @@
   // Esc to close. `search` loads the matches; or `searchPage` loads them a page at a time, with more
   // fetched as the list is scrolled (long lists). `onpick` receives the chosen one.
   let { id, label, placeholder = "", search, searchPage, onpick, option, value = $bindable(""), icon = "search", minChars = 1,
-        emptyText = "No matches.", autofocus = false, inputEl = $bindable() }: {
+        emptyText = "No matches.", onadd, addLabel = "", autofocus = false, inputEl = $bindable() }: {
     id: string; label: string; placeholder?: string; search?: (q: string, signal: AbortSignal) => Promise<T[]>;
     searchPage?: (q: string, page: number, size: number, signal: AbortSignal) => Promise<{ items: T[]; total: number }>;
     onpick: (item: T) => void; option: Snippet<[T]>; value?: string; icon?: string; minChars?: number; emptyText?: string;
+    /** No matches: offer to add what was typed right there, instead of making them go find a separate button.
+     *  `addLabel` is what it's added as (e.g. "a new patient"), shown as `Add "x" as a new patient`; both are
+     *  needed for the row to show. */
+    onadd?: (text: string) => void; addLabel?: string;
     autofocus?: boolean; inputEl?: HTMLInputElement;
   } = $props();
 
@@ -82,6 +86,11 @@
             onmousedown={(e) => { e.preventDefault(); pick(item); }} onmouseenter={() => (active = i)}>{@render option(item)}</li>
       {:else}
         <li class="combo-empty" role="option" aria-selected="false" aria-disabled="true">{emptyText}</li>
+        {#if onadd && addLabel && value.trim()}
+          <li class="combo-add" role="option" aria-selected="false" onmousedown={(e) => { e.preventDefault(); open = false; onadd(value.trim()); }}>
+            <Icon name="plus" size="sm" /> Add "{value.trim()}" as {addLabel}
+          </li>
+        {/if}
       {/each}
     </ul>
   {/if}
@@ -94,6 +103,8 @@
   .combo-list li { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
   .combo-list li.is-active { background: var(--accent); }
   .combo-empty { color: var(--muted-foreground); cursor: default !important; }
+  .combo-add { display: flex; align-items: center; gap: 6px; color: var(--primary-text); font-weight: 600; }
+  .combo-add :global(.icon) { flex: none; }
   .combo-spin { position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;
     border: 2px solid var(--border); border-top-color: var(--primary); animation: combo-spin .7s linear infinite; }
   @keyframes combo-spin { to { transform: rotate(360deg); } }

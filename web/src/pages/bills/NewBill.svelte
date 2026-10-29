@@ -46,11 +46,18 @@
     address: optionalText(500),
   });
   const patientLabels = { name: "Full name", mobile: "Mobile", age_years: "Age", gender: "Gender", guardian_name: "Guardian", address: "Address" };
-  let pendingPrint = false;
+  // Added at once (like a new referring doctor), not held back until the bill is saved: picked for this bill
+  // straight away, so the next search starts fresh.
   const np = new Form({
     schema: patientSchema,
     initial: { name: "", mobile: "", age_years: null as number | null, gender: "", guardian_name: "", address: "" },
-    onSubmit: (data) => saveBill(pendingPrint, data),
+    onSubmit: async (v) => {
+      const p = await post<Patient>("/api/patients", { ...v, age_years: Number(v.age_years), gender: v.gender || "other" });
+      patient = p;
+      patientQuery = "";
+      addingPatient = false;
+      notify(`${p.name} is added to your patients and chosen for this bill.`);
+    },
   });
 
   const preset = router.query.get("patient");
@@ -185,7 +192,7 @@
   let requestKey: string = newRequestKey();
   // The summary (discount, payment, hold, save) waits for the first test: until then there's nothing to price.
   const noTests = $derived(!lines.length);
-  const dirty = $derived(!!(patient || addingPatient || lines.length || doctorText.trim() || notes.trim() || discountValue || payNow));
+  const dirty = $derived(!!(patient || lines.length || doctorText.trim() || notes.trim() || discountValue || payNow));
 
   // ---------- draft ----------
   // Everything typed is kept on this computer as it's typed (lib/drafts), so leaving the page, closing the tab
@@ -193,7 +200,7 @@
   // save was already on its way is never made twice.
   const DRAFT = "new-bill";
   interface BillDraft {
-    patient: Patient | null; addingPatient: boolean; patientQuery: string; np: typeof np.values;
+    patient: Patient | null; patientQuery: string;
     doctorText: string; doctor: Doctor | null; lines: Line[];
     discountKind: "percent" | "amount"; discountValue: string; payNow: string; payMode: PaymentMode; payRef: string;
     notes: string; hold: boolean; requestKey: string;
@@ -203,8 +210,7 @@
   let waiting = $state<Draft<BillDraft> | null>(null);   // a draft not opened (the page came for another patient)
 
   function applyDraft(d: BillDraft) {
-    patient = d.patient; addingPatient = d.addingPatient; patientQuery = d.patientQuery;
-    if (d.addingPatient) np.reset(d.np);
+    patient = d.patient; patientQuery = d.patientQuery;
     doctorText = d.doctorText; doctor = d.doctor; lines = d.lines;
     discountKind = d.discountKind; discountValue = d.discountValue; payNow = d.payNow; payMode = d.payMode; payRef = d.payRef;
     notes = d.notes; hold = d.hold; requestKey = d.requestKey || requestKey;
@@ -235,9 +241,9 @@
     requestKey = newRequestKey(); errors = {}; restored = null; waiting = null;
   }
   autosaveDraft<BillDraft>(DRAFT, () => ({
-    patient, addingPatient, patientQuery, np: np.values, doctorText, doctor, lines,
+    patient, patientQuery, doctorText, doctor, lines,
     discountKind, discountValue, payNow, payMode, payRef, notes, hold, requestKey,
-  }), (v) => !v.patient && !v.addingPatient && !v.lines.length && !v.doctorText.trim() && !v.notes.trim() && !v.discountValue && !v.payNow,
+  }), (v) => !v.patient && !v.lines.length && !v.doctorText.trim() && !v.notes.trim() && !v.discountValue && !v.payNow,
   { paused: () => finished || !!waiting });
 
   $effect(() => {
@@ -251,14 +257,13 @@
   });
 
   function save(print: boolean) {
-    if (saving || np.submitting) return;
+    if (saving) return;
     errors = {};
-    if (!patient && !addingPatient) { errors = { patient: "Choose a patient or add a new one." }; document.getElementById("patient-search")?.focus(); return; }
-    if (addingPatient) { pendingPrint = print; void np.submit(); return; }
-    void saveBill(print, null);
+    if (!patient) { errors = { patient: "Choose a patient or add a new one." }; document.getElementById("patient-search")?.focus(); return; }
+    void saveBill(print);
   }
 
-  async function saveBill(print: boolean, newPatient: z.output<typeof patientSchema> | null) {
+  async function saveBill(print: boolean) {
     if (!lines.length) { errors = { lines: "Add at least one test." }; document.getElementById("nb-test")?.focus(); return; }
     // These errors are already showing next to their boxes: go to the first one.
     const firstQty = Object.keys(qtyProblems)[0];
@@ -267,8 +272,7 @@
     if (payTooMuch) { document.getElementById("pay-now")?.focus(); return; }
     saving = true;
     const body = {
-      patient_id: patient?.id ?? null,
-      patient: newPatient ? { ...newPatient, age_years: Number(newPatient.age_years), gender: newPatient.gender || "other" } : null,
+      patient_id: patient!.id,
       referring_doctor_id: doctor && doctor.name === doctorText ? doctor.id : null,
       referring_doctor_name: doctor && doctor.name === doctorText ? "" : doctorText,
       lines: lines.map((l) => ({ test_id: l.test.id, quantity: l.quantity })),
@@ -276,7 +280,7 @@
       payments: paying > 0 ? [{ mode: payMode, amount: paying.toFixed(2), reference: payRef }] : [],
       notes, hold,
     };
-    if (!connection.usable) { await saveOffline(print, body, newPatient); return; }
+    if (!connection.usable) { await saveOffline(print, body); return; }
     try {
       const bill = await post<Bill>("/api/bills", body, { "Idempotency-Key": requestKey });
       finished = true;
@@ -288,33 +292,26 @@
     } catch (e) {
       // CIDMS couldn't be reached: keep the bill on this computer instead (same key, so if the save did get
       // through, sending it later finds that bill instead of making another).
-      if (e instanceof ApiError && e.transient) { await saveOffline(print, body, newPatient); return; }
+      if (e instanceof ApiError && e.transient) { await saveOffline(print, body); return; }
       requestKey = newRequestKey();
-      if (e instanceof ApiError && Object.keys(e.fieldErrors).length) {
-        const own: Record<string, string> = {}, theirs: Record<string, string> = {};
-        for (const [k, v] of Object.entries(e.fieldErrors)) {
-          if (k.startsWith("patient.")) theirs[k.slice(8)] = v; else own[k] = v;
-        }
-        if (Object.keys(theirs).length) { np.errors = theirs; np.submitted = true; }
-        errors = own;
-        notifyError(e, { title: "Check the bill" });
-      } else notifyError(e, { title: "Couldn't save the bill" });
+      if (e instanceof ApiError && Object.keys(e.fieldErrors).length) { errors = e.fieldErrors; notifyError(e, { title: "Check the bill" }); }
+      else notifyError(e, { title: "Couldn't save the bill" });
     } finally {
       saving = false;
     }
   }
 
-  async function saveOffline(print: boolean, body: Record<string, unknown>, newPatient: z.output<typeof patientSchema> | null) {
+  async function saveOffline(print: boolean, body: Record<string, unknown>) {
     saving = true;
     try {
       const now = new Date().toISOString();
       const who = session.me?.full_name ?? "";
-      const p = patient ?? null;
+      const p = patient!;
       const record = await saveOfflineBill(requestKey, body, {
-        legacy_no: null, patient_id: p?.id ?? "", patient_name: (p?.name ?? newPatient?.name ?? "").replace(/\s+/g, " ").trim(),
-        patient_mobile: p?.mobile ?? newPatient?.mobile ?? "", patient_age: `${p?.age_years ?? newPatient?.age_years ?? ""} Y`,
-        patient_gender: p?.gender ?? newPatient?.gender ?? "other", patient_address: p?.address ?? newPatient?.address ?? "",
-        guardian_name: p?.guardian_name ?? newPatient?.guardian_name ?? "",
+        legacy_no: null, patient_id: p.id, patient_name: p.name.replace(/\s+/g, " ").trim(),
+        patient_mobile: p.mobile, patient_age: `${p.age_years ?? ""} Y`,
+        patient_gender: p.gender, patient_address: p.address,
+        guardian_name: p.guardian_name,
         referring_doctor_id: doctor && doctor.name === doctorText ? doctor.id : null, referring_doctor_name: doctorText.trim(),
         status: hold ? "on_hold" : "confirmed", subtotal: subtotal.toFixed(2), discount_type: discountType,
         discount_value: discountType === "none" ? "0" : String(Number(discountValue) || 0), discount_amount: discount.toFixed(2),
@@ -326,7 +323,7 @@
         })),
         payments: paying > 0 ? [{ id: "pay-1", kind: "payment" as const, amount: paying.toFixed(2), mode: payMode, reference: payRef, note: "",
                                   received_at: now, received_by_name: who }] : [],
-      }, p?.patient_no ?? "");
+      }, p.patient_no);
       finished = true;
       clearDraft(DRAFT);
       setBeforeLeave(null);
@@ -397,11 +394,11 @@
               <div class="font-semibold">{patient.name} <span class="badge badge-navy badge-plain mono">{patient.patient_no}</span></div>
               <div class="text-sm text-muted">{[patient.age_years !== null ? `${patient.age_years} Y` : "", patient.gender, formatPhone(patient.mobile), patient.guardian_name ? `C/O ${patient.guardian_name}` : ""].filter(Boolean).join(" · ")}</div>
             </div>
-            <Button variant="ghost" size="sm" onclick={() => (patient = null)}>Change</Button>
+            <Button variant="ghost" size="sm" onclick={() => { patient = null; patientQuery = ""; }}>Change</Button>
           </div>
-        {:else if !addingPatient}
+        {:else}
           <Combobox id="patient-search" label="Find a patient" placeholder="Name, mobile or patient number…" searchPage={searchPatients} bind:value={patientQuery}
-                    onpick={(p) => (patient = p)} autofocus emptyText="No patient found. Add them as a new patient.">
+                    onpick={(p) => { patient = p; patientQuery = ""; }} onadd={startNewPatient} addLabel="a new patient" autofocus emptyText="No patient found.">
             {#snippet option(p)}
               <div class="row-between"><span><span class="font-semibold">{p.name}</span> <span class="text-xs text-muted mono">{p.patient_no}</span></span>
                 <span class="text-sm text-muted tabular">{formatPhone(p.mobile) || "—"}</span></div>
@@ -410,46 +407,6 @@
           </Combobox>
           <div><Button size="sm" icon="plus" onclick={startNewPatient}>New patient</Button></div>
           {#if errors.patient}<p class="field-error"><Icon name="alert" size="sm" />{errors.patient}</p>{/if}
-        {:else}
-          <FormErrors form={np} labels={patientLabels} idPrefix="np-" />
-          <div class="form-grid">
-            <Field id="np-name" label="Full name" required error={np.error("name")}>
-              {#snippet children({ invalid, describedby })}<input id="np-name" class="input" autocomplete="off" bind:value={np.values.name} {...np.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-            </Field>
-            <Field id="np-mobile" label="Mobile" optional error={np.error("mobile")}
-                   tip="Others already registered with this number are shown, so a family member isn't added twice. Bills and reports can be sent here.">
-              {#snippet children({ invalid, describedby })}
-                {@const f = np.field("mobile")}
-                <PhoneInput id="np-mobile" bind:value={np.values.mobile} {invalid} {describedby} onblur={f.onblur} oninput={onMobile} />
-              {/snippet}
-            </Field>
-          </div>
-          {#if family.length}
-            <div class="alert alert-info"><Icon name="info" /><div><div class="alert-title">Already registered with this mobile</div>
-              <div class="row-wrap family">
-                {#each family as f (f.id)}<Button size="sm" onclick={() => { patient = f; addingPatient = false; }}>{f.name} · {f.age_years ?? "?"} Y</Button>{/each}
-              </div><div class="text-xs family-note">Pick one if it's the same person, or carry on for a family member.</div></div></div>
-          {/if}
-          <div class="form-grid three">
-            <Field id="np-age_years" label="Age (years)" required error={np.error("age_years")}
-                   tip="In completed years; 0 for a baby under one. The date of birth can be added later on the patient's page, and the age is then worked out from it.">
-              {#snippet children({ invalid, describedby })}<input id="np-age_years" class="input tabular" type="number" min="0" max="130" inputmode="numeric" bind:value={np.values.age_years} {...np.field("age_years")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-            </Field>
-            <Field id="np-gender" label="Gender" required error={np.error("gender")}>
-              {#snippet children({ invalid, describedby })}
-                <select id="np-gender" class="select" bind:value={np.values.gender} {...np.field("gender")} aria-invalid={invalid} aria-describedby={describedby}>
-                  <option value="" disabled>Choose…</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
-                </select>
-              {/snippet}
-            </Field>
-            <Field id="np-guardian_name" label="Guardian (C/O)" optional error={np.error("guardian_name")} tip="Father, husband or whoever the patient comes with. Printed on the bill as C/O.">
-              {#snippet children({ invalid, describedby })}<input id="np-guardian_name" class="input" bind:value={np.values.guardian_name} {...np.field("guardian_name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-            </Field>
-          </div>
-          <Field id="np-address" label="Address" optional error={np.error("address")}>
-            {#snippet children({ invalid, describedby })}<input id="np-address" class="input" bind:value={np.values.address} {...np.field("address")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
-          </Field>
-          <div><button class="link-button" type="button" onclick={() => (addingPatient = false)}>Search existing patients instead</button></div>
         {/if}
       </div>
     </section>
@@ -471,7 +428,7 @@
         {:else}
           <Combobox id="doctor" label="Find a doctor or hospital" placeholder="Name, degree or phone… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
                     bind:value={doctorText} onpick={(d) => { doctor = d; doctorText = d.name; }}
-                    emptyText="Not in your list yet. Press New doctor / hospital to add them.">
+                    onadd={startNewDoctor} addLabel="a new doctor or hospital" emptyText="Not in your list yet.">
             {#snippet option(d)}
               <div class="row-between"><span class="font-semibold">{d.name}</span>
                 <span class="text-sm text-muted tabular">{formatPhone(d.phone) || "—"}</span></div>
@@ -611,8 +568,52 @@
     </div>
 </FormDialog>
 
+<FormDialog bind:open={addingPatient} title="Add a new patient" icon="user" tone="info"
+            description="Added to your list of patients and chosen for this bill."
+            submitLabel="Add" submitIcon="check" busy={np.submitting} busyLabel="Adding…"
+            onsubmit={submitting(np, "Couldn't add the patient")}>
+    <FormErrors form={np} labels={patientLabels} idPrefix="np-" />
+    <div class="form-grid">
+      <Field id="np-name" label="Full name" required error={np.error("name")}>
+        {#snippet children({ invalid, describedby })}<input id="np-name" class="input" autocomplete="off" bind:value={np.values.name} {...np.field("name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+      </Field>
+      <Field id="np-mobile" label="Mobile" optional error={np.error("mobile")}
+             tip="Others already registered with this number are shown, so a family member isn't added twice. Bills and reports can be sent here.">
+        {#snippet children({ invalid, describedby })}
+          {@const f = np.field("mobile")}
+          <PhoneInput id="np-mobile" bind:value={np.values.mobile} {invalid} {describedby} onblur={f.onblur} oninput={onMobile} />
+        {/snippet}
+      </Field>
+    </div>
+    {#if family.length}
+      <div class="alert alert-info"><Icon name="info" /><div><div class="alert-title">Already registered with this mobile</div>
+        <div class="row-wrap family">
+          {#each family as f (f.id)}<Button size="sm" onclick={() => { patient = f; patientQuery = ""; addingPatient = false; }}>{f.name} · {f.age_years ?? "?"} Y</Button>{/each}
+        </div><div class="text-xs family-note">Pick one if it's the same person, or carry on for a family member.</div></div></div>
+    {/if}
+    <div class="form-grid three">
+      <Field id="np-age_years" label="Age (years)" required error={np.error("age_years")}
+             tip="In completed years; 0 for a baby under one. The date of birth can be added later on the patient's page, and the age is then worked out from it.">
+        {#snippet children({ invalid, describedby })}<input id="np-age_years" class="input tabular" type="number" min="0" max="130" inputmode="numeric" bind:value={np.values.age_years} {...np.field("age_years")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+      </Field>
+      <Field id="np-gender" label="Gender" required error={np.error("gender")}>
+        {#snippet children({ invalid, describedby })}
+          <select id="np-gender" class="select" bind:value={np.values.gender} {...np.field("gender")} aria-invalid={invalid} aria-describedby={describedby}>
+            <option value="" disabled>Choose…</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
+          </select>
+        {/snippet}
+      </Field>
+      <Field id="np-guardian_name" label="Guardian (C/O)" optional error={np.error("guardian_name")} tip="Father, husband or whoever the patient comes with. Printed on the bill as C/O.">
+        {#snippet children({ invalid, describedby })}<input id="np-guardian_name" class="input" bind:value={np.values.guardian_name} {...np.field("guardian_name")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+      </Field>
+    </div>
+    <Field id="np-address" label="Address" optional error={np.error("address")}>
+      {#snippet children({ invalid, describedby })}<input id="np-address" class="input" bind:value={np.values.address} {...np.field("address")} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
+    </Field>
+</FormDialog>
+
 <style>
-  .nb-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+  .nb-grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
   .nb-main { min-width: 0; }
   .picked { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
   .summary { position: sticky; top: calc(var(--topbar-height) + 16px); }
