@@ -13,7 +13,8 @@
   import { get } from "../../lib/api";
   import { PAYMENT_MODES, type BillPage, type Doctor, type LabTest } from "../../lib/bill-types";
   import { rangeLabel, thisMonth } from "../../lib/dates";
-  import { count, date, dateTime, rupees } from "../../lib/format";
+  import { count, dateTime, longDate, rupees, timeOf } from "../../lib/format";
+  import { formatPhone } from "../../lib/phone";
   import { router, setQuery } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
   import { tooltip } from "../../lib/tooltip";
@@ -118,10 +119,10 @@
 </script>
 
 {#snippet billCell(b: BillSummary)}
-  <a class="cell-title mono nowrap" href="/bills/{b.id}">{b.invoice_no}</a><span class="m-inline-sep" aria-hidden="true"> · </span><div class="cell-sub nowrap bill-date">{date(b.bill_date)}</div>
+  <a class="cell-title mono nowrap" href="/bills/{b.id}">{b.invoice_no}</a><div class="cell-sub nowrap">{longDate(b.bill_date)} {timeOf(b.created_at)}</div>
 {/snippet}
 {#snippet patientCell(b: BillSummary)}
-  <div class="cell-title">{b.patient_name}</div><div class="cell-sub tabular">{b.patient_mobile || "—"}</div>
+  <div class="cell-title">{b.patient_name}</div><div class="cell-sub tabular">{formatPhone(b.patient_mobile) || "—"}</div>
 {/snippet}
 {#snippet doctorCell(b: BillSummary)}<span class="text-sm">{b.referring_doctor_name ? nice(b.referring_doctor_name) : "Self"}</span>{/snippet}
 {#snippet totalCell(b: BillSummary)}<span class="money">{rupees(b.total)}</span>{/snippet}
@@ -272,7 +273,7 @@
              empty={{ icon: dues ? "wallet" : "receipt", title: filtered ? "No bills match these filters." : dues ? "No dues. Everything is paid." : "No bills yet.",
                       text: filtered ? "Try a longer date range, or clear the filters." : "" }}
              columns={[
-               { key: "bill", label: "Bill", cell: billCell, mobile: "sub" },
+               { key: "bill", label: "Bill ID", cell: billCell, mobile: "sub" },
                { key: "patient", label: "Patient", cell: patientCell, mobile: "title" },
                { key: "doctor", label: "Referred by", cell: doctorCell, optional: true },
                { key: "total", label: "Total", cell: totalCell, align: "right", tip: "After discount." },
@@ -289,10 +290,7 @@
   .range { border: 0; padding: 0; margin: 0; min-width: 0; }
   .range-legend { padding: 0; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 2px; }
   .range-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
-  .m-inline-sep { display: none; }
   @media (max-width: 640px) {
     :global(.dt-table td.m-sub) :global(.cell-title.mono) { font-weight: 500; color: var(--muted-foreground); }
-    .m-inline-sep { display: inline; color: var(--muted-foreground); }
-    .bill-date { display: inline; }
   }
 </style>
