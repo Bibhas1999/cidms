@@ -84,6 +84,7 @@
         <div class="empty" aria-busy="true">Loading…</div>
       {:else}
         <form class="card-content stack" onsubmit={open} novalidate>
+          {#if info.has_logo}<img class="gate-logo" src="/api/workspace/logo" alt="" />{/if}
           <div>
             <p class="eyebrow">{info.centre_name}</p>
             <h1 class="gate-title">Your bill</h1>
@@ -110,5 +111,6 @@
   .gate { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
   .gate-card { width: 100%; max-width: 400px; }
   .gate-title { font-size: 20px; margin: 2px 0 4px; }
+  .gate-logo { max-height: 56px; max-width: 160px; object-fit: contain; align-self: flex-start; }
   @media print { .screen-only { display: none !important; } :global(body.is-printout) { background: #fff !important; } }
 </style>

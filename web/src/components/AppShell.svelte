@@ -9,6 +9,7 @@
   import { session } from "../lib/session.svelte";
   import { applyTheme, getTheme, type Theme } from "../lib/theme";
   import Avatar from "./Avatar.svelte";
+  import Credit from "./Credit.svelte";
   import NotificationBell from "./NotificationBell.svelte";
   import Icon from "./Icon.svelte";
 
@@ -43,6 +44,27 @@
   let theme = $state<Theme>(getTheme());
   let menuButton = $state<HTMLButtonElement>();
   let menu = $state<HTMLElement>();
+  let navToggle = $state<HTMLButtonElement>();
+  let sidebarEl = $state<HTMLElement>();
+
+  // The desktop sidebar: full (icon + label), half (icon only, the label as a hover tooltip) or hidden
+  // (the page takes the room). Remembered per browser; only matters above the 900px breakpoint where the
+  // sidebar is static rather than the phone/tablet drawer `navOpen` governs.
+  type SidebarMode = "full" | "half" | "hidden";
+  function readSidebarMode(): SidebarMode {
+    try {
+      const v = localStorage.getItem("sidebar-mode");
+      if (v === "full" || v === "half" || v === "hidden") return v;
+    } catch { /* private browsing, blocked storage: default to full */ }
+    return "full";
+  }
+  let sidebarMode = $state<SidebarMode>(readSidebarMode());
+  const NEXT_MODE: Record<SidebarMode, SidebarMode> = { full: "half", half: "hidden", hidden: "full" };
+  const NEXT_MODE_LABEL: Record<SidebarMode, string> = { full: "Collapse to icons only", half: "Hide the sidebar", hidden: "Show the full sidebar" };
+  $effect(() => {
+    try { localStorage.setItem("sidebar-mode", sidebarMode); } catch { /* ignore */ }
+  });
+  function cycleSidebar() { sidebarMode = NEXT_MODE[sidebarMode]; }
 
   $effect(() => {
     router.path; // close menus after moving to another page
@@ -64,10 +86,21 @@
     return () => { document.removeEventListener("click", onClick); document.removeEventListener("keydown", onKey); };
   });
 
-  // Phones and tablets: the sidebar is a drawer. Esc closes it; the page behind doesn't scroll while it's open.
+  // Phones and tablets: the sidebar is a drawer. Opening it moves focus inside and traps Tab there; Esc closes
+  // it and gives focus back to the toggle button; the page behind doesn't scroll while it's open.
   $effect(() => {
     if (!navOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") navOpen = false; };
+    const focusables = () => [...(sidebarEl?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])") ?? [])];
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { navOpen = false; navToggle?.focus(); return; }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
     document.documentElement.classList.add("nav-locked");
     return () => { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("nav-locked"); };
@@ -97,10 +130,14 @@
 </script>
 
 <a class="skip-link" href="#main">Skip to main content</a>
-<div class="app" class:nav-open={navOpen}>
-  <aside class="sidebar" aria-label="Main navigation">
+<div class="app" class:nav-open={navOpen} class:sidebar-half={sidebarMode === "half"} class:sidebar-hidden={sidebarMode === "hidden"}>
+  <aside class="sidebar" aria-label="Main navigation" bind:this={sidebarEl}>
     <div class="sidebar-brand">
-      {#if !session.isPlatform && ws?.wordmark_url}
+      {#if sidebarMode === "half"}
+        <a href="/" class="link-reset row brand-link brand-link-half" aria-label="{session.isPlatform ? 'CIDMS' : ws?.name}: dashboard">
+          {#if ws?.logo_url}<img class="centre-logo" src={ws.logo_url} alt="" width="34" height="34" />{:else}<span class="centre-mark"><Icon name="activity" /></span>{/if}
+        </a>
+      {:else if !session.isPlatform && ws?.wordmark_url}
         <a href="/" class="link-reset brand-link wordmark-link" aria-label="{ws.name}: dashboard">
           <img class="centre-wordmark" src={ws.wordmark_url} alt={ws.name} />
         </a>
@@ -122,20 +159,34 @@
       {#each sections as section (section.heading)}
         <div class="nav-heading" role="presentation">{section.heading}</div>
         {#each section.items as item (item.href)}
-          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>
+          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}
+             use:tooltip={{ text: sidebarMode === "half" ? item.label : "", placement: "top" }}>
             <Icon name={item.icon} /><span>{item.label}</span>
           </a>
         {/each}
       {/each}
     </nav>
-    <div class="sidebar-footer"><a class="terms-link" href="/terms">Terms</a></div>
+    <div class="sidebar-footer">
+      {#if sidebarMode !== "half"}<Credit /><a class="terms-link" href="/terms">Terms</a>{/if}
+    </div>
   </aside>
   {#if navOpen}<button class="nav-backdrop" type="button" aria-label="Close menu" onclick={() => (navOpen = false)}></button>{/if}
 
   <div class="main">
     <header class="topbar">
-      <button class="btn btn-ghost btn-icon menu-toggle" type="button" aria-label={navOpen ? "Close menu" : "Open menu"} use:tooltip={navOpen ? "Close menu" : "Open menu"}
+      <button class="btn btn-ghost btn-icon menu-toggle" type="button" bind:this={navToggle} aria-label={navOpen ? "Close menu" : "Open menu"} use:tooltip={navOpen ? "Close menu" : "Open menu"}
               aria-expanded={navOpen} onclick={() => (navOpen = !navOpen)}><Icon name="menu" /></button>
+      <button class="btn btn-ghost btn-icon sidebar-toggle" type="button" use:tooltip={NEXT_MODE_LABEL[sidebarMode]} aria-label={NEXT_MODE_LABEL[sidebarMode]}
+              onclick={cycleSidebar}><Icon name="panelLeft" /></button>
+      {#if sidebarMode === "hidden"}
+        <a href="/" class="link-reset row topbar-brand" aria-label="{session.isPlatform ? 'CIDMS' : ws?.name}: dashboard">
+          {#if ws?.logo_url}
+            <img class="topbar-logo" src={ws.logo_url} alt="" width="28" height="28" />
+          {:else}
+            <span class="centre-mark topbar-mark"><Icon name="activity" /></span>
+          {/if}
+        </a>
+      {/if}
       <nav class="breadcrumbs grow" aria-label="Breadcrumb">
         <a href="/" class="text-muted">{session.isPlatform ? "Platform" : ws?.name}</a>
         <Icon name="chevronRight" size="sm" />
@@ -196,7 +247,39 @@
   /* Room above and below the wordmark, so it doesn't sit on the top edge of the window. */
   .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; padding: 10px 0; box-sizing: border-box; }
   .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 40px; object-fit: contain; object-position: left center; }
-  .sidebar-footer { display: flex; align-items: center; gap: 8px; }
+  .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
   .terms-link:hover { color: var(--foreground); text-decoration: underline; }
+
+  /* The desktop sidebar's three widths: full (icon + label), half (icon only) and hidden (the page takes the
+     room), cycled from one toggle in the topbar (so it's reachable whichever width the sidebar is at right
+     now). Only above the 900px breakpoint — on phones/tablets the sidebar stays the drawer `navOpen` opens. */
+  .app { transition: grid-template-columns .15s ease; }
+  .app.sidebar-half { grid-template-columns: 64px 1fr; }
+  .app.sidebar-hidden { grid-template-columns: 1fr; }
+  .app.sidebar-hidden .sidebar { display: none; }
+
+  .sidebar-half .sidebar-brand { padding-left: 0; padding-right: 0; justify-content: center; }
+  .brand-link-half { justify-content: center; padding: 8px 0; }
+  .sidebar-half .nav-heading { display: none; }
+  .sidebar-half .nav-link { justify-content: center; padding: 0; gap: 0; }
+  /* Visually hidden, not display:none: the link's accessible name still comes from this text, same as a
+     sighted mouse user getting it from the hover tooltip instead of reading it on the rail. */
+  .sidebar-half .nav-link span {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* Hidden: the sidebar's own logo is gone with it, so the topbar shows a small one in its place. */
+  .topbar-brand { flex: none; margin-right: 4px; }
+  .topbar-logo { width: 28px; height: 28px; border-radius: 7px; object-fit: contain; flex: none; }
+  .topbar-mark { width: 28px; height: 28px; font-size: 13px; }
+
+  @media (max-width: 900px) {
+    /* Phones/tablets keep the drawer: full/half/hidden is a desktop-only preference. */
+    .app.sidebar-half, .app.sidebar-hidden { grid-template-columns: var(--sidebar-width) 1fr; }
+    .app.sidebar-hidden .sidebar { display: flex; }
+    .sidebar-toggle, .topbar-brand { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .app { transition: none; } }
 </style>

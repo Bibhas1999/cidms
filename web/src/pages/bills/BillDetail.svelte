@@ -347,7 +347,7 @@
           {#snippet children()}<select id="ref-mode" class="select" bind:value={mode}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>{/snippet}
         </Field>
       </div>
-      <Field id="ref-note" label="Reason" required error={errors.note}>
+      <Field id="ref-note" label="Reason" required hint="At least 3 characters." error={errors.note}>
         {#snippet children({ invalid, describedby })}<textarea id="ref-note" class="textarea" style="min-height: 72px" bind:value={note} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
   </FormDialog>
@@ -358,7 +358,7 @@
           submitLabel={reasonOpen === "cancel" ? "Cancel bill" : "Put on hold"} submitVariant={reasonOpen === "cancel" ? "destructive" : "primary"}
           cancelLabel="Keep it" oncancel={() => (reasonOpen = "")} {busy} disabled={reason.trim().length < 3 || (reasonOpen === "cancel" && paid > 0)}
           onsubmit={() => setStatus(reasonOpen as "hold" | "cancel")}>
-      <Field id="reason" label="Reason" required error={errors.reason}>
+      <Field id="reason" label="Reason" required hint="At least 3 characters." error={errors.reason}>
         {#snippet children({ invalid, describedby })}<textarea id="reason" class="textarea" style="min-height: 72px" bind:value={reason} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
       </Field>
   </FormDialog>

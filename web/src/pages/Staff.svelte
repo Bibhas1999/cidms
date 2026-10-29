@@ -58,6 +58,18 @@
   // ---------- add / edit ----------
   let dialogOpen = $state(false);
   let editing = $state<Staff | null>(null);
+  let shownPassword = $state<{ password: string; name: string; reset: boolean } | null>(null);
+  let pwCopied = $state(false);
+
+  async function copyPassword() {
+    try {
+      await navigator.clipboard.writeText(shownPassword!.password);
+      pwCopied = true;
+      notify("Password copied.");
+    } catch {
+      notify("Couldn't copy. Select the text and copy it yourself.", { kind: "warning" });
+    }
+  }
 
   const schema = z.object({
     full_name: text("Enter their full name.", 200, 2),
@@ -85,8 +97,8 @@
       } else {
         const made = await post<{ temporary_password: string }>("/api/staff", { full_name: v.full_name, email: v.email.trim(), mobile: v.mobile,
                                                                                 role_ids: v.role_ids, temporary_password: v.temporary_password });
-        notify(`Give them this temporary password: ${made.temporary_password}. It's shown only now. They choose their own when they first sign in.`,
-               { kind: "info", title: `${v.full_name} added`, duration: 0 });
+        pwCopied = false;
+        shownPassword = { password: made.temporary_password, name: v.full_name, reset: false };
       }
       dialogOpen = false;
       reload++;
@@ -123,7 +135,8 @@
                                 message: "They'll be signed out everywhere and get a temporary password to change at their next sign-in." }))) return;
     try {
       const { temporary_password: pw } = await post<{ temporary_password: string }>(`/api/staff/${who.id}/reset-password`, {});
-      notify(`Their temporary password is ${pw}. It's shown only now. They've been signed out everywhere.`, { kind: "info", title: `Password reset for ${who.full_name}`, duration: 0 });
+      pwCopied = false;
+      shownPassword = { password: pw, name: who.full_name, reset: true };
       dialogOpen = false;
       reload++;
     } catch (e) {
@@ -255,6 +268,22 @@
     <Button onclick={() => (dialogOpen = false)}>Cancel</Button>
     <Button variant="primary" type="submit" form="staff-form" loading={form.submitting} loadingText="Saving…">{editing ? "Save changes" : "Add person"}</Button>
   {/snippet}
+</Dialog>
+
+<Dialog open={!!shownPassword} onclose={() => (shownPassword = null)} title={shownPassword?.reset ? "Password reset" : "Person added"} icon="check" tone="success"
+        description={shownPassword ? `For ${shownPassword.name}. Copy it now and give it to them.` : ""}>
+  {#if shownPassword}
+    <div class="stack-sm">
+      <div class="alert alert-warning" role="alert"><Icon name="alert" /><div>This password won't be shown again
+        {shownPassword.reset ? "— they've been signed out everywhere" : ""}. They choose their own the first time they sign in.</div></div>
+      <div class="code-box">
+        <pre class="mono" aria-label="Temporary password">{shownPassword.password}</pre>
+        <button type="button" class="btn btn-outline btn-icon btn-sm" aria-label="Copy the password" use:tooltip={pwCopied ? "Copied" : "Copy the password"}
+                onclick={copyPassword}><Icon name={pwCopied ? "check" : "clipboard"} size="sm" /></button>
+      </div>
+    </div>
+  {/if}
+  {#snippet footer()}<Button variant="primary" onclick={() => (shownPassword = null)}>{pwCopied ? "Done" : "I've saved it"}</Button>{/snippet}
 </Dialog>
 
 <style>
