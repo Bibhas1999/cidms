@@ -352,9 +352,6 @@
 {/snippet}
 {#snippet lineTotal(l: Line)}<span class="money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</span>{/snippet}
 {#snippet testsFoot()}
-  {#if noTests}
-    <tr class="tf-row"><td colspan="5"><p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to continue.</p></td></tr>
-  {/if}
   <tr class="tf-row" class:is-waiting={noTests}>
     <td colspan="5">
       <div class="tf-subtotal">
@@ -401,7 +398,6 @@
             <div class="row pay-row">
               <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
                      aria-invalid={invalid} aria-describedby={describedby} />
-              {#if total > 0}<button class="link-button" type="button" disabled={noTests} onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}
               <label class="sr-only" for="pay-mode">Paid by</label>
               <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
             </div>
@@ -700,7 +696,6 @@
   .disc-value { flex: none; width: 110px; }
   .pay-row { gap: 8px; }
   .pay-row .money { flex: none; width: 110px; }
-  .pay-row .link-button { flex: none; white-space: nowrap; font-size: 13px; }
   .pay-mode { flex: none; width: 96px; }
   .qty { width: 72px; margin-left: auto; text-align: right; }
   .savebar, .savebar-space { display: none; }
@@ -727,9 +722,6 @@
   @media (max-width: 600px) { .draft-note { flex-wrap: wrap; } }
   /* Until a test is added the foot's controls are switched off (the help buttons still work). */
   .is-waiting .disc-kind label { opacity: .55; cursor: not-allowed; }
-  .waiting-note { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 4px; padding: 8px 10px; border-radius: 8px;
-    background: var(--card); color: var(--muted-foreground); }
-  .waiting-note :global(.icon) { flex: none; margin-top: 2px; }
   .field-hint { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; font-size: 12.5px; color: var(--primary-text); }
   .draft-saved { display: inline-flex; align-items: center; gap: 5px; }
 </style>

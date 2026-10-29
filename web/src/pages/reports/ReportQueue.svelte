@@ -5,6 +5,7 @@
   import PageHeader from "../../components/PageHeader.svelte";
   import type { RowAction } from "../../components/RowMenu.svelte";
   import { get } from "../../lib/api";
+  import { thisMonth } from "../../lib/dates";
   import { date, dateTime } from "../../lib/format";
   import { REPORT_STATUS, type ReportRow } from "../../lib/report-types";
   import { router, setQuery } from "../../lib/router.svelte";
@@ -25,8 +26,11 @@
   const page = $derived(Number(router.query.get("page") ?? 1) || 1);
   const search = $derived(router.query.get("search") ?? "");
   const department = $derived(router.query.get("department") ?? "");
-  const from = $derived(router.query.get("from") ?? "");
-  const to = $derived(router.query.get("to") ?? "");
+  // Nothing in the address = this month (the default everywhere); ?from=all = any bill date.
+  const month = thisMonth();
+  const allPicked = $derived(router.query.get("from") === "all");
+  const from = $derived(allPicked ? "" : router.query.get("from") ?? month.from);
+  const to = $derived(allPicked ? "" : router.query.get("to") ?? (router.query.has("from") ? "" : month.to));
 
   let data = $state<Page<ReportRow> | null>(null);
   let loadError = $state("");
@@ -88,14 +92,15 @@
       <option value="">All departments</option>
       {#each departments as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
     </select>
-    <DateRange id="rq" {from} {to} anyLabel="Any bill date" onchange={(f, t) => setQuery({ from: f || null, to: t || null, page: null })} />
+    <DateRange id="rq" {from} {to} anyLabel="Any bill date"
+               onchange={(f, t) => setQuery(!f && !t ? { from: "all", to: null, page: null } : f === month.from && t === month.to ? { from: null, to: null, page: null } : { from: f, to: t, page: null })} />
   </div>
 
   <DataTable label="Reports" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
              actions={actions} actionsLabel={(r) => `Actions for ${r.test_name}, ${r.patient_name}`}
              empty={{ icon: "clipboard",
-                      title: search || department || from || to ? "No reports match these filters." : tab.key === "pending" ? "Nothing is waiting for a report." : "Nothing here yet.",
-                      text: search || department || from || to ? "Try a longer date range, or clear the filters." : "" }}
+                      title: search || department ? "No reports match these filters." : tab.key === "pending" ? "Nothing is waiting for a report." : "Nothing here yet.",
+                      text: search || department ? "Try a longer date range, or clear the filters." : "" }}
              columns={[
                { key: "bill", label: "Bill", cell: billCell, mobile: "sub" },
                { key: "patient", label: "Patient", cell: patientCell, mobile: "title" },
