@@ -401,6 +401,7 @@
             <div class="row pay-row">
               <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
                      aria-invalid={invalid} aria-describedby={describedby} />
+              {#if total > 0}<button class="link-button" type="button" disabled={noTests} onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}
               <label class="sr-only" for="pay-mode">Paid by</label>
               <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
             </div>
@@ -699,6 +700,7 @@
   .disc-value { flex: none; width: 110px; }
   .pay-row { gap: 8px; }
   .pay-row .money { flex: none; width: 110px; }
+  .pay-row .link-button { flex: none; white-space: nowrap; font-size: 13px; }
   .pay-mode { flex: none; width: 96px; }
   .qty { width: 72px; margin-left: auto; text-align: right; }
   .savebar, .savebar-space { display: none; }
