@@ -49,7 +49,9 @@
 
   const isPicked = (t: LabTest) => selected.has(t.id);
   function toggle(t: LabTest) {
-    ontoggle(t, !isPicked(t));
+    const adding = !isPicked(t);
+    ontoggle(t, adding);
+    if (adding) query = "";  // ready for the next search; the list stays open
     queueMicrotask(() => inputEl?.focus());
   }
 
