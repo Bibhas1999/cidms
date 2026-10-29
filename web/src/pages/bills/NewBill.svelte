@@ -159,7 +159,7 @@
   const paying = $derived(Math.min(total, round2(Number(payNow) || 0)));
   // Paid now can't be more than the bill. Typed above it (or the total drops below it after a test is taken off or
   // the discount goes up), the amount stays as typed and an error shows under the box at once; the bill can't be
-  // saved until it's put right ("Full amount" sets it to the total).
+  // saved until it's put right.
   // The discount box, checked as it's typed: a percentage above 100, rupees above the subtotal, or less than 0.
   const discountProblem = $derived.by(() => {
     if (discountValue === "" || discountValue === null) return "";
@@ -173,11 +173,6 @@
   $effect(() => { if (payNow !== "" && Number(payNow) < 0) payNow = ""; });
   const dueAfter = $derived(round2(total - paying));
   const overLimit = $derived(maxDiscount !== null && subtotal > 0 && discount * 100 > subtotal * maxDiscount);
-
-  const discountTip = $derived(
-    `A percentage of the subtotal, or a fixed amount in rupees. ${maxDiscount !== null ? `The centre allows up to ${maxDiscount}% ` : "The centre sets a limit "}` +
-    (overLimitOk ? "(you may go above it)." : "without the owner's permission; ask the owner for more."),
-  );
 
   // ---------- save ----------
   let errors = $state<Record<string, string>>({});
@@ -250,8 +245,9 @@
     return () => setBeforeLeave(null);
   });
 
-  function save(print: boolean) {
+  function save(print: boolean, holdNow = false) {
     if (saving || np.submitting) return;
+    hold = holdNow;
     errors = {};
     if (!patient && !addingPatient) { errors = { patient: "Choose a patient or add a new one." }; document.getElementById("patient-search")?.focus(); return; }
     if (addingPatient) { pendingPrint = print; void np.submit(); return; }
@@ -355,6 +351,71 @@
          aria-invalid={!!qtyProblems[l.test.id]} onchange={(e) => setQty(l.test.id, e.currentTarget.valueAsNumber)} />
 {/snippet}
 {#snippet lineTotal(l: Line)}<span class="money font-semibold">{rupees(Number(l.test.price) * l.quantity)}</span>{/snippet}
+{#snippet testsFoot()}
+  {#if noTests}
+    <tr class="tf-row"><td colspan="5"><p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to continue.</p></td></tr>
+  {/if}
+  <tr class="tf-row" class:is-waiting={noTests}>
+    <td colspan="5">
+      <div class="tf-subtotal">
+        <Field id="tf-subtotal" label="Grand total (₹) :">
+          {#snippet children()}<input id="tf-subtotal" class="input money tf-subtotal-value" value={subtotal.toFixed(2)} readonly />{/snippet}
+        </Field>
+      </div>
+    </td>
+  </tr>
+  <tr class="tf-row" class:is-waiting={noTests}>
+    <td colspan="5">
+      <div class="tf-discount">
+        <Field id="disc-value" label="Discount :" error={discountProblem || errors.discount_value}>
+          {#snippet children({ invalid, describedby })}
+            <div class="row">
+              <div class="disc-kind" role="radiogroup" aria-label="Discount in">
+                <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} disabled={noTests} /> %<span class="sr-only"> Percent</span></label>
+                <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} disabled={noTests} /> ₹<span class="sr-only"> Rupees</span></label>
+              </div>
+              <input id="disc-value" class="input money disc-value" type="number" min="0" step={discountKind === "percent" ? "1" : "0.01"} max={discountKind === "percent" ? 100 : subtotal}
+                     inputmode="decimal" placeholder={discountKind === "percent" ? "0 %" : "₹ 0"}
+                     aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={invalid} aria-describedby={describedby}
+                     disabled={noTests} />
+            </div>
+          {/snippet}
+        </Field>
+        {#if overLimit && !overLimitOk}<p class="field-error tf-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
+      </div>
+    </td>
+  </tr>
+  {#if discount > 0}
+    <tr class="tf-row" class:is-waiting={noTests}>
+      <td colspan="5"><div class="tf-line text-muted"><span>Discount</span><span class="money">− {rupees(discount)}</span></div></td>
+    </tr>
+  {/if}
+  <tr class="tf-row tf-grand" class:is-waiting={noTests}>
+    <td colspan="5"><div class="tf-line"><span>Total Payable</span><span class="money">{rupees(total)}</span></div></td>
+  </tr>
+  <tr class="tf-row" class:is-waiting={noTests}>
+    <td colspan="5">
+      <div class="tf-pay">
+        <Field id="pay-now" label="Paid now (₹) :" error={payTooMuch ? `Paid now can't be more than the total, ${rupees(total)}.` : ""}>
+          {#snippet children({ invalid, describedby })}
+            <div class="row pay-row">
+              <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
+                     aria-invalid={invalid} aria-describedby={describedby} />
+              <label class="sr-only" for="pay-mode">Paid by</label>
+              <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
+            </div>
+          {/snippet}
+        </Field>
+        {#if payMode !== "cash" && paying > 0}
+          <div class="tf-pay-extra">
+            <input class="input mono tf-ref" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} disabled={noTests} />
+          </div>
+        {/if}
+        <div class="tf-line tf-due {dueAfter > 0 ? 'is-due' : ''}"><span>{dueAfter > 0 ? "Due after this" : "Nothing due"}</span><span class="money">{rupees(dueAfter)}</span></div>
+      </div>
+    </td>
+  </tr>
+{/snippet}
 
 <PageHeader eyebrow="Front desk" title="New bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
   {#snippet actions()}
@@ -384,8 +445,7 @@
   </div>
 {/if}
 
-<div class="nb-grid">
-  <div class="stack nb-main">
+<div class="stack nb-main">
     <section class="card" aria-labelledby="p-title">
       <div class="card-header"><div><h2 class="card-title" id="p-title">Patient</h2>
         <p class="card-description">Search by name, mobile or patient number, or add someone new.</p></div></div>
@@ -505,8 +565,10 @@
         {#if errors.lines}<p class="field-error"><Icon name="alert" size="sm" />{errors.lines}</p>{/if}
         {#each Object.entries(qtyProblems) as [id, message] (id)}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{message}</p>{/each}
       </div>
+      <!-- 450px = 6 rows: each row is 75px (the 44px qty input, 15px padding top and bottom, 1px border-bottom) — so a
+           7th test is the first one fully hidden until the body is scrolled. -->
       <DataTable label="Tests on the bill" rows={lines} rowKey={(l) => l.test.id}
-                 actionsInline minWidth={0}
+                 actionsInline minWidth={0} maxHeight="450px"
                  actions={(l) => [{ label: `Remove ${l.test.name}`, icon: "trash", tone: "danger", onclick: () => toggleTest(l.test, false) }]}
                  actionsLabel={(l) => `Actions for ${l.test.name}`}
                  empty={{ icon: "flask", title: "No tests added yet.", text: "Use the box above to find and tick tests." }}
@@ -515,67 +577,24 @@
                    { key: "qty", label: "Qty", cell: qtyCell, align: "right", width: "12%" },
                    { key: "unit", label: "Unit price", value: (l) => rupees(l.test.price), align: "right", class: "money", width: "15%" },
                    { key: "total", label: "Total price", cell: lineTotal, align: "right", mobile: "end", width: "17%" },
-                 ]} />
+                 ]}
+                 foot={testsFoot} footAlways />
     </section>
 
-    <section class="card">
+    <section class="card" id="bill-summary">
       <div class="card-content">
         <Field id="notes" label="Notes on the bill" optional hint="Printed on the bill.">
           {#snippet children({ describedby })}<textarea id="notes" class="textarea notes" bind:value={notes} aria-describedby={describedby}></textarea>{/snippet}
         </Field>
       </div>
+      <div class="card-footer nb-actions">
+        <Button variant="outline" icon="clock" disabled={saving || np.submitting || noTests} tooltip={noTests ? "Add a test first" : "Saves without sending its tests to the worklist yet"}
+                onclick={() => save(false, true)}>Save & Hold</Button>
+        <Button icon="check" disabled={saving || np.submitting || noTests} tooltip={noTests ? "Add a test first" : ""} onclick={() => save(false)}>Save bill</Button>
+        <Button variant="primary" icon="printer" loading={saving || np.submitting} loadingText="Saving…" disabled={noTests}
+                tooltip={noTests ? "Add a test first" : ""} onclick={() => save(true)}>Save & Print</Button>
+      </div>
     </section>
-  </div>
-
-  <aside class="card summary" aria-labelledby="s-title" id="bill-summary">
-    <div class="card-header"><h2 class="card-title" id="s-title">Summary</h2><span class="text-sm text-muted">{lines.length} {lines.length === 1 ? "test" : "tests"}</span></div>
-    <div class="card-content stack" class:is-waiting={noTests}>
-      {#if noTests}<p class="waiting-note text-sm"><Icon name="info" size="sm" />Add a test to continue.</p>{/if}
-      <div class="line"><span class="text-muted">Subtotal</span><span class="money">{rupees(subtotal)}</span></div>
-      <div class="field">
-        <div class="label-row"><span class="label" id="disc-label">Discount</span><InfoTip about="Discount" text={discountTip} /></div>
-        <div class="row" role="group" aria-labelledby="disc-label">
-          <div class="disc-kind" role="radiogroup" aria-label="Discount in">
-            <label class:is-on={discountKind === "percent"}><input type="radio" name="disc-kind" value="percent" bind:group={discountKind} disabled={noTests} /> %<span class="sr-only"> Percent</span></label>
-            <label class:is-on={discountKind === "amount"}><input type="radio" name="disc-kind" value="amount" bind:group={discountKind} disabled={noTests} /> ₹<span class="sr-only"> Rupees</span></label>
-          </div>
-          <input class="input money disc-value" type="number" min="0" step={discountKind === "percent" ? "1" : "0.01"} max={discountKind === "percent" ? 100 : subtotal}
-                 inputmode="decimal" placeholder={discountKind === "percent" ? "0 %" : "₹ 0"}
-                 aria-label={discountKind === "percent" ? "Discount percent" : "Discount in rupees"} bind:value={discountValue} aria-invalid={!!errors.discount_value || !!discountProblem}
-                 disabled={noTests} />
-        </div>
-        {#if overLimit && !overLimitOk}<p class="field-error"><Icon name="alert" size="sm" />Above the centre's {maxDiscount}% limit: the owner must approve it.</p>{/if}
-        {#if discountProblem}<p class="field-error" role="alert"><Icon name="alert" size="sm" />{discountProblem}</p>
-        {:else if errors.discount_value}<p class="field-error"><Icon name="alert" size="sm" />{errors.discount_value}</p>{/if}
-      </div>
-      {#if discount > 0}<div class="line"><span class="text-muted">Discount</span><span class="money">− {rupees(discount)}</span></div>{/if}
-      <div class="line grand"><span>Total</span><span class="money">{rupees(total)}</span></div>
-
-      <hr class="divider" />
-      <div class="field">
-        <div class="row-between"><div class="label-row"><label class="label" for="pay-now">Paid now (₹)</label>
-          <InfoTip about="Paid now" text="What the patient pays at the desk now. Leave it empty if nothing is paid; the rest stays due and can be collected later from Dues, in as many instalments as needed." /></div>
-          {#if total > 0}<button class="link-button" type="button" disabled={noTests} onclick={() => (payNow = total.toFixed(2))}>Full amount</button>{/if}</div>
-        <div class="row pay-row">
-          <input id="pay-now" class="input money" type="number" min="0" step="0.01" max={total} inputmode="decimal" placeholder="0" bind:value={payNow} disabled={noTests}
-                 aria-invalid={payTooMuch} aria-describedby={payTooMuch ? "pay-capped" : undefined} />
-          <label class="sr-only" for="pay-mode">Paid by</label>
-          <select id="pay-mode" class="select pay-mode" bind:value={payMode} disabled={noTests}>{#each PAYMENT_MODES as [v, l] (v)}<option value={v}>{l}</option>{/each}</select>
-          <InfoTip about="Paid by" text="How the money was taken. The day's collection is split by this (cash in the drawer, UPI, card…). Add the UPI or card reference so it can be matched with the bank." />
-        </div>
-        {#if payTooMuch}<p class="field-error" id="pay-capped" role="alert"><Icon name="alert" size="sm" />Paid now can't be more than the total, {rupees(total)}.</p>{/if}
-        {#if payMode !== "cash" && paying > 0}<input class="input mono" placeholder="UPI / card reference" aria-label="Payment reference" bind:value={payRef} disabled={noTests} />{/if}
-      </div>
-      <div class="line {dueAfter > 0 ? 'is-due' : ''}"><span>{dueAfter > 0 ? "Due after this" : "Nothing due"}</span><span class="money">{rupees(dueAfter)}</span></div>
-      <div class="check-line"><label class="check-row"><input class="checkbox" type="checkbox" bind:checked={hold} disabled={noTests} /> Put the bill on hold</label>
-        <InfoTip about="On hold" text="Saves the bill without sending its tests to the worklist, e.g. while waiting for the doctor's slip. Confirm it later from the bill." /></div>
-    </div>
-    <div class="card-footer card-footer-stack summary-actions">
-      <Button variant="primary" size="lg" block icon="printer" loading={saving || np.submitting} loadingText="Saving…" disabled={noTests}
-              tooltip={noTests ? "Add a test first" : ""} onclick={() => save(true)}>Save and print</Button>
-      <Button block icon="check" disabled={saving || np.submitting || noTests} tooltip={noTests ? "Add a test first" : ""} onclick={() => save(false)}>Save bill</Button>
-    </div>
-  </aside>
 </div>
 
 <!-- Phones and tablets: the total and Save stay at the bottom of the screen. -->
@@ -612,13 +631,54 @@
 </FormDialog>
 
 <style>
-  .nb-grid { display: grid; grid-template-columns: minmax(0, 9fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
   .nb-main { min-width: 0; }
   .picked { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
-  .summary { position: sticky; top: calc(var(--topbar-height) + 16px); }
-  .line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
-  .line.grand { font-size: 20px; font-weight: 700; font-family: var(--font-heading); }
-  .line.is-due { color: var(--destructive); font-weight: 600; }
+  /* Discount, the grand total and the payment: real rows at the foot of the tests table (like the old
+     Supreme Invoice) instead of a separate summary panel — shown (disabled, via .is-waiting) even before the
+     first test, so the layout doesn't jump around as soon as one is ticked. */
+  /* DataTable's maxHeight CSS turns tfoot into a plain block, but it only overrides display on the `tr` it
+     renders itself — these tr/td come from this component's own snippet, so they keep their default table-row
+     / table-cell display and the browser wraps them in an orphan anonymous table sized to its own content,
+     not the tfoot's width. Blockifying the row and its cell here sidesteps that: a lone colspan cell with
+     nothing to force it to the row's full width was shrinking to its own content — leaving the right-aligned
+     box inside it nothing to push against. */
+  .tf-row { display: block; width: 100%; }
+  .tf-row td { display: block; width: 100%; background: var(--muted); text-align: right; }
+  /* The last tbody row has its own border-bottom removed (the usual rule, so it doesn't double up with the
+     card's edge), which left nothing marking where the table ends and the footer begins. */
+  .tf-row:first-child td { border-top: 1px solid var(--border); }
+  /* Discount and Paid now are <Field>s, right-aligned like the total/due lines around them: the wrapper (not
+     a fixed width) is what's pushed to the right, so each field auto-sizes to its own content and its label
+     naturally stays flush with its input instead of drifting apart. */
+  /* A shared fixed width (not each shrink-wrapped to its own content) so the Grand total, Discount and Paid
+     now boxes all start at the same left edge instead of drifting with however wide each row's own controls
+     happen to be. */
+  /* width: fit-content, not width: auto (the default): a block box with width:auto fills the full available
+     width, leaving margin-left: auto nothing to push against, so the whole row sat flush-left instead of
+     lining up with Total Payable/Due on the right. fit-content shrink-wraps it to its own content so the
+     auto margin actually has room to push it over (inline-flex wouldn't: auto margins only resolve on
+     block-level boxes). */
+  /* inline-flex + the cell's text-align: right (not margin-left: auto on a block) — the long-reliable way to
+     right-position a shrink-wrapped box: an inline-level box is placed by its parent's text-align, not by a
+     margin of its own, which is what kept failing here. */
+  .tf-subtotal, .tf-discount, .tf-pay { display: inline-flex; flex-direction: column; text-align: left; gap: 6px; }
+  /* "Grand total", "Discount" and "Paid now" beside their own controls, not stacked above them: the label-row
+     and the row sit side by side, so all three line up the same way; the tip/error still wrap to their own
+     full-width line below. */
+  .tf-subtotal :global(.field), .tf-discount :global(.field), .tf-pay :global(.field) {
+    flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 8px;
+  }
+  .tf-subtotal :global(.label-row), .tf-discount :global(.label-row), .tf-pay :global(.label-row) { flex: none; min-height: 0; }
+  .tf-subtotal :global(.field-error), .tf-discount :global(.field-error), .tf-discount :global(.hint),
+  .tf-pay :global(.field-error), .tf-pay :global(.hint) { flex-basis: 100%; }
+  .tf-subtotal-value { flex: none; width: 140px; }
+  .tf-error { margin-top: 4px; }
+  .tf-line { display: flex; justify-content: flex-end; align-items: baseline; gap: 10px; font-size: 14px; }
+  .tf-line.is-due { color: var(--destructive); font-weight: 600; }
+  .tf-grand .tf-line { font-size: 15px; font-weight: 600; }
+  .tf-due { margin-top: 2px; padding-top: 6px; border-top: 1px dashed var(--border); }
+  .tf-pay-extra { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 6px; }
+  .tf-ref { flex: 1 1 200px; min-width: 0; max-width: 220px; }
   .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: end; }
   .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   /* A label's ⓘ tip wrapping onto its own line (some fields have one, some don't) is what was throwing the
@@ -627,21 +687,22 @@
   .family, .family-note { margin-top: 6px; }
   .notes { min-height: 64px; }
   .disc-kind { display: inline-flex; flex: none; height: 38px; padding: 3px; gap: 2px; border: 1px solid var(--input); border-radius: 9px; background: var(--background); }
-  .disc-kind label { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  /* A fixed width (not padding around whatever the glyph needs) so the % and ₹ pills match exactly: those two
+     characters don't render the same width, which looked lopsided once one of them got a solid background. */
+  .disc-kind label { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: 34px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
   .disc-kind label:hover { background: var(--muted); }
   .disc-kind label.is-on { background: var(--primary); color: #fff; }
   .disc-kind input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   .disc-kind label:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
-  .disc-value { flex: 1 1 0; min-width: 0; }
+  /* Fixed, not flex:1: an auto-sizing width would shift with the placeholder ("0 %" vs "₹ 0") or the typed
+     value's length, resizing the whole row (and the field above it) as the discount kind or amount changes. */
+  .disc-value { flex: none; width: 110px; }
   .pay-row { gap: 8px; }
-  .pay-row .money { flex: 1 1 0; min-width: 0; }
+  .pay-row .money { flex: none; width: 110px; }
   .pay-mode { flex: none; width: 96px; }
   .qty { width: 72px; margin-left: auto; text-align: right; }
   .savebar, .savebar-space { display: none; }
   @media (max-width: 900px) {
-    .nb-grid { grid-template-columns: minmax(0, 1fr); }
-    .summary { position: static; }
-    .summary-actions { display: none; }
     .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px;
       padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
       background: color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
@@ -662,11 +723,10 @@
   }
   .draft-note { margin-bottom: 16px; align-items: center; }
   @media (max-width: 600px) { .draft-note { flex-wrap: wrap; } }
-  /* Until a test is added the summary's controls are switched off (the help buttons still work). */
-  .is-waiting .disc-kind label, .is-waiting .check-row { opacity: .55; cursor: not-allowed; }
-  .is-waiting .link-button:disabled { opacity: .5; cursor: not-allowed; text-decoration: none; }
-  .waiting-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 8px 10px; border-radius: 8px;
-    background: var(--muted); color: var(--muted-foreground); }
+  /* Until a test is added the foot's controls are switched off (the help buttons still work). */
+  .is-waiting .disc-kind label { opacity: .55; cursor: not-allowed; }
+  .waiting-note { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 4px; padding: 8px 10px; border-radius: 8px;
+    background: var(--card); color: var(--muted-foreground); }
   .waiting-note :global(.icon) { flex: none; margin-top: 2px; }
   .field-hint { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; font-size: 12.5px; color: var(--primary-text); }
   .draft-saved { display: inline-flex; align-items: center; gap: 5px; }
