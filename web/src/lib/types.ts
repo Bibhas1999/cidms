@@ -71,6 +71,7 @@ export interface CentreSettings {
   gst_number: string;
   invoice_prefix: string;
   bill_paper?: "A4" | "A5";
+  max_discount_percent: string;
   bill_footer: string;
   report_footer: string;
   updated_at: string;
