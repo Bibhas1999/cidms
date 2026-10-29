@@ -3,7 +3,7 @@
 import type { BillSummary } from "./types";
 
 export type PaymentMode = "cash" | "upi" | "card" | "bank" | "other";
-export const PAYMENT_MODES: [PaymentMode, string][] = [["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["bank", "Bank transfer"], ["other", "Other"]];
+export const PAYMENT_MODES: [PaymentMode, string][] = [["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["bank", "Bank Tr"], ["other", "Other"]];
 export const modeLabel = (m: string) => PAYMENT_MODES.find(([v]) => v === m)?.[1] ?? m;
 
 export interface BillLine {

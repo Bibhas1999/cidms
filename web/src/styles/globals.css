@@ -73,7 +73,9 @@
   --font-heading: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif; /* the brand brand font, titles only */
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 
-  --sidebar-width: 220px; /* fits an icon plus a label up to .nav-label's 15-character cap, not an arbitrary round number */
+  /* Measured, not guessed: the longest current label ("Doctors & hospitals") at 13.5px Inter is ~125px; plus the
+     18px icon, the 10px gap, the link's 20px and the nav list's 20px of horizontal padding, with a small buffer. */
+  --sidebar-width: 208px;
   --topbar-height: 60px;
 }
 
@@ -460,8 +462,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
   text-decoration: none !important; position: relative;
 }
 .nav-link .icon { color: var(--muted-foreground); flex: none; }
-/* A long menu name is cut short with "…" rather than widening the sidebar or wrapping. */
-.nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 15ch; }
+/* The label itself is already cut to length in JS (lib/format.ts truncate) — "ch" isn't a reliable character
+   count, since it's the width of "0" in whatever font, over- or under-shooting for text that isn't digit-width. */
+.nav-label { white-space: nowrap; }
 .nav-link:hover { background: var(--muted); }
 .nav-link.is-active { background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
 .nav-link.is-active .icon { color: var(--primary); }
