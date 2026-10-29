@@ -10,7 +10,6 @@
   import { applyTheme, getTheme, type Theme } from "../lib/theme";
   import Avatar from "./Avatar.svelte";
   import NotificationBell from "./NotificationBell.svelte";
-  import Credit from "./Credit.svelte";
   import Icon from "./Icon.svelte";
 
   // The app frame, laid out like the Sandhata Registry: sidebar with grouped sections, a top bar with
@@ -123,13 +122,13 @@
       {#each sections as section (section.heading)}
         <div class="nav-heading" role="presentation">{section.heading}</div>
         {#each section.items as item (item.href)}
-          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>
-            <Icon name={item.icon} /><span>{item.label}</span>
+          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined} title={item.label}>
+            <Icon name={item.icon} /><span class="nav-label">{item.label}</span>
           </a>
         {/each}
       {/each}
     </nav>
-    <div class="sidebar-footer"><Credit /><a class="terms-link" href="/terms">Terms</a></div>
+    <div class="sidebar-footer"><a class="terms-link" href="/terms">Terms</a></div>
   </aside>
   {#if navOpen}<button class="nav-backdrop" type="button" aria-label="Close menu" onclick={() => (navOpen = false)}></button>{/if}
 
@@ -197,7 +196,7 @@
   /* Room above and below the wordmark, so it doesn't sit on the top edge of the window. */
   .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; padding: 10px 0; box-sizing: border-box; }
   .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 40px; object-fit: contain; object-position: left center; }
-  .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .sidebar-footer { display: flex; align-items: center; gap: 8px; }
   .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
   .terms-link:hover { color: var(--foreground); text-decoration: underline; }
 </style>
