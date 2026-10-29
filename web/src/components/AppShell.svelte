@@ -122,8 +122,8 @@
       {#each sections as section (section.heading)}
         <div class="nav-heading" role="presentation">{section.heading}</div>
         {#each section.items as item (item.href)}
-          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined} title={item.label}>
-            <Icon name={item.icon} /><span class="nav-label">{item.label}</span>
+          <a class="nav-link" class:is-active={isCurrent(item.href)} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>
+            <Icon name={item.icon} /><span>{item.label}</span>
           </a>
         {/each}
       {/each}
