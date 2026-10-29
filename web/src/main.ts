@@ -17,6 +17,7 @@ import { installOffline } from "./lib/offline.svelte";
 import { installRouter } from "./lib/router.svelte";
 import { install } from "./lib/install.svelte";
 import { applyTheme, getTheme } from "./lib/theme";
+import { notify } from "./lib/toast.svelte";
 
 applyTheme(getTheme());
 installGlobalErrorHandlers();
@@ -31,6 +32,9 @@ export default mount(App, { target: document.getElementById("app")! });
 // Installable app (PWA). Only the built app registers the worker: in development Vite serves fresh files.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
+    // Already controlled before this registration resolves: a returning visit, not the very first ever.
+    // Only then does a later controllerchange mean a new version took over while the tab was open.
+    let controlled = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register("/sw.js")
       .then(() => navigator.serviceWorker.ready)
       .then((reg) => {
@@ -40,5 +44,15 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
         reg.active?.postMessage({ type: "keep", files });
       })
       .catch((e) => console.warn("Service worker not registered", e));
+
+    // The service worker skips waiting and claims every tab as soon as it activates, so this fires the
+    // moment a newly deployed version takes over — only a reload actually loads its new files, so ask.
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (controlled) {
+        notify("A new version of CIDMS is ready.", { kind: "info", duration: 0,
+          action: { label: "Refresh", run: () => location.reload() } });
+      }
+      controlled = true;
+    });
   });
 }
