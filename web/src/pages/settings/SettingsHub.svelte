@@ -63,8 +63,8 @@
       <div class="nav-heading" role="presentation">{group}</div>
       {#each visible.filter((s) => s.group === group) as s (s.id)}
         <a class="nav-link" class:is-active={current?.id === s.id} href={s.href ? withNext(s.href, "/settings") : `/settings/${s.id}`}
-           aria-current={current?.id === s.id ? "page" : undefined} title={s.label}>
-          <Icon name={s.icon} /><span class="nav-label">{s.label}</span>
+           aria-current={current?.id === s.id ? "page" : undefined}>
+          <Icon name={s.icon} /><span>{s.label}</span>
         </a>
       {/each}
     {/each}
