@@ -189,7 +189,10 @@ async function send<T>(method: string, path: string, options: { body?: unknown; 
 
   const err = new ApiError(res.status, data?.message ?? `Request failed (${res.status}).`, data?.field ?? null,
                            data?.detail ?? [], data?.request_id ?? res.headers.get("X-Request-ID"));
-  if (res.status === 401 && !path.startsWith("/api/auth/login")) hooks.onUnauthorized();
+  // /api/auth/me's 401 just means "not signed in" (session.load() expects it and handles it quietly) — not a
+  // session that died mid-use, so it shouldn't force a page that's meant to work without signing in (the
+  // patient's bill link, /terms) over to the login screen.
+  if (res.status === 401 && !path.startsWith("/api/auth/login") && !path.startsWith("/api/auth/me")) hooks.onUnauthorized();
   if (res.status === 403 && err.field === "must_change_password") hooks.onMustChangePassword();
   throw err;
 }
