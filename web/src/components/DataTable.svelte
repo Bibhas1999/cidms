@@ -51,7 +51,7 @@
   //              rowHref={(b) => `/bills/${b.id}`} actions={actionsFor} page={data} empty={{ icon: "receipt", title: "No bills yet." }} />
   let { columns, rows, label, rowKey = (r: T) => String((r as { id?: unknown }).id), loading = false, error = "", onretry,
         empty = { title: "Nothing here yet." }, emptySlot, actions, actionsLabel, actionsInline = false, minWidth, rowHref, onrowclick, rowClass,
-        selectable = false, selected = $bindable([]), sort = "", onsort, page, onpage, foot, maxHeight = "", skeletonRows = 5 }: {
+        selectable = false, selected = $bindable([]), sort = "", onsort, page, onpage, foot, footAlways = false, maxHeight = "", skeletonRows = 5 }: {
     columns: Column<T>[];
     rows: T[];
     /** What the table lists, for screen readers ("Bills"). */
@@ -78,6 +78,8 @@
     page?: { page: number; size: number; total: number } | null;
     onpage?: (page: number) => void;
     foot?: Snippet;
+    /** Show `foot` even with no rows yet (e.g. totals a form keeps building toward from zero). */
+    footAlways?: boolean;
     /** Limit the height (e.g. "60vh") so the box scrolls with the header kept in view. */
     maxHeight?: string;
     skeletonRows?: number;
@@ -151,7 +153,7 @@
           {#each { length: skeletonRows } as _, i (i)}
             <tr class="dt-skeleton" aria-hidden="true">
               {#if selectable}<td class="dt-select"></td>{/if}
-              {#each columns as c, j (c.key)}<td class={cellClass(c)}><span class="skeleton" style="width: {j === 0 ? 70 : 45 + ((i * 7 + j * 13) % 40)}%"></span></td>{/each}
+              {#each columns as c, j (c.key)}<td class={cellClass(c)} style={c.width ? `width: ${c.width}` : undefined}><span class="skeleton" style="width: {j === 0 ? 70 : 45 + ((i * 7 + j * 13) % 40)}%"></span></td>{/each}
               {#if hasActions}<td class="dt-actions m-actions"></td>{/if}
             </tr>
           {/each}
@@ -166,7 +168,7 @@
                                              onchange={(e) => toggleOne(k, e.currentTarget.checked)} /></td>
               {/if}
               {#each columns as c (c.key)}
-                <td class={cellClass(c)} data-label={c.label}>
+                <td class={cellClass(c)} data-label={c.label} style={c.width ? `width: ${c.width}` : undefined}>
                   {#if c.cell}{@render c.cell(row)}{:else}{c.value?.(row) ?? ""}{/if}
                 </td>
               {/each}
@@ -188,7 +190,7 @@
           {/each}
         {/if}
       </tbody>
-      {#if foot && rows.length}<tfoot>{@render foot()}</tfoot>{/if}
+      {#if foot && (rows.length || footAlways)}<tfoot>{@render foot()}</tfoot>{/if}
     </table>
   </div>
   {#if page && page.total > 0}
@@ -197,8 +199,14 @@
 {/if}
 
 <style>
-  .dt-wrap.has-max { max-height: var(--dt-max-h); overflow: auto; }
-  .dt-wrap.has-max :global(thead th) { position: sticky; top: 0; z-index: 2; }
+  /* maxHeight bounds the body only, not the header or foot: thead/tbody/tfoot each become their own block (a
+     row stays display:table so its cells still lay out side by side), and only tbody scrolls — so the
+     scrollbar sits next to the rows, not running the full height of a header and footer that don't move. */
+  @media (min-width: 641px) {
+    .dt-wrap.has-max thead, .dt-wrap.has-max tbody, .dt-wrap.has-max tfoot { display: block; }
+    .dt-wrap.has-max tr { display: table; width: 100%; table-layout: fixed; }
+    .dt-wrap.has-max tbody { max-height: var(--dt-max-h); overflow-y: auto; }
+  }
   .dt-table.is-loading tbody { opacity: .55; transition: opacity .15s; }
   .dt-table :global(th .tip) { margin-left: 2px; }
   .dt-sort { background: none; border: 0; padding: 0; cursor: pointer; }

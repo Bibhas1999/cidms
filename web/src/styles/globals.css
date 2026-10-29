@@ -232,6 +232,10 @@ a.alert:hover { border-color: var(--primary); }
 }
 .input, .select { height: 40px; }
 .textarea { min-height: 96px; resize: vertical; }
+/* No native up/down stepper on number fields anywhere in the app: it clutters money and quantity boxes
+   more than it helps, and typing or the ▲▼ keys still work without it. */
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .input::placeholder, .textarea::placeholder { color: var(--faint-foreground); }
 .input:focus, .select:focus, .textarea:focus {
   outline: 2px solid var(--primary-text); outline-offset: 0; border-color: var(--primary-text); box-shadow: 0 0 0 4px var(--ring);
