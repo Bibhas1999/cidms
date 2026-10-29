@@ -109,14 +109,6 @@
   <DateRange id="dues" {from} {to} anyLabel="Any date" compact onchange={setRange} />
 </section>
 
-<!-- one tab per sheet: Summary, then each referring doctor -->
-<nav class="sheet-tabs no-print" aria-label="Sheets">
-  {#each tabs as t (t.key)}
-    <a class="sheet-tab" class:is-active={t.key === String(index)} href={sheetHref(t.key)} aria-current={t.key === String(index) ? "page" : undefined}
-       use:tooltip={{ text: t.hint, placement: "bottom" }}>{t.title}</a>
-  {/each}
-</nav>
-
 <div class="print-head" aria-hidden="true">
   <strong>{session.workspace?.name}</strong> · Dues · {name}{period ? ` · ${period}` : ""} · printed {printedAt}
 </div>
@@ -146,21 +138,30 @@
     {:else}
       <div class="empty"><Icon name="check" />Nothing owed{from || to ? " for these dates" : ""}.</div>
     {/if}
+
+    <!-- one tab per sheet, at the bottom of the workbook like a real spreadsheet's: Summary, then each referring doctor -->
+    <nav class="sheet-tabs no-print" aria-label="Sheets">
+      {#each tabs as t (t.key)}
+        <a class="sheet-tab" class:is-active={t.key === String(index)} href={sheetHref(t.key)} aria-current={t.key === String(index) ? "page" : undefined}
+           use:tooltip={{ text: t.hint, placement: "top" }}>{t.title}</a>
+      {/each}
+    </nav>
   </section>
 {/if}
 
 <style>
   .bar { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 12px 16px; }
-  /* report tabs, like Bootstrap's nav-tabs: a line under the strip; the open tab is outlined on three sides and
-     sits on the line, so it opens onto the page below; the others are plain links that get a faint outline on hover */
-  .sheet-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; margin: 0 0 16px; padding: 0;
-    border-bottom: 1px solid var(--border); scrollbar-width: thin; }
-  .sheet-tab { flex: none; margin-bottom: -1px; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px 6px 0 0;
+  /* Like a real spreadsheet's sheet tabs: a strip at the bottom of the workbook, not a browser-style bar above
+     it. A line over the strip; the open tab is outlined on three sides and sits on the line, so it opens up into
+     the workbook above; the others are plain links that get a faint outline on hover. */
+  .sheet-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; margin: 0; padding-top: 12px;
+    border-top: 1px solid var(--border); scrollbar-width: thin; }
+  .sheet-tab { flex: none; margin-top: -1px; padding: 8px 16px; border: 1px solid transparent; border-radius: 0 0 6px 6px;
     background: none; color: var(--primary-text); font-size: 14px; font-weight: 500; line-height: 1.5; text-decoration: none !important;
     white-space: nowrap; transition: color .15s, border-color .15s; }
-  .sheet-tab:hover { border-color: var(--muted) var(--muted) var(--border); color: var(--primary); }
+  .sheet-tab:hover { border-color: var(--border) var(--muted) var(--muted); color: var(--primary); }
   .sheet-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-  .sheet-tab.is-active { color: var(--foreground); background: var(--background); border-color: var(--border) var(--border) var(--background); }
+  .sheet-tab.is-active { color: var(--foreground); background: var(--background); border-color: var(--background) var(--border) var(--border); }
   .bar :global(.date-filter > .select) { width: 170px; min-width: 0; }
 
   .sheet-card { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
