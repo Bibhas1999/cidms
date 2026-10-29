@@ -73,7 +73,7 @@
   --font-heading: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif; /* the brand brand font, titles only */
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 
-  --sidebar-width: 248px;
+  --sidebar-width: 220px; /* fits an icon plus a label up to .nav-label's 15-character cap, not an arbitrary round number */
   --topbar-height: 60px;
 }
 
@@ -459,7 +459,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
   border-radius: var(--radius-sm); color: var(--foreground); font-weight: 500; font-size: 13.5px;
   text-decoration: none !important; position: relative;
 }
-.nav-link .icon { color: var(--muted-foreground); }
+.nav-link .icon { color: var(--muted-foreground); flex: none; }
+/* A long menu name is cut short with "…" rather than widening the sidebar or wrapping. */
+.nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 15ch; }
 .nav-link:hover { background: var(--muted); }
 .nav-link.is-active { background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
 .nav-link.is-active .icon { color: var(--primary); }
