@@ -60,7 +60,10 @@ export const exactTime = (iso: string): string =>
 /** Show a browser pop-up (service worker if registered, else a page Notification). Clicking opens `link`. */
 export async function showPopup(title: string, body: string, link = "", tag = ""): Promise<boolean> {
   if (!popupsSupported() || Notification.permission !== "granted") return false;
-  const options: NotificationOptions = { body, tag: tag || undefined, icon: "/icons/icon-192-v2.png", badge: "/icons/favicon.png", data: { link } };
+  // renotify: a reused tag (e.g. "sdms-test", clicked more than once) would otherwise update the existing
+  // OS notification silently instead of alerting again. (Not in this TS version's DOM types, though every
+  // browser that supports Notification supports it.)
+  const options = { body, tag: tag || undefined, renotify: !!tag, icon: "/icons/icon-192-v2.png", badge: "/icons/favicon.png", data: { link } } as NotificationOptions;
   try {
     const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
     if (reg) { await reg.showNotification(title, options); return true; }

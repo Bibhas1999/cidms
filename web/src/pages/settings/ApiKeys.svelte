@@ -368,8 +368,6 @@
 </Dialog>
 
 <style>
-  .code-box { display: flex; align-items: flex-start; gap: 8px; background: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
-  .code-box pre { margin: 0; flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-all; }
   .check-row :global(.tip) { margin-left: auto; }
   .hint :global(.icon) { vertical-align: -2px; }
 </style>
