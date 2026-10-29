@@ -26,8 +26,10 @@ export function datePresets(anyLabel = "Any time"): Preset[] {
     { key: "today", label: "Today", from: today, to: today },
     { key: "yesterday", label: "Yesterday", from: shiftDays(today, -1), to: shiftDays(today, -1) },
     { key: "7d", label: "Last 7 days", from: shiftDays(today, -6), to: today },
-    { key: "30d", label: "Last 30 days", from: shiftDays(today, -29), to: today },
+    // Checked (and listed) before "Last 30 days": on day 28-31 of a month, the two spans can be identical,
+    // and the default everywhere is "This month", so it must win that tie.
     { key: "month", label: "This month", from: firstOfMonth(today), to: today },
+    { key: "30d", label: "Last 30 days", from: shiftDays(today, -29), to: today },
     { key: "last-month", label: "Last month", from: firstOfMonth(lastMonthEnd), to: lastMonthEnd },
     { key: "year", label: "This year", from: `${y}-01-01`, to: today },
     { key: "last-year", label: "Last year", from: `${y - 1}-01-01`, to: `${y - 1}-12-31` },
