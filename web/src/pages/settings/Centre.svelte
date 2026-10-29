@@ -13,7 +13,7 @@
 
   type Form = Omit<CentreSettings, "updated_at" | "logo_file" | "wordmark_file">;
   const FIELDS: (keyof Form)[] = ["legal_name", "tagline", "brand_color", "address", "phones", "email", "gst_number", "invoice_prefix",
-                                   "bill_footer", "report_footer"];
+                                   "max_discount_percent", "bill_footer", "report_footer"];
 
   let saved = $state<CentreSettings | null>(null);
   let form = $state<Form | null>(null);
@@ -216,6 +216,15 @@
               {#snippet children({ invalid, describedby })}<input id="prefix" class="input mono" maxlength="10" bind:value={form!.invoice_prefix} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
             </Field>
           </div>
+          <Field id="max_discount" label="Maximum discount without approval" tip="The biggest discount (as a percent of the bill) front-desk staff can give on their own while making a bill. A bigger discount still works, but needs the owner or an admin to approve it first." error={errors.max_discount_percent} hint="0 to 100. Default is 20%.">
+            {#snippet children({ invalid, describedby })}
+              <div class="row" style="gap: 8px; max-width: 140px">
+                <input id="max_discount" class="input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                       bind:value={form!.max_discount_percent} aria-invalid={invalid} aria-describedby={describedby} />
+                <span class="text-muted" aria-hidden="true">%</span>
+              </div>
+            {/snippet}
+          </Field>
           <Field id="bill_footer" label="Notes at the foot of every bill" optional tip="Short notes printed at the bottom of each bill, e.g. report collection times or refund policy. One note per line." error={errors.bill_footer}>
             {#snippet children({ invalid, describedby })}<textarea id="bill_footer" class="textarea" bind:value={form!.bill_footer} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
           </Field>
