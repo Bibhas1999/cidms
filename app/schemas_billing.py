@@ -340,6 +340,42 @@ class BillOut(BillSummaryOut):
     payments: list[PaymentOut]
 
 
+# ---------- the patient's public link (the QR code on the printed bill) ----------
+
+class BillShareOut(BaseModel):
+    exists: bool
+    active: bool
+    url: str
+    created_at: datetime | None
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    views: int
+    last_viewed_at: datetime | None
+
+
+class PublicBillCheckIn(BaseModel):
+    check: str = Field(min_length=4, max_length=8)
+
+
+class PublicBillInfoOut(BaseModel):
+    centre_name: str
+    has_logo: bool
+    check: Literal["mobile", "birth_year", "bill"]
+
+
+class PublicBillCentreOut(BaseModel):
+    legal_name: str
+    address: str
+    phones: str
+    bill_footer: str
+
+
+class PublicBillOut(BaseModel):
+    bill: BillOut
+    patient_no: str
+    centre: PublicBillCentreOut
+
+
 class WorklistRowOut(BaseModel):
     item_id: uuid.UUID
     invoice_id: uuid.UUID
