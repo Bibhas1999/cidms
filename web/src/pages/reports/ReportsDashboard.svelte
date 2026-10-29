@@ -9,7 +9,7 @@
   import PageHeader from "../../components/PageHeader.svelte";
   import { get } from "../../lib/api";
   import { exact, full } from "../../lib/chart";
-  import { rangeLabel, thisYear } from "../../lib/dates";
+  import { rangeLabel, thisMonth } from "../../lib/dates";
   import { count, dateTime } from "../../lib/format";
   import { REPORT_STATUS, type ReportStatus } from "../../lib/report-types";
   import { router, setQuery } from "../../lib/router.svelte";
@@ -36,14 +36,14 @@
     oldest_waiting: Row[]; recently_signed: Row[]; my_drafts: Row[]; awaiting_my_signature: Row[];
   }
 
-  // One period for the page (?from=&to=): nothing = this year; ?from=all = all time.
-  const year = thisYear();
+  // One period for the page (?from=&to=): nothing = this month (the default everywhere); ?from=all = all time.
+  const month = thisMonth();
   const allPicked = $derived(router.query.get("from") === "all");
-  const from = $derived(allPicked ? "" : router.query.get("from") ?? year.from);
-  const to = $derived(allPicked ? "" : router.query.get("to") ?? (router.query.has("from") ? "" : year.to));
+  const from = $derived(allPicked ? "" : router.query.get("from") ?? month.from);
+  const to = $derived(allPicked ? "" : router.query.get("to") ?? (router.query.has("from") ? "" : month.to));
   const label = $derived(rangeLabel(from, to));
   const setRange = (f: string, t: string) =>
-    setQuery(!f && !t ? { from: "all", to: null } : f === year.from && t === year.to ? { from: null, to: null } : { from: f, to: t });
+    setQuery(!f && !t ? { from: "all", to: null } : f === month.from && t === month.to ? { from: null, to: null } : { from: f, to: t });
 
   let data = $state<Summary | null>(null);
   let failed = $state("");

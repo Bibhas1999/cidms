@@ -35,12 +35,6 @@ export function datePresets(anyLabel = "Any time"): Preset[] {
   ];
 }
 
-/** 1 January this year to today. */
-export function thisYear(): { from: string; to: string } {
-  const today = todayISO();
-  return { from: `${today.slice(0, 4)}-01-01`, to: today };
-}
-
 /** The preset a range matches, if any. */
 export const presetOf = (from: string, to: string, anyLabel?: string): Preset | undefined =>
   datePresets(anyLabel).find((p) => p.from === from && p.to === to);
