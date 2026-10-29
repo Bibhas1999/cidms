@@ -35,6 +35,7 @@
   import OfflineBills from "./pages/bills/OfflineBills.svelte";
   import Message from "./pages/Message.svelte";
   import Notifications from "./pages/Notifications.svelte";
+  import PublicBill from "./pages/bills/PublicBill.svelte";
   import Terms from "./pages/Terms.svelte";
   import Clients from "./pages/platform/Clients.svelte";
   import SettingsHub from "./pages/settings/SettingsHub.svelte";
@@ -109,6 +110,8 @@
   const PUBLIC = ["/login", "/forgot-password", "/reset-password"];
   // Pages anyone can read, signed in or not.
   const OPEN = ["/terms"];
+  // The patient's bill, opened from the QR code: /b/<token>, no sign-in, its own check instead.
+  const publicBillToken = $derived(router.path.startsWith("/b/") ? router.path.slice(3) : "");
 
   let startError = $state("");
 
@@ -133,7 +136,7 @@
   $effect(() => {
     if (!session.ready || session.workspace?.kind === "none") return;
     const path = router.path;
-    if (OPEN.includes(path)) return;
+    if (OPEN.includes(path) || publicBillToken) return;
     const here = path === "/" ? "" : path + router.search;
     if (!session.me) {
       if (!PUBLIC.includes(path)) navigate(withNext("/login", here), { replace: true });
@@ -147,6 +150,7 @@
   });
 
   $effect(() => {
+    if (publicBillToken) return;  // PublicBill.svelte sets its own title once the centre's name is known
     const where = session.workspace?.name ? ` · ${session.workspace.name}` : "";
     const titles: Record<string, string> = { "/login": "Sign in", "/forgot-password": "Forgot password", "/reset-password": "Choose a new password", "/terms": "Terms and conditions" };
     document.title = `${titles[router.path] ?? route?.title ?? "Not found"}${where} · CIDMS`;
@@ -173,6 +177,8 @@
   <Landing ws={session.workspace} />
 {:else if OPEN.includes(router.path)}
   {@render guarded(Terms)}
+{:else if publicBillToken}
+  {@render guarded(PublicBill, { token: publicBillToken })}
 {:else if !session.me}
   {#if router.path === "/login"}{@render guarded(Login)}
   {:else if router.path === "/forgot-password"}{@render guarded(ForgotPassword)}
