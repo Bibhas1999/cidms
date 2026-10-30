@@ -96,7 +96,7 @@
                onchange={(f, t) => setQuery(!f && !t ? { from: "all", to: null, page: null } : f === month.from && t === month.to ? { from: null, to: null, page: null } : { from: f, to: t, page: null })} />
   </div>
 
-  <DataTable label="Reports" rows={data?.items ?? []} {loading} error={loadError} onretry={() => reload++} page={data}
+  <DataTable label="Reports" rows={data?.items ?? []} rowKey={(r) => r.item_id} {loading} error={loadError} onretry={() => reload++} page={data}
              actions={actions} actionsLabel={(r) => `Actions for ${r.test_name}, ${r.patient_name}`}
              empty={{ icon: "clipboard",
                       title: search || department ? "No reports match these filters." : tab.key === "pending" ? "Nothing is waiting for a report." : "Nothing here yet.",
