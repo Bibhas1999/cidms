@@ -59,5 +59,7 @@
     .foot h6 { margin: 4px 0 1px; }
     .foot ol { font-size: 10px; }
     .sign { margin-top: 10px; font-size: 11px; }
-    @page { size: A4; margin: 6px 10mm 6px; }
   }
+  /* No forced size/margin here: an @page size locks the browser's own "Paper size" and margin
+     controls in the print dialog, so paper choice is left to whoever prints. */
+  @page { margin: 6mm; }
