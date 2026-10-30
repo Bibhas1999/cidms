@@ -22,38 +22,47 @@ export const CLIENT_NAV: NavSection[] = [
     items: [
       { href: "/", label: "Dashboard", icon: "dashboard" },
       { href: "/analytics", label: "Analytics", icon: "barChart", permission: "analytics.view" },
-      ...(import.meta.env.DEV ? [{ href: "/dev/monitor", label: "Dev monitor", icon: "activity" }] : []),
     ],
   },
   {
-    heading: "Front desk",
+    heading: "Front Desk",
     items: [
-      { href: "/bills/new", label: "New bill", icon: "filePlus", permission: "billing.create" },
+      { href: "/bills/new", label: "New Bill", icon: "filePlus", permission: "billing.create" },
       { href: "/bills", label: "Bills", icon: "receipt" },
-      { href: "/patients", label: "Patients", icon: "users" },
       { href: "/dues", label: "Dues", icon: "wallet", permission: "payments.collect" },
+      { href: "/patients", label: "Patients", icon: "users" },
     ],
   },
-  ...(FEATURES.worklist ? [{ heading: "Lab", items: [{ href: "/worklist", label: "Worklist", icon: "clipboard" }] }] : []),
-  {
-    heading: "Reports",
+  ...(FEATURES.worklist || FEATURES.testReports ? [{
+    heading: "Lab",
     items: [
-      // Test reports: the reporting dashboard (work in hand, turnaround) and the full list at /test-reports/queue.
-      ...(FEATURES.testReports ? [{ href: "/test-reports", label: "Test reports", icon: "fileText" }] : []),
-      { href: "/reports", label: "Billing reports", icon: "barChart", permission: "business_reports.view" },
+      ...(FEATURES.worklist ? [{ href: "/worklist", label: "Investigation Report", icon: "clipboard" }] : []),
+      // Reporting: the dashboard (work in hand, turnaround). Test Reports: the actual list of items to
+      // report on or already reported (To report / Drafts / Signed).
+      ...(FEATURES.testReports ? [
+        { href: "/test-reports", label: "Reporting", icon: "fileText" },
+        { href: "/test-reports/queue", label: "Test Reports", icon: "clipboard" },
+      ] : []),
+    ],
+  }] : []),
+  {
+    heading: "Finance",
+    items: [
+      { href: "/reports", label: "Financial Reports", icon: "barChart", permission: "business_reports.view" },
     ],
   },
   {
     heading: "Catalogue",
     items: [
-      { href: "/tests", label: "Tests & prices", icon: "flask" },
-      { href: "/doctors", label: "Doctors & hospitals", icon: "stethoscope" },
+      { href: "/tests", label: "Tests & Prices", icon: "flask" },
+      { href: "/doctors", label: "Doctors & Hospitals", icon: "stethoscope" },
     ],
   },
+  ...(import.meta.env.DEV ? [{ heading: "Monitoring", items: [{ href: "/dev/monitor", label: "Dev Monitor", icon: "activity" }] }] : []),
 ];
 
 export const PLATFORM_NAV: NavSection[] = [
-  { heading: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" },
-                                 ...(import.meta.env.DEV ? [{ href: "/dev/monitor", label: "Dev monitor", icon: "activity" }] : [])] },
+  { heading: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
   { heading: "Clients", items: [{ href: "/clients", label: "Clients", icon: "building", permission: "platform.clients.view" }] },
+  ...(import.meta.env.DEV ? [{ heading: "Monitoring", items: [{ href: "/dev/monitor", label: "Dev Monitor", icon: "activity" }] }] : []),
 ];

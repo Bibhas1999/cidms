@@ -13,7 +13,6 @@
   import BillDetail from "./pages/bills/BillDetail.svelte";
   import BillPrint from "./pages/bills/BillPrint.svelte";
   import Bills from "./pages/bills/Bills.svelte";
-  import Dues from "./pages/bills/Dues.svelte";
   import NewBill from "./pages/bills/NewBill.svelte";
   import Doctors from "./pages/catalogue/Doctors.svelte";
   import Tests from "./pages/catalogue/Tests.svelte";
@@ -56,24 +55,24 @@
     { path: "/", component: Dashboard, title: "Dashboard" },
     { path: "/analytics", component: Analytics, title: "Analytics", client: "analytics.view", platform: null },
     { path: "/bills", component: Bills, title: "Bills", ...CLIENT_ONLY },
-    { path: "/bills/new", component: NewBill, title: "New bill", client: "billing.create", platform: null },
+    { path: "/bills/new", component: NewBill, title: "New Bill", client: "billing.create", platform: null },
     { path: "/bills/offline", component: OfflineBills, title: "Offline", client: "billing.create", platform: null },
     { path: "/bills/offline/:offlineId/print", component: BillPrint, title: "Print bill", bare: true, client: "billing.create", platform: null },
     { path: "/bills/:id", component: BillDetail, title: "Bill", ...CLIENT_ONLY },
     { path: "/bills/:id/print", component: BillPrint, title: "Print bill", bare: true, ...CLIENT_ONLY },
-    { path: "/dues", component: Dues, title: "Dues", client: "payments.collect", platform: null },
+    { path: "/dues", component: Bills, title: "Dues", client: "payments.collect", platform: null },
     { path: "/patients", component: Patients, title: "Patients", ...CLIENT_ONLY },
     { path: "/patients/:id", component: PatientDetail, title: "Patient", ...CLIENT_ONLY },
-    ...(FEATURES.worklist ? [{ path: "/worklist", component: Worklist, title: "Worklist", ...CLIENT_ONLY }] : []),
+    ...(FEATURES.worklist ? [{ path: "/worklist", component: Worklist, title: "Investigation Report", ...CLIENT_ONLY }] : []),
     ...(FEATURES.testReports ? [
-      { path: "/test-reports", component: ReportsDashboard, title: "Test reports", ...CLIENT_ONLY },
-      { path: "/test-reports/queue", component: ReportQueue, title: "Test reports", ...CLIENT_ONLY },
+      { path: "/test-reports", component: ReportsDashboard, title: "Reporting", ...CLIENT_ONLY },
+      { path: "/test-reports/queue", component: ReportQueue, title: "Test Reports", ...CLIENT_ONLY },
       { path: "/test-reports/:itemId", component: TestReport, title: "Report", ...CLIENT_ONLY },
     ] : []),
-    { path: "/reports", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
-    { path: "/reports/:name", component: Reports, title: "Billing reports", client: "business_reports.view", platform: null },
-    { path: "/tests", component: Tests, title: "Tests & prices", ...CLIENT_ONLY },
-    { path: "/doctors", component: Doctors, title: "Doctors & hospitals", ...CLIENT_ONLY },
+    { path: "/reports", component: Reports, title: "Financial Reports", client: "business_reports.view", platform: null },
+    { path: "/reports/:name", component: Reports, title: "Financial Reports", client: "business_reports.view", platform: null },
+    { path: "/tests", component: Tests, title: "Tests & Prices", ...CLIENT_ONLY },
+    { path: "/doctors", component: Doctors, title: "Doctors & Hospitals", ...CLIENT_ONLY },
     { path: "/settings", component: SettingsHub, title: "Settings" },
     { path: "/settings/:section", component: SettingsHub, title: "Settings" },
     { path: "/staff", component: SettingsHub, title: "Settings" },
@@ -82,7 +81,7 @@
     { path: "/change-password", component: ChangePassword, title: "Change password" },
     { path: "/notifications", component: Notifications, title: "Notifications" },
     // Development only (npm run dev): the live server monitor. Not in production builds.
-    ...(import.meta.env.DEV ? [{ path: "/dev/monitor", component: DevMonitor, title: "Dev monitor" }] : []),
+    ...(import.meta.env.DEV ? [{ path: "/dev/monitor", component: DevMonitor, title: "Dev Monitor" }] : []),
   ];
 
   function match(path: string): { route: Route; params: Record<string, string> } | null {

@@ -46,7 +46,7 @@
 {/snippet}
 {#snippet addressCell(p: Patient)}<div class="truncate address" use:tooltip={p.address}>{p.address || "—"}</div>{/snippet}
 
-<PageHeader eyebrow="Front desk" title="Patients" description="Everyone who has been billed at the centre. Open a patient to see their details and bills." />
+<PageHeader eyebrow="Front Desk" title="Patients" description="Everyone who has been billed at the centre. Open a patient to see their details and bills." />
 
 <section class="card" aria-label="Patients">
   <FilterBar placeholder="Search by name, mobile or patient number…" searchLabel="Search patients"

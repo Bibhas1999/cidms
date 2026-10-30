@@ -134,7 +134,7 @@
   const printedAt = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(new Date());
 </script>
 
-<PageHeader eyebrow="Billing" title="Billing reports">
+<PageHeader eyebrow="Finance" title="Financial Reports">
   {#snippet actions()}
     {#if meta}
       <button class="btn btn-outline" type="button" disabled={!report || loading} onclick={() => window.print()}><Icon name="printer" /> Print</button>

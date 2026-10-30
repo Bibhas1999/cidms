@@ -133,7 +133,7 @@
   {:else}<div class="text-sm text-muted">None so far.</div>{/each}
 {/snippet}
 
-<PageHeader eyebrow="Development" title="Dev monitor" description="Live view of the server: requests, errors, slow queries, jobs and uploads. Only in development.">
+<PageHeader eyebrow="Development" title="Dev Monitor" description="Live view of the server: requests, errors, slow queries, jobs and uploads. Only in development.">
   {#snippet actions()}
     <span class="badge {connected ? 'badge-success' : 'badge-destructive'}"><span class="dot"></span>{connected ? "Live" : "Reconnecting…"}</span>
     <button class="btn btn-outline" onclick={() => (paused = !paused)}><Icon name={paused ? "play" : "pause"} /> {paused ? "Resume" : "Pause"}</button>

@@ -97,7 +97,7 @@
 
 {#snippet statusCell(d: Doctor)}<StatusBadge active={d.is_active} help={d.is_active ? "" : "Not suggested on new bills."} />{/snippet}
 
-<PageHeader eyebrow="Catalogue" title="Doctors & hospitals"
+<PageHeader eyebrow="Catalogue" title="Doctors & Hospitals"
             description="Doctors and hospitals that send patients to the centre. One is added automatically when a new name is typed on a bill.">
   {#snippet actions()}
     {#if canManage}<Button variant="primary" icon="plus" onclick={() => (bulkOpen = true)}>Add doctors / hospitals</Button>{/if}

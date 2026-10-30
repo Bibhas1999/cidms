@@ -414,7 +414,7 @@
   </tr>
 {/snippet}
 
-<PageHeader eyebrow="Front desk" title="New bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
+<PageHeader eyebrow="Front Desk" title="New Bill" description="Find the patient, add the tests, take the payment. Prices come from your catalogue.">
   {#snippet actions()}
     {#if dirty}<span class="draft-saved text-sm text-muted" role="status"><Icon name="check" size="sm" />Draft saved on this computer</span>
       <Button variant="ghost-destructive" size="sm" icon="trash" onclick={clearTheDraft} tooltip="Empty the form and remove the draft">Clear draft</Button>{/if}

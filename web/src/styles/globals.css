@@ -390,13 +390,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
 
 /* ---------- Tabs ---------------------------------------------------------- */
 
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+/* Like a spreadsheet's sheet tabs: a line under the strip; the open tab is outlined on three sides and sits
+   on the line, so it opens onto the panel below. Scrolls (doesn't wrap) when there are too many to fit. */
+.tabs { display: flex; flex-wrap: nowrap; gap: 0; border-bottom: 1px solid var(--border); overflow-x: auto;
+  scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
-  padding: 10px 14px; font: 600 13px var(--font-sans); color: var(--muted-foreground);
-  background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap;
+  flex: none; margin-bottom: -1px; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px 6px 0 0;
+  background: none; color: var(--primary-text); font: 500 14px var(--font-sans); line-height: 1.5; cursor: pointer;
+  white-space: nowrap; transition: color .15s, border-color .15s;
 }
-.tab:hover { color: var(--foreground); }
-.tab[aria-selected="true"] { color: var(--primary-text); border-bottom-color: var(--primary); }
+.tab:hover { border-color: var(--muted) var(--muted) var(--border); color: var(--primary); }
+.tab[aria-selected="true"] { color: var(--foreground); background: var(--background); border-color: var(--border) var(--border) var(--background); }
 
 /* ---------- Dialog ------------------------------------------------------- */
 
@@ -1115,9 +1120,9 @@ td .cell-sub { margin-top: var(--space-1-5); }
 .tip-bubble { display: none; }
 .tip.is-open .tip-bubble { display: block; }
 
-/* Small screens: rows of tabs and filter controls wrap instead of pushing the page sideways. */
-.tabs { flex-wrap: wrap; overflow: visible; row-gap: 2px; }
 .date-range { flex-wrap: wrap; row-gap: 8px; }
+/* Small screens: filter controls wrap instead of pushing the page sideways. .tabs still scrolls, never wraps,
+   on every screen size - same as a spreadsheet's sheet tabs. */
 @media (max-width: 560px) {
   .date-range { width: 100%; }
   .date-field { flex: 1 1 140px; }

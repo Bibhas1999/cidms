@@ -71,7 +71,7 @@
   }
 </script>
 
-<PageHeader eyebrow="Front desk" title="Offline"
+<PageHeader eyebrow="Front Desk" title="Offline"
             description="What this computer keeps for working without the internet: bills and payments made offline (sent by themselves, oldest first, as soon as the connection is back) and saved copies of the screens you've opened.">
   {#snippet actions()}
     <button class="btn btn-primary" type="button" onclick={() => { void offline.send(); void outbox.send(); }}

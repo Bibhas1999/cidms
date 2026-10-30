@@ -129,7 +129,7 @@
   }
 </script>
 
-<PageHeader eyebrow="Lab" title="Worklist"
+<PageHeader eyebrow="Lab" title="Investigation Report"
             description="Tests waiting to be scanned and reports waiting to be handed over. Mark each one as it moves along." />
 
 <section class="card">

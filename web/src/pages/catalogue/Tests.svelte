@@ -140,7 +140,7 @@
 {/snippet}
 {#snippet statusCell(t: LabTest)}<StatusBadge active={t.is_active} help={t.is_active ? "" : "Can't be added to new bills."} />{/snippet}
 
-<PageHeader eyebrow="Catalogue" title="Tests & prices" description="The tests the centre offers, what each costs, and how they're grouped.">
+<PageHeader eyebrow="Catalogue" title="Tests & Prices" description="The tests the centre offers, what each costs, and how they're grouped.">
   {#snippet actions()}
     {#if canManage && tab === "tests"}<Button variant="primary" icon="plus" onclick={() => (bulkOpen = true)}>Add tests</Button>{/if}
   {/snippet}
