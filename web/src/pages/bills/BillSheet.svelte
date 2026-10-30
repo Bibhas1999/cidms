@@ -27,9 +27,9 @@
 
   <table class="top">
     <tbody><tr>
-      <th class="l">Invoice No. - {bill.legacy_no ? `#000${bill.legacy_no}` : bill.invoice_no}</th>
+      <th class="l">Invoice No. : {bill.legacy_no ? `#000${bill.legacy_no}` : bill.invoice_no}</th>
       <th class="c">Bill / Receipt</th>
-      <th class="r">Date-{billDate}</th>
+      <th class="r">Date : {billDate}</th>
     </tr></tbody>
   </table>
   <hr />
