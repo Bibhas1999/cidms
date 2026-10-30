@@ -54,16 +54,21 @@
     .top th { padding: 3px 0 1px; font-size: 11px; }
     .top .c { font-size: 15px; } .top .r { font-size: 10px; }
     .provisional { margin-top: 2px; font-size: 9px; }
+    /* A guaranteed gap below the <hr> above it, rather than relying on the QR cell's own padding. */
+    .patient { margin-top: 4px; }
     .patient td { padding: 1px 0; font-size: 11px; line-height: 1.25; }
     .patient .k { width: 88px; }
+    /* Smaller than the 4 compact rows are tall, so vertical-align: middle has room to centre it,
+       leaving even space above and below instead of the QR forcing the row height itself. */
+    .qr img { width: 50px; height: 50px; }
     .items { margin-top: 3px; }
     .items th { font-size: 11px; padding: 1px; }
     .items td { font-size: 11px; padding: 3px 2px 2px; }
     .due { font-size: 13px; }
     .foot h6 { margin: 4px 0 1px; }
     .foot ol { font-size: 10px; }
-    /* 18mm, not 22px: real room for a pen signature, not just a token gap. */
-    .sign { margin-top: 18mm; font-size: 11px; }
+    /* Enough room for a pen signature, without being excessive. */
+    .sign { margin-top: 14mm; font-size: 11px; }
   }
   /* No forced size/margin here: an @page size locks the browser's own "Paper size" and margin
      controls in the print dialog, so paper choice is left to whoever prints. */

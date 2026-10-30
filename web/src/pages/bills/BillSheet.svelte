@@ -44,7 +44,7 @@
       </tr>
       <tr><td><span class="k">Patient ID</span>: {patientNo}</td></tr>
       <tr><td><span class="k">Mobile</span>: {bill.patient_mobile ? `+91${bill.patient_mobile.replace(/\D/g, "").slice(-10)}` : ""}
-        <span class="gap2"></span><span class="k2">Consultant :</span> {bill.referring_doctor_name || "SELF"}</td></tr>
+        <span class="gap2"></span><span class="k2">Consultant :</span> <span class="up">{bill.referring_doctor_name || "SELF"}</span></td></tr>
       <tr><td><span class="k">Address</span>: {bill.patient_address}</td></tr>
     </tbody>
   </table>
