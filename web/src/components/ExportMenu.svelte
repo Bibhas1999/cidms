@@ -3,10 +3,12 @@
   import { toasts, notify, notifyError } from "../lib/toast.svelte";
   import { tooltip } from "../lib/tooltip";
 
-  // "Export" with a small menu: PDF or Excel. The file is fetched with the session cookie (a GET, so no CSRF
-  // token), then handed to the browser as a download, so a refusal or a server error shows as a toast.
+  // "Export" with a small menu: PDF, Excel, and (bills lists only) CSV and Word. The file is fetched with the
+  // session cookie (a GET, so no CSRF token), then handed to the browser as a download, so a refusal or a
+  // server error shows as a toast.
   //   kind "bills":  /api/exports/bills.xlsx?…   (the bills list's own query string)
   //   kind "report": /api/reports/dues?…&format=xlsx
+  type Format = "pdf" | "xlsx" | "csv" | "docx";
   type Query = Record<string, string | number | boolean | null | undefined>;
   let { path, query = {}, kind = "report", label = "Export", disabled = false, workbook }: {
     path: string; query?: Query; kind?: "bills" | "report"; label?: string; disabled?: boolean;
@@ -16,12 +18,18 @@
 
   // The server includes at most this many rows in a file (it says so in the file's subtitle when it stops).
   const MAX_ROWS = "20,000";
-  const FORMATS = [
-    { id: "pdf" as const, label: "PDF", icon: "fileText",
+  const ALL_FORMATS: { id: Format; label: string; icon: string; about: string }[] = [
+    { id: "pdf", label: "PDF", icon: "fileText",
       about: `Printable A4 pages with the centre's name, page numbers and totals. Up to ${MAX_ROWS} rows; long lists are easier in Excel.` },
-    { id: "xlsx" as const, label: "Excel (.xlsx)", icon: "sheet",
+    { id: "xlsx", label: "Excel (.xlsx)", icon: "sheet",
       about: `A spreadsheet with real numbers you can sort, filter and add up. Up to ${MAX_ROWS} rows; narrow the filters for more.` },
+    { id: "csv", label: "CSV", icon: "fileText",
+      about: `Plain comma-separated text, for importing into other software. Up to ${MAX_ROWS} rows.` },
+    { id: "docx", label: "Word (.docx)", icon: "fileText",
+      about: `A formatted document you can edit or add to a letter. Up to ${MAX_ROWS} rows.` },
   ];
+  // CSV and Word are only offered for a bills-style list (not yet wired up for every report).
+  const FORMATS = $derived(kind === "bills" ? ALL_FORMATS : ALL_FORMATS.filter((f) => f.id === "pdf" || f.id === "xlsx"));
 
   const uid = $props.id();
   let open = $state(false);
@@ -34,7 +42,7 @@
     for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null && v !== "" && v !== false) out.set(k, String(v));
     return out;
   };
-  function url(format: "pdf" | "xlsx" | "book"): string {
+  function url(format: Format | "book"): string {
     if (format === "book" && workbook) { const s = qs(workbook.query ?? {}).toString(); return `${workbook.path}${s ? `?${s}` : ""}`; }
     const q = qs(query);
     if (kind === "report") q.set("format", format);
@@ -47,11 +55,13 @@
     return m ? m[1] : fallback;
   }
 
-  async function download(format: "pdf" | "xlsx" | "book") {
+  const WHAT: Record<Format, string> = { pdf: "PDF", xlsx: "Excel file", csv: "CSV file", docx: "Word document" };
+
+  async function download(format: Format | "book") {
     open = false;
     if (busy) return;
     busy = true;
-    const what = format === "pdf" ? "PDF" : format === "book" ? "workbook" : "Excel file";
+    const what = format === "book" ? "workbook" : WHAT[format];
     const progress = notify(`Preparing the ${what}…`, { kind: "progress" });
     try {
       const res = await fetch(url(format), { credentials: "same-origin" });

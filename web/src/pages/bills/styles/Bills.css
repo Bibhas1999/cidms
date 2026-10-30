@@ -6,3 +6,13 @@
   @media (max-width: 640px) {
     :global(.dt-table td.m-sub) :global(.cell-title.mono) { font-weight: 500; color: var(--muted-foreground); }
   }
+
+  /* Dues: one doctor's bills at a time, chosen from a tab strip - most owed first. */
+  .r { text-align: right; }
+  .due-tabs { margin: 14px 16px 0; }
+  .due-group-table { margin: 0; }
+  .due-group-actions { width: 1%; white-space: nowrap; text-align: right; }
+  .due-more { padding: 14px; text-align: center; font-size: 13px; color: var(--muted-foreground); }
+  @media (max-width: 640px) {
+    .due-group-table :global(th), .due-group-table :global(td) { padding: 10px 12px; }
+  }

@@ -7,26 +7,28 @@
   import Icon from "../../components/Icon.svelte";
   import InfoTip from "../../components/InfoTip.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
+  import type { RowAction } from "../../components/RowMenu.svelte";
   import StatCard from "../../components/StatCard.svelte";
   import StatusBadge from "../../components/StatusBadge.svelte";
-  import type { RowAction } from "../../components/RowMenu.svelte";
   import { get } from "../../lib/api";
   import { PAYMENT_MODES, type BillPage, type Doctor, type LabTest } from "../../lib/bill-types";
   import { rangeLabel, thisMonth } from "../../lib/dates";
   import { count, dateTime, longDate, rupees, timeOf } from "../../lib/format";
   import { formatPhone } from "../../lib/phone";
-  import { router, setQuery } from "../../lib/router.svelte";
+  import { navigate, router, setQuery } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
   import { tooltip } from "../../lib/tooltip";
   import type { BillSummary, Department, Page, Staff } from "../../lib/types";
 
-  // All bills, or (mode "dues") only bills with money still owed, oldest first for whoever chases them.
+  // All bills, or (at /dues) only bills with money still owed, oldest first for whoever chases them.
   // Every filter is in the address (FilterBar), so a filtered list can be shared and survives a reload.
-  let { mode = "all" }: { mode?: "all" | "dues"; params?: Record<string, string> } = $props();
-  const dues = $derived(mode === "dues");
+  const dues = $derived(router.path === "/dues");
 
   const q = $derived(router.query);
-  const SIZE = $derived(Math.min(100, Number(q.get("size")) || 25));
+  // Dues isn't paginated (see dueGroups below) - every due bill is fetched (100 at a time, the server's own
+  // cap), not just the first page, so a doctor's bills are never silently cut off.
+  const PAGE_SIZE = 100;
+  const SIZE = $derived(dues ? PAGE_SIZE : Math.min(100, Number(q.get("size")) || 25));
   const page = $derived(Number(q.get("page") ?? 1) || 1);
   // Nothing in the address = this month (owner's default everywhere); ?from=all = every date.
   const month = thisMonth();
@@ -56,9 +58,22 @@
   $effect(() => {
     const ctrl = new AbortController();
     const query = { ...filters, page, size: SIZE };
+    const isDues = dues;
     reload;
     loading = true;
-    get<BillPage>("/api/bills", query, ctrl.signal)
+    (async () => {
+      if (!isDues) return get<BillPage>("/api/bills", query, ctrl.signal);
+      // Every page, not just the first: a doctor's bills must never split across an unfetched page.
+      let p = 1, first: BillPage | null = null, items: BillPage["items"] = [];
+      for (;;) {
+        const d = await get<BillPage>("/api/bills", { ...query, page: p, size: PAGE_SIZE }, ctrl.signal);
+        first ??= d;
+        items = items.concat(d.items);
+        if (items.length >= d.total || !d.items.length) break;
+        p += 1;
+      }
+      return { ...first!, items, page: 1, size: items.length };
+    })()
       .then((d) => { data = d; loadError = ""; })
       .catch((e) => { if (e.name !== "AbortError") loadError = e.message; })
       .finally(() => { loading = false; });
@@ -100,6 +115,11 @@
 
   function actionsFor(b: BillSummary): RowAction[] {
     const live = b.status !== "cancelled";
+    // Dues: just the one thing this page is for, nothing else to choose from.
+    if (dues) {
+      return live && Number(b.due) > 0 && session.can("payments.collect")
+        ? [{ label: "Collect due", icon: "wallet", href: `/bills/${b.id}?collect=1`, hint: `${rupees(b.due)} still to pay` }] : [];
+    }
     return [
       { label: "View bill", icon: "eye", href: `/bills/${b.id}` },
       { label: "Print", icon: "printer", href: `/bills/${b.id}/print`, newTab: true, hint: "Opens the printable bill in a new tab" },
@@ -116,6 +136,38 @@
   ]);
   // The table's own filters (the dates at the top are the page's period, not a table filter).
   const filtered = $derived(moreKeys.flat().some((k) => q.get(k)) || !!(q.get("search") || (!dues && payment)));
+
+  // Dues, grouped by referring doctor and sorted by who owes the most, so whoever's chasing dues can work
+  // through doctors most worth calling first (bills without a doctor fall under "Self"). Not paginated like
+  // the rest of the list - dues lists are small enough to show in one go, and a doctor's bills shouldn't
+  // split across pages.
+  interface DoctorDues { name: string; bills: BillSummary[]; total: number }
+  const dueGroups = $derived<DoctorDues[]>(
+    !dues ? [] : Object.values(
+      (data?.items ?? []).reduce<Record<string, DoctorDues>>((acc, b) => {
+        const name = b.referring_doctor_name ? nice(b.referring_doctor_name) : "Self";
+        (acc[name] ??= { name, bills: [], total: 0 }).bills.push(b);
+        acc[name].total += Number(b.due);
+        return acc;
+      }, {}),
+    ).sort((a, b) => b.total - a.total),
+  );
+  // One doctor at a time, picked from the tab strip - the default is whoever owes the most.
+  const activeDoctor = $derived(q.get("doctor_tab") || dueGroups[0]?.name || "");
+  const activeGroup = $derived(dueGroups.find((g) => g.name === activeDoctor) ?? dueGroups[0]);
+
+  // The active doctor's bills, revealed a batch at a time as the page scrolls, rather than every row of a
+  // long list rendered (and painted) at once. Resets to one batch whenever the doctor tab changes.
+  const DUE_BATCH = 50;
+  let shown = $state(DUE_BATCH);
+  $effect(() => { activeGroup; shown = DUE_BATCH; });
+  const visibleBills = $derived(activeGroup?.bills.slice(0, shown) ?? []);
+  const hasMore = $derived(shown < (activeGroup?.bills.length ?? 0));
+  function moreSentinel(node: HTMLElement) {
+    const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) shown += DUE_BATCH; }, { rootMargin: "400px" });
+    io.observe(node);
+    return { destroy: () => io.disconnect() };
+  }
 </script>
 
 {#snippet billCell(b: BillSummary)}
@@ -131,24 +183,34 @@
 {#snippet payCell(b: BillSummary)}<StatusBadge bill={b} />{/snippet}
 {#snippet byCell(b: BillSummary)}<span class="nowrap text-sm" use:tooltip={`Billed ${dateTime(b.created_at)}`}>{b.created_by_name ? nice(b.created_by_name) : "—"}</span>{/snippet}
 
-<PageHeader eyebrow="Front desk" title={dues ? "Dues" : "Bills"}
+<PageHeader eyebrow="Front Desk" title={dues ? "Dues" : "Bills"}
             description={dues ? "Bills with money still owed, oldest first. Open one to collect what's due; every instalment is kept." : "Every bill, newest first. Search by patient, mobile or bill number."}>
   {#snippet actions()}
     <DateRange {from} {to} id="bills" anyLabel="All time" compact onchange={setDates} />
   {/snippet}
 </PageHeader>
 
-<!-- Four figures for everyone, for the dates at the top: total bills, total billed amount, collected, dues -->
-<div class="stat-row" aria-live="polite">
-  <StatCard label="Total bills" value={cards ? count(cards.total) : "—"} loading={!cards} icon="receipt"
-            note={rangeLabel(from, to)} tip="How many bills fall in the dates chosen at the top (the table's search and filters don't change these cards). Cancelled bills are included in this count." />
-  <StatCard label="Total billed amount" value={cards ? rupees(cards.sums.billed ?? 0) : "—"} loading={!cards} icon="rupee"
-            tip="What the bills in these dates came to, after discounts. Cancelled bills aren't counted." />
-  <StatCard label="Collected" value={cards ? rupees(cards.sums.paid) : "—"} loading={!cards} icon="wallet" tone="green"
-            tip="What has been paid on the bills in these dates, refunds taken off. Cancelled bills aren't counted." />
-  <StatCard label="Dues" value={cards ? rupees(cards.sums.due) : "—"} loading={!cards} icon="alert" tone="red" valueClass="money-due"
-            tip="Money still owed on the bills in these dates: their totals less what's been paid (refunds add back). Cancelled bills aren't counted." />
-</div>
+{#if dues}
+  <!-- Dues: just the two figures that matter here -->
+  <div class="stat-row" aria-live="polite">
+    <StatCard label="Total bills with dues" value={cards ? count(cards.total) : "—"} loading={!cards} icon="receipt" note={rangeLabel(from, to)}
+              tip="How many bills in these dates still have money owed (the table's search and filters don't change this card)." />
+    <StatCard label="Total dues" value={cards ? rupees(cards.sums.due) : "—"} loading={!cards} icon="alert" tone="red" valueClass="money-due"
+              tip="Money still owed on the bills in these dates: their totals less what's been paid (refunds add back)." />
+  </div>
+{:else}
+  <!-- Four figures: total bills, total billed amount, collected, dues -->
+  <div class="stat-row" aria-live="polite">
+    <StatCard label="Total bills" value={cards ? count(cards.total) : "—"} loading={!cards} icon="receipt"
+              note={rangeLabel(from, to)} tip="How many bills fall in the dates chosen at the top (the table's search and filters don't change these cards). Cancelled bills are included in this count." />
+    <StatCard label="Total billed amount" value={cards ? rupees(cards.sums.billed ?? 0) : "—"} loading={!cards} icon="rupee"
+              tip="What the bills in these dates came to, after discounts. Cancelled bills aren't counted." />
+    <StatCard label="Collected" value={cards ? rupees(cards.sums.paid) : "—"} loading={!cards} icon="wallet" tone="green"
+              tip="What has been paid on the bills in these dates, refunds taken off. Cancelled bills aren't counted." />
+    <StatCard label="Dues" value={cards ? rupees(cards.sums.due) : "—"} loading={!cards} icon="alert" tone="red" valueClass="money-due"
+              tip="Money still owed on the bills in these dates: their totals less what's been paid (refunds add back). Cancelled bills aren't counted." />
+  </div>
+{/if}
 
 <section class="card" aria-label={dues ? "Dues" : "Bills"}>
   <FilterBar placeholder="Patient name, mobile or bill number…" searchLabel="Search bills" {moreKeys} noun={dues ? "dues" : "bills"}
@@ -268,20 +330,68 @@
     {/snippet}
   </FilterBar>
 
-  <DataTable label={dues ? "Dues" : "Bills"} rows={data?.items ?? []} loading={loading} error={loadError} onretry={() => reload++}
-             rowHref={(b) => `/bills/${b.id}`} actions={actionsFor} actionsLabel={(b) => `Actions for ${b.invoice_no}`} page={data}
-             empty={{ icon: dues ? "wallet" : "receipt", title: filtered ? "No bills match these filters." : dues ? "No dues. Everything is paid." : "No bills yet.",
-                      text: filtered ? "Try a longer date range, or clear the filters." : "" }}
-             columns={[
-               { key: "bill", label: "Bill ID", cell: billCell, mobile: "sub" },
-               { key: "patient", label: "Patient", cell: patientCell, mobile: "title" },
-               { key: "doctor", label: "Referred by", cell: doctorCell, optional: true },
-               { key: "total", label: "Total", cell: totalCell, align: "right", tip: "After discount." },
-               { key: "paid", label: "Paid", cell: paidCell, align: "right", optional: true, mobile: "hide", tip: "Payments taken, less any refunds." },
-               { key: "due", label: "Due", cell: dueCell, align: "right", tip: "Total less what's been paid: still to collect." },
-               { key: "pay", label: "Payment", cell: payCell, mobile: "end" },
-               ...(dues ? [] : [{ key: "by", label: "Billed by", cell: byCell, optional: true, mobile: "hide" as const }]),
-             ]} />
+  {#if dues}
+    {#if loading && !data}
+      <div class="empty" aria-busy="true">Loading…</div>
+    {:else if loadError}
+      <div class="alert alert-destructive" role="alert"><Icon name="alert" /><div>{loadError} <button class="link-button" onclick={() => reload++}>Try again</button></div></div>
+    {:else if !dueGroups.length}
+      <div class="empty"><Icon name="wallet" />
+        <p>{filtered ? "No bills match these filters." : "No dues. Everything is paid."}</p>
+        {#if filtered}<p class="text-sm text-muted">Try a longer date range, or clear the filters.</p>{/if}
+      </div>
+    {:else}
+      <!-- One doctor's bills on screen at a time, picked from the tabs; most owed first. -->
+      <div class="tabs due-tabs" role="tablist" aria-label="Which doctor">
+        {#each dueGroups as g (g.name)}
+          <button class="tab" role="tab" aria-selected={g.name === activeGroup?.name}
+                  onclick={() => set({ doctor_tab: g.name === dueGroups[0].name ? null : g.name })}>
+            {g.name}
+          </button>
+        {/each}
+      </div>
+      {#if activeGroup}
+        <table class="table due-group-table">
+          <thead><tr><th>Bill</th><th>Patient</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Due</th><th>Payment</th><th class="due-group-actions"></th></tr></thead>
+          <tbody>
+            {#each visibleBills as b (b.id)}
+              <tr class="is-clickable" onclick={() => navigate(`/bills/${b.id}`)}>
+                <td>{@render billCell(b)}</td>
+                <td>{@render patientCell(b)}</td>
+                <td class="r">{@render totalCell(b)}</td>
+                <td class="r">{@render paidCell(b)}</td>
+                <td class="r">{@render dueCell(b)}</td>
+                <td>{@render payCell(b)}</td>
+                <td class="due-group-actions" onclick={(e) => e.stopPropagation()}>
+                  {#if b.status !== "cancelled" && Number(b.due) > 0 && session.can("payments.collect")}
+                    <a class="btn btn-outline btn-sm" href="/bills/{b.id}?collect=1" use:tooltip={`${rupees(b.due)} still to pay`}>
+                      <Icon name="wallet" size="sm" /> Collect
+                    </a>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if hasMore}<div class="due-more" use:moreSentinel aria-hidden="true">Loading more…</div>{/if}
+      {/if}
+    {/if}
+  {:else}
+    <DataTable label="Bills" rows={data?.items ?? []} loading={loading} error={loadError} onretry={() => reload++}
+               rowHref={(b) => `/bills/${b.id}`} actions={actionsFor} actionsLabel={(b) => `Actions for ${b.invoice_no}`} page={data}
+               empty={{ icon: "receipt", title: filtered ? "No bills match these filters." : "No bills yet.",
+                        text: filtered ? "Try a longer date range, or clear the filters." : "" }}
+               columns={[
+                 { key: "bill", label: "Bill ID", cell: billCell, mobile: "sub" },
+                 { key: "patient", label: "Patient", cell: patientCell, mobile: "title" },
+                 { key: "doctor", label: "Referred by", cell: doctorCell, optional: true },
+                 { key: "total", label: "Total", cell: totalCell, align: "right", tip: "After discount." },
+                 { key: "paid", label: "Paid", cell: paidCell, align: "right", optional: true, mobile: "hide", tip: "Payments taken, less any refunds." },
+                 { key: "due", label: "Due", cell: dueCell, align: "right", tip: "Total less what's been paid: still to collect." },
+                 { key: "pay", label: "Payment", cell: payCell, mobile: "end" },
+                 { key: "by", label: "Billed by", cell: byCell, optional: true, mobile: "hide" },
+               ]} />
+  {/if}
 </section>
 
 <style src="./styles/Bills.css"></style>
