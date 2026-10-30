@@ -1,0 +1,2 @@
+  .check-row :global(.tip) { margin-left: auto; }
+  .hint :global(.icon) { vertical-align: -2px; }

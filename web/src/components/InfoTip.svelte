@@ -68,12 +68,4 @@
         style="left: {pos.left}px; top: {pos.top}px; --arrow-x: {pos.arrow}px">{text}</span>
 </span>
 
-<style>
-  /* Sits on the text line it explains, whatever the container (labels, card titles, table headers). */
-  .info-tip { display: inline-flex; align-items: center; vertical-align: middle; flex: none; margin: -4px 0; line-height: 1; }
-  .info-tip .tip-trigger { width: 22px; height: 22px; }
-  /* Fixed to the viewport (overrides the registry's absolute placement), above dialogs and sticky bars. */
-  .info-tip .info-bubble { position: fixed; z-index: 1100; bottom: auto; right: auto; transform: none; }
-  .info-tip .info-bubble::after { left: var(--arrow-x); }
-  .info-tip.is-open .info-bubble::before { left: 0; right: 0; }
-</style>
+<style src="./styles/InfoTip.css"></style>

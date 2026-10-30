@@ -136,8 +136,4 @@
     </Field>
 </FormDialog>
 
-<style>
-  .attached { align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-  .min-w-0 { min-width: 0; }
-  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-</style>
+<style src="./styles/ReportPdf.css"></style>

@@ -17,8 +17,4 @@
   {#if action}<div class="empty-state-action">{@render action()}</div>{/if}
 </div>
 
-<style>
-  .empty-title { color: var(--foreground); }
-  .is-compact { padding: 20px 16px; }
-  .empty-state-action { margin-top: 8px; }
-</style>
+<style src="./styles/EmptyState.css"></style>

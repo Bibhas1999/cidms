@@ -1,0 +1,54 @@
+  /* maxHeight bounds the body only, not the header or foot: thead/tbody/tfoot each become their own block (a
+     row stays display:table so its cells still lay out side by side), and only tbody scrolls — so the
+     scrollbar sits next to the rows, not running the full height of a header and footer that don't move. */
+  @media (min-width: 641px) {
+    .dt-wrap.has-max thead, .dt-wrap.has-max tbody, .dt-wrap.has-max tfoot { display: block; }
+    .dt-wrap.has-max tr { display: table; width: 100%; table-layout: fixed; }
+    .dt-wrap.has-max tbody { max-height: var(--dt-max-h); overflow-y: auto; }
+  }
+  .dt-table.is-loading tbody { opacity: .55; transition: opacity .15s; }
+  .dt-table :global(th .tip) { margin-left: 2px; }
+  .dt-sort { background: none; border: 0; padding: 0; cursor: pointer; }
+  .dt-select { width: 40px; }
+  .dt-actions { width: 52px; }
+  tr.is-selected td { background: var(--accent); }
+  .text-center { text-align: center; }
+  :global(.skeleton) { display: inline-block; height: 12px; border-radius: 6px; vertical-align: middle;
+    background: linear-gradient(90deg, var(--muted) 25%, color-mix(in srgb, var(--border) 80%, var(--muted)) 50%, var(--muted) 75%);
+    background-size: 200% 100%; animation: dt-shimmer 1.2s ease-in-out infinite; }
+  @keyframes dt-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { :global(.skeleton) { animation: none; } }
+  .dt-error { padding-top: 14px; }
+
+  /* Tablets and small laptops: drop the columns marked optional rather than squeeze them. */
+  @media (min-width: 641px) and (max-width: 1100px) { .dt-optional { display: none; } }
+
+  /* Phones: each row is a card. */
+  @media (max-width: 640px) {
+    .dt-wrap { overflow: visible; }
+    .dt-wrap.has-max { overflow: auto; }
+    .dt-table { min-width: 0 !important; display: block; }
+    .dt-table thead { display: none; }
+    .dt-table tbody, .dt-table tfoot { display: block; }
+    .dt-table tr { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 10px; row-gap: 4px;
+      align-items: center; padding: 12px 12px 12px 14px; border-bottom: 1px solid var(--border); }
+    .dt-table tbody tr:last-child { border-bottom: 0; }
+    .dt-table td { display: block; padding: 0 !important; border: 0 !important; min-width: 0; text-align: left; background: none !important; }
+    .dt-table td.m-title { grid-column: 1; grid-row: 1; font-weight: 600; }
+    .dt-table td.m-end { grid-column: 2; grid-row: 1; text-align: right; }
+    .dt-table td.m-actions { grid-column: 3; grid-row: 1 / span 2; align-self: start; margin: -6px -6px 0 0; width: auto; }
+    .dt-table td.m-sub { grid-column: 1 / 3; font-size: 13px; color: var(--muted-foreground); }
+    .dt-table td.m-field { grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13.5px; }
+    .dt-table td.m-field::before { content: attr(data-label); flex: none; color: var(--muted-foreground); font-size: 12.5px; font-weight: 500; }
+    .dt-table td.m-field > :global(*) { text-align: right; min-width: 0; }
+    .dt-table td.m-hide, .dt-table td.dt-optional.m-hide { display: none; }
+    .dt-table td.dt-optional { display: flex; }
+    .dt-table td.dt-optional.m-title, .dt-table td.dt-optional.m-sub, .dt-table td.dt-optional.m-end { display: block; }
+    .dt-table.has-select tr { padding-left: 46px; }
+    .dt-table td.dt-select { position: absolute; left: 14px; top: 14px; }
+    .dt-table tr.dt-empty, .dt-table tr.dt-skeleton { display: block; }
+    .dt-table tr.dt-skeleton td { margin: 4px 0; }
+    .dt-table tr.dt-skeleton td.m-hide, .dt-table tr.dt-skeleton td.m-field:nth-child(n + 4) { display: none; }
+    .dt-table tr.dt-empty td { padding: 0 !important; }
+    .dt-table :global(.cell-sub) { margin-top: 2px; }
+  }

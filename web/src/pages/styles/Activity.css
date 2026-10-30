@@ -1,0 +1,3 @@
+  .details { display: block; max-width: 420px; overflow-wrap: anywhere; }
+  .activity-filter { max-width: none !important; min-width: 240px !important; }
+  @media (max-width: 640px) { .details { max-width: none; } .activity-filter { min-width: 0 !important; } }

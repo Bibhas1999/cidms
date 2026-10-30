@@ -95,18 +95,4 @@
   </div>
 {/if}
 
-<style>
-  .row-menu { position: fixed; z-index: 200; width: 220px; max-width: calc(100vw - 16px); padding: 5px; background: var(--popover); border: 1px solid var(--border);
-    border-radius: 10px; box-shadow: var(--shadow-lg); }
-  .row-menu-item { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 10px; border: 0; border-radius: 7px;
-    background: none; color: var(--foreground); font: 500 13.5px var(--font-sans); text-decoration: none !important; cursor: pointer; text-align: left; }
-  .row-menu-item:hover:not(:disabled), .row-menu-item:focus-visible { background: var(--muted); }
-  .row-menu-item:disabled { opacity: .5; cursor: not-allowed; }
-  .row-menu-item :global(.icon) { color: var(--muted-foreground); flex: none; }
-  .row-menu-item.is-danger { color: var(--destructive); }
-  .row-menu-item.is-danger :global(.icon) { color: var(--destructive); }
-  @media (pointer: coarse) {
-    .row-menu-item { height: 42px; font-size: 14.5px; }
-    .kebab { width: 40px !important; height: 40px !important; }
-  }
-</style>
+<style src="./styles/RowMenu.css"></style>

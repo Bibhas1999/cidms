@@ -26,8 +26,4 @@
   </div>
 </section>
 
-<style>
-  .choice { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
-  .choice:hover { border-color: var(--primary-text); }
-  .choice.is-on { border-color: var(--primary-text); background: var(--accent); color: var(--accent-foreground); }
-</style>
+<style src="./styles/Appearance.css"></style>

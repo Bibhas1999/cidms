@@ -104,12 +104,4 @@
   </main>
 {/if}
 
-<style>
-  :global(body.is-printout) { background: #f3f4f6 !important; }
-  .bar { display: flex; gap: 10px; justify-content: center; padding: 16px; flex-wrap: wrap; }
-  .gate { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-  .gate-card { width: 100%; max-width: 400px; }
-  .gate-title { font-size: 20px; margin: 2px 0 4px; }
-  .gate-logo { max-height: 56px; max-width: 160px; object-fit: contain; align-self: flex-start; }
-  @media print { .screen-only { display: none !important; } :global(body.is-printout) { background: #fff !important; } }
-</style>
+<style src="./styles/PublicReport.css"></style>

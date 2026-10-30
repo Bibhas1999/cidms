@@ -1,0 +1,2 @@
+  .form-summary { outline: none; }
+  .form-summary:not(.is-shown) { display: contents; }

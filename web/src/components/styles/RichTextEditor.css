@@ -1,0 +1,14 @@
+  .rte { border: 1px solid var(--input, var(--border)); border-radius: 8px; background: var(--background); overflow: hidden; }
+  .rte:focus-within { outline: 2px solid var(--ring, var(--primary)); outline-offset: 1px; }
+  .rte.is-invalid { border-color: var(--destructive); }
+  .rte.is-disabled { background: var(--muted); }
+  .rte-bar { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-bottom: 1px solid var(--border); background: var(--muted); }
+  .rte-btn { min-width: 30px; height: 28px; padding: 0 6px; border: 0; border-radius: 6px; background: none; color: var(--foreground);
+    font: 600 13px var(--font-sans); cursor: pointer; }
+  .rte-btn:hover, .rte-btn:focus-visible { background: var(--background); }
+  .rte-btn.i { font-style: italic; }
+  .rte-btn.u { text-decoration: underline; }
+  .rte-body { padding: 10px 12px; font-size: 14px; line-height: 1.55; outline: none; overflow-wrap: anywhere; }
+  .rte-body :global(p) { margin: 0 0 6px; }
+  .rte-body :global(h2), .rte-body :global(h3), .rte-body :global(h4) { font-size: 15px; margin: 8px 0 4px; }
+  .rte-body :global(ul), .rte-body :global(ol) { margin: 0 0 6px; padding-left: 22px; }

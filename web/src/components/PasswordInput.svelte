@@ -22,11 +22,4 @@
   </button>
 </span>
 
-<style>
-  .pw { position: relative; display: block; }
-  .pw-input { padding-right: 42px; }
-  .pw-eye { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 30px;
-    padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted-foreground); cursor: pointer; }
-  .pw-eye:hover { color: var(--foreground); background: var(--muted); }
-  .pw-eye:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
-</style>
+<style src="./styles/PasswordInput.css"></style>

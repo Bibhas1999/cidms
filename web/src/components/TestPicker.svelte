@@ -97,14 +97,4 @@
   </ul>
 </div>
 
-<style>
-  .picker { display: flex; flex-direction: column; gap: 10px; }
-  .picker-bar { display: flex; gap: 10px; flex-wrap: wrap; }
-  .picker-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 28px; }
-  .picker-list { list-style: none; margin: 0; padding: 4px; max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
-  .picker-row { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: var(--radius-sm); cursor: pointer; }
-  .picker-row:hover { background: var(--muted); }
-  .picker-row.is-on { background: var(--accent); }
-  .picker-row.is-locked { cursor: default; opacity: .75; }
-  .sub { display: block; font-size: 12px; color: var(--muted-foreground); }
-</style>
+<style src="./styles/TestPicker.css"></style>

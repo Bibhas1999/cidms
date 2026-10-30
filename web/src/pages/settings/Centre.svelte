@@ -244,9 +244,4 @@
   <div class="card"><div class="empty" aria-busy="true">Loading…</div></div>
 {/if}
 
-<style>
-  .wordmark-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-  .wordmark-preview { display: grid; place-items: center; width: 260px; height: 72px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
-  .wordmark-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  :global(.flip-v) { transform: scaleY(-1); }
-</style>
+<style src="./styles/Centre.css"></style>

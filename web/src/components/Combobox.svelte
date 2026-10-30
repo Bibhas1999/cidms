@@ -96,16 +96,4 @@
   {/if}
 </div>
 
-<style>
-  .combo { position: relative; }
-  .combo-list { position: absolute; z-index: 40; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 320px; overflow-y: auto;
-    background: var(--popover); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
-  .combo-list li { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
-  .combo-list li.is-active { background: var(--accent); }
-  .combo-empty { color: var(--muted-foreground); cursor: default !important; }
-  .combo-add { display: flex; align-items: center; gap: 6px; color: var(--primary-text); font-weight: 600; }
-  .combo-add :global(.icon) { flex: none; }
-  .combo-spin { position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;
-    border: 2px solid var(--border); border-top-color: var(--primary); animation: combo-spin .7s linear infinite; }
-  @keyframes combo-spin { to { transform: rotate(360deg); } }
-</style>
+<style src="./styles/Combobox.css"></style>

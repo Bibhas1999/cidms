@@ -89,24 +89,4 @@
   {/if}
 </div>
 
-<style>
-  .notif-row { position: relative; }
-  .notif-row .notif-item { padding-right: 44px; }
-  .row-action { position: absolute; right: 6px; top: 8px; opacity: 0; transition: opacity .12s; }
-  .notif-row:hover .row-action, .row-action:focus-within { opacity: 1; }
-  .notif-time { align-self: flex-start; }
-  .sev { flex: none; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-         background: var(--muted); color: var(--muted-foreground); }
-  .sev-success { background: color-mix(in srgb, #15803d 14%, transparent); color: #15803d; }
-  .sev-warning { background: color-mix(in srgb, #b45309 14%, transparent); color: #b45309; }
-  .sev-danger { background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive); }
-  .sheet-backdrop { display: none; }
-  @media (hover: none) { .row-action { opacity: 1; } }
-  @media (max-width: 640px) {
-    .sheet-backdrop { display: block; position: fixed; inset: 0; z-index: 59; background: rgb(0 0 0 / .35); border: 0; }
-    .notif-popover { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%;
-                     border-radius: var(--radius-lg) var(--radius-lg) 0 0; max-height: 85vh; display: flex; flex-direction: column;
-                     padding-bottom: env(safe-area-inset-bottom); animation: sheet-up .2s ease-out; }
-    .notif-popover .notif-list { max-height: none; flex: 1; }
-  }
-</style>
+<style src="./styles/NotificationBell.css"></style>

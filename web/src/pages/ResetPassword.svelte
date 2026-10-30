@@ -71,8 +71,4 @@
   </form>
 </AuthLayout>
 
-<style>
-  .error { color: var(--danger); font-weight: 500; font-size: 12px; }
-  .show { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
-  .show input { width: 16px; height: 16px; accent-color: var(--brand); }
-</style>
+<style src="./styles/ResetPassword.css"></style>

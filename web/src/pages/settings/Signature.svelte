@@ -127,7 +127,4 @@
   <div class="card"><div class="empty" aria-busy="true">Loading…</div></div>
 {/if}
 
-<style>
-  .sig-box { width: 200px; height: 80px; border: 1px dashed var(--border); border-radius: 8px; display: grid; place-items: center; background: #fff; }
-  .sig-box img { max-width: 190px; max-height: 70px; object-fit: contain; }
-</style>
+<style src="./styles/Signature.css"></style>

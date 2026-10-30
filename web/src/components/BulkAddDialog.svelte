@@ -209,10 +209,4 @@
   {/snippet}
 </Dialog>
 
-<style>
-  .bulk { max-height: 50vh; overflow: auto; }
-  .bulk td { vertical-align: top; padding-top: 6px; padding-bottom: 6px; }
-  .bulk .input, .bulk .select { width: 100%; min-width: 90px; }
-  .cell-error { color: var(--destructive); font-size: 0.8125rem; margin-top: 4px; display: flex; gap: 4px; align-items: flex-start; }
-  .wrap { flex-wrap: wrap; align-items: center; }
-</style>
+<style src="./styles/BulkAddDialog.css"></style>

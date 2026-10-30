@@ -1,0 +1,2 @@
+  .type-badges { flex-wrap: wrap; }
+  @media (max-width: 640px) { .type-badges { justify-content: flex-end; } }

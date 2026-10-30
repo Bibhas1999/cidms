@@ -26,6 +26,4 @@
   </Dialog>
 {/if}
 
-<style>
-  .extra { margin-right: auto; color: var(--destructive); }
-</style>
+<style src="./styles/ConfirmHost.css"></style>

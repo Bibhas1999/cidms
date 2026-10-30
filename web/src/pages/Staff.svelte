@@ -286,11 +286,4 @@
   {#snippet footer()}<Button variant="primary" onclick={() => (shownPassword = null)}>{pwCopied ? "Done" : "I've saved it"}</Button>{/snippet}
 </Dialog>
 
-<style>
-  .person { gap: 10px; min-width: 0; }
-  .roles { gap: 6px; }
-  .roles-field { border: 0; padding: 0; margin: 0; outline: none; }
-  .roles-legend { display: inline-flex; align-items: center; gap: 2px; margin-bottom: 6px; padding: 0; }
-  :global(.push-left) { margin-right: auto; }
-  @media (max-width: 640px) { :global(.push-left) { margin-right: 0; flex: 1 1 100% !important; } }
-</style>
+<style src="./styles/Staff.css"></style>

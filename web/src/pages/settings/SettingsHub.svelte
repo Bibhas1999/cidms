@@ -77,10 +77,4 @@
   </div>
 </div>
 
-<style>
-  .settings { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; align-items: start; }
-  .settings-nav { padding: 8px 12px 12px; position: sticky; top: calc(var(--topbar-height) + 16px); display: flex; flex-direction: column; gap: 2px; }
-  .settings-nav .nav-link.is-active::before { left: -12px; }
-  .settings-body { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-  @media (max-width: 900px) { .settings { grid-template-columns: 1fr; } .settings-nav { position: static; } }
-</style>
+<style src="./styles/SettingsHub.css"></style>

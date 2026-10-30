@@ -127,15 +127,4 @@
   {/if}
 </div>
 
-<style>
-  .export { position: relative; display: inline-block; }
-  .export-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 200; width: 280px; padding: 5px; background: var(--popover);
-    border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); }
-  .export-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px;
-    background: none; color: var(--foreground); font: 500 13.5px var(--font-sans); cursor: pointer; text-align: left; }
-  .export-item:hover, .export-item:focus-visible { background: var(--muted); }
-  .export-item :global(.icon) { color: var(--muted-foreground); margin-top: 2px; flex: none; }
-  .export-label { display: block; }
-  .export-sep { height: 1px; margin: 4px 6px; background: var(--border); }
-  .export-about { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; line-height: 1.4; color: var(--muted-foreground); }
-</style>
+<style src="./styles/ExportMenu.css"></style>

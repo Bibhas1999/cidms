@@ -243,43 +243,4 @@
   </div>
 </div>
 
-<style>
-  /* Room above and below the wordmark, so it doesn't sit on the top edge of the window. */
-  .wordmark-link { display: flex; align-items: center; width: 100%; height: 100%; padding: 10px 0; box-sizing: border-box; }
-  .sidebar-brand .centre-wordmark { display: block; width: 100%; max-width: 196px; height: auto; max-height: 40px; object-fit: contain; object-position: left center; }
-  .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .terms-link { font-size: 12px; color: var(--faint-foreground, var(--muted-foreground)); text-decoration: none; }
-  .terms-link:hover { color: var(--foreground); text-decoration: underline; }
-
-  /* The desktop sidebar's three widths: full (icon + label), half (icon only) and hidden (the page takes the
-     room), cycled from one toggle in the topbar (so it's reachable whichever width the sidebar is at right
-     now). Only above the 900px breakpoint — on phones/tablets the sidebar stays the drawer `navOpen` opens. */
-  .app { transition: grid-template-columns .15s ease; }
-  .app.sidebar-half { grid-template-columns: 64px 1fr; }
-  .app.sidebar-hidden { grid-template-columns: 1fr; }
-  .app.sidebar-hidden .sidebar { display: none; }
-
-  .sidebar-half .sidebar-brand { padding-left: 0; padding-right: 0; justify-content: center; }
-  .brand-link-half { justify-content: center; padding: 8px 0; }
-  .sidebar-half .nav-heading { display: none; }
-  .sidebar-half .nav-link { justify-content: center; padding: 0; gap: 0; }
-  /* Visually hidden, not display:none: the link's accessible name still comes from this text, same as a
-     sighted mouse user getting it from the hover tooltip instead of reading it on the rail. */
-  .sidebar-half .nav-link span {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
-    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-  }
-
-  /* Hidden: the sidebar's own logo is gone with it, so the topbar shows a small one in its place. */
-  .topbar-brand { flex: none; margin-right: 4px; }
-  .topbar-logo { width: 28px; height: 28px; border-radius: 7px; object-fit: contain; flex: none; }
-  .topbar-mark { width: 28px; height: 28px; font-size: 13px; }
-
-  @media (max-width: 900px) {
-    /* Phones/tablets keep the drawer: full/half/hidden is a desktop-only preference. */
-    .app.sidebar-half, .app.sidebar-hidden { grid-template-columns: var(--sidebar-width) 1fr; }
-    .app.sidebar-hidden .sidebar { display: flex; }
-    .sidebar-toggle, .topbar-brand { display: none; }
-  }
-  @media (prefers-reduced-motion: reduce) { .app { transition: none; } }
-</style>
+<style src="./styles/AppShell.css"></style>

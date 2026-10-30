@@ -42,8 +42,4 @@
   <p class="screen-only" style="padding: 24px">Preparing the report…</p>
 {/if}
 
-<style>
-  :global(body.is-printout) { background: #f3f4f6 !important; }
-  .bar { display: flex; gap: 10px; justify-content: center; padding: 16px; }
-  @media print { :global(body.is-printout) { background: #fff !important; } .screen-only { display: none !important; } }
-</style>
+<style src="./styles/ReportPrint.css"></style>

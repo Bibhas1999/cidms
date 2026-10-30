@@ -122,16 +122,4 @@
   {/if}
 </section>
 
-<style>
-  .notif-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-  .notif-row { position: relative; }
-  .notif-row .notif-item { padding-right: 48px; }
-  .row-action { position: absolute; right: 10px; top: 10px; }
-  .notif-body.full { -webkit-line-clamp: unset; line-clamp: unset; display: block; }
-  .notif-time { align-self: flex-start; }
-  .sev { flex: none; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-         background: var(--muted); color: var(--muted-foreground); }
-  .sev-success { background: color-mix(in srgb, #15803d 14%, transparent); color: #15803d; }
-  .sev-warning { background: color-mix(in srgb, #b45309 14%, transparent); color: #b45309; }
-  .sev-danger { background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive); }
-</style>
+<style src="./styles/Notifications.css"></style>

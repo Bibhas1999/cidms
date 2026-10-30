@@ -1,0 +1,96 @@
+  .nb-main { min-width: 0; }
+  .picked { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
+  /* Discount, the grand total and the payment: real rows at the foot of the tests table (like the old
+     Supreme Invoice) instead of a separate summary panel — shown (disabled, via .is-waiting) even before the
+     first test, so the layout doesn't jump around as soon as one is ticked. */
+  /* DataTable's maxHeight CSS turns tfoot into a plain block, but it only overrides display on the `tr` it
+     renders itself — these tr/td come from this component's own snippet, so they keep their default table-row
+     / table-cell display and the browser wraps them in an orphan anonymous table sized to its own content,
+     not the tfoot's width. Blockifying the row and its cell here sidesteps that: a lone colspan cell with
+     nothing to force it to the row's full width was shrinking to its own content — leaving the right-aligned
+     box inside it nothing to push against. */
+  .tf-row { display: block; width: 100%; }
+  .tf-row td { display: block; width: 100%; background: var(--muted); text-align: right; }
+  /* The last tbody row has its own border-bottom removed (the usual rule, so it doesn't double up with the
+     card's edge), which left nothing marking where the table ends and the footer begins. */
+  .tf-row:first-child td { border-top: 1px solid var(--border); }
+  /* Discount and Paid now are <Field>s, right-aligned like the total/due lines around them: the wrapper (not
+     a fixed width) is what's pushed to the right, so each field auto-sizes to its own content and its label
+     naturally stays flush with its input instead of drifting apart. */
+  /* A shared fixed width (not each shrink-wrapped to its own content) so the Grand total, Discount and Paid
+     now boxes all start at the same left edge instead of drifting with however wide each row's own controls
+     happen to be. */
+  /* width: fit-content, not width: auto (the default): a block box with width:auto fills the full available
+     width, leaving margin-left: auto nothing to push against, so the whole row sat flush-left instead of
+     lining up with Total Payable/Due on the right. fit-content shrink-wraps it to its own content so the
+     auto margin actually has room to push it over (inline-flex wouldn't: auto margins only resolve on
+     block-level boxes). */
+  /* inline-flex + the cell's text-align: right (not margin-left: auto on a block) — the long-reliable way to
+     right-position a shrink-wrapped box: an inline-level box is placed by its parent's text-align, not by a
+     margin of its own, which is what kept failing here. */
+  .tf-subtotal, .tf-discount, .tf-pay { display: inline-flex; flex-direction: column; text-align: left; gap: 6px; }
+  /* "Grand total", "Discount" and "Paid now" beside their own controls, not stacked above them: the label-row
+     and the row sit side by side, so all three line up the same way; the tip/error still wrap to their own
+     full-width line below. */
+  .tf-subtotal :global(.field), .tf-discount :global(.field), .tf-pay :global(.field) {
+    flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 8px;
+  }
+  .tf-subtotal :global(.label-row), .tf-discount :global(.label-row), .tf-pay :global(.label-row) { flex: none; min-height: 0; }
+  .tf-subtotal :global(.field-error), .tf-discount :global(.field-error), .tf-discount :global(.hint),
+  .tf-pay :global(.field-error), .tf-pay :global(.hint) { flex-basis: 100%; }
+  .tf-subtotal-value { flex: none; width: 140px; }
+  .tf-error { margin-top: 4px; }
+  .tf-line { display: flex; justify-content: flex-end; align-items: baseline; gap: 10px; font-size: 14px; }
+  .tf-line.is-due { color: var(--destructive); font-weight: 600; }
+  .tf-grand .tf-line { font-size: 15px; font-weight: 600; }
+  .tf-due { margin-top: 2px; padding-top: 6px; border-top: 1px dashed var(--border); }
+  .tf-pay-extra { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 6px; }
+  .tf-ref { flex: 1 1 200px; min-width: 0; max-width: 220px; }
+  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: end; }
+  .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* A label's ⓘ tip wrapping onto its own line (some fields have one, some don't) is what was throwing the
+     boxes below out of line across a row; keeping every label on one line keeps them level. */
+  .form-grid :global(.label-row) { flex-wrap: nowrap; }
+  .family, .family-note { margin-top: 6px; }
+  .notes { min-height: 64px; }
+  .disc-kind { display: inline-flex; flex: none; height: 38px; padding: 3px; gap: 2px; border: 1px solid var(--input); border-radius: 9px; background: var(--background); }
+  /* A fixed width (not padding around whatever the glyph needs) so the % and ₹ pills match exactly: those two
+     characters don't render the same width, which looked lopsided once one of them got a solid background. */
+  .disc-kind label { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: 34px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .disc-kind label:hover { background: var(--muted); }
+  .disc-kind label.is-on { background: var(--primary); color: #fff; }
+  .disc-kind input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .disc-kind label:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+  /* Fixed, not flex:1: an auto-sizing width would shift with the placeholder ("0 %" vs "₹ 0") or the typed
+     value's length, resizing the whole row (and the field above it) as the discount kind or amount changes. */
+  .disc-value { flex: none; width: 110px; }
+  .pay-row { gap: 8px; }
+  .pay-row .money { flex: none; width: 110px; }
+  .pay-mode { flex: none; width: 96px; }
+  .qty { width: 72px; margin-left: auto; text-align: right; }
+  .savebar, .savebar-space { display: none; }
+  @media (max-width: 900px) {
+    .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px;
+      padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      background: color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
+      box-shadow: 0 -6px 20px rgb(15 23 42 / .08); }
+    .savebar-space { display: block; height: calc(72px + env(safe-area-inset-bottom)); }
+    .savebar-total { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; color: inherit; text-decoration: none !important; }
+    .savebar-total strong { font-size: 18px; }
+    .savebar :global(.btn) { height: 44px; flex: none; }
+  }
+  @media (max-width: 640px) {
+    .test-row { grid-template-columns: 1fr; }
+    .form-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .form-grid.three > :global(:last-child) { grid-column: 1 / -1; }
+    .qty { margin-left: 0; width: 84px; }
+  }
+  @media (max-width: 380px) {
+    .savebar :global(.btn-outline) { padding: 0 12px; }
+  }
+  .draft-note { margin-bottom: 16px; align-items: center; }
+  @media (max-width: 600px) { .draft-note { flex-wrap: wrap; } }
+  /* Until a test is added the foot's controls are switched off (the help buttons still work). */
+  .is-waiting .disc-kind label { opacity: .55; cursor: not-allowed; }
+  .field-hint { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; font-size: 12.5px; color: var(--primary-text); }
+  .draft-saved { display: inline-flex; align-items: center; gap: 5px; }

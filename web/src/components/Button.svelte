@@ -35,10 +35,4 @@
   <button class={classes} {type} disabled={disabled || loading} aria-busy={loading || undefined} use:tip={tooltip} {...rest}>{@render inner()}</button>
 {/if}
 
-<style>
-  .btn-spinner { width: 15px; height: 15px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent;
-    opacity: .8; animation: btn-spin .7s linear infinite; }
-  @keyframes btn-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .btn-spinner { animation-duration: 2s; } }
-  .is-loading { cursor: progress !important; }
-</style>
+<style src="./styles/Button.css"></style>

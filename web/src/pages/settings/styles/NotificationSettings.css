@@ -1,0 +1,5 @@
+  .group { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .check-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  .check-row .checkbox { margin-top: 3px; flex: none; }
+  .kinds { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .kind { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }

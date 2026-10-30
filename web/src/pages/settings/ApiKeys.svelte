@@ -367,7 +367,4 @@
   {/snippet}
 </Dialog>
 
-<style>
-  .check-row :global(.tip) { margin-left: auto; }
-  .hint :global(.icon) { vertical-align: -2px; }
-</style>
+<style src="./styles/ApiKeys.css"></style>

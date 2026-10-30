@@ -43,13 +43,4 @@
   {#if upload.status === "error"}<p class="text-sm upload-error">{upload.error}</p>{/if}
 </div>
 
-<style>
-  .upload { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
-  .upload.is-error { border-color: var(--destructive); }
-  .upload-head { align-items: center; }
-  .progress-bar { transition: width 0.2s ease; }
-  .progress-bar.is-paused { background: var(--muted-foreground); }
-  .upload-error { color: var(--destructive); margin: 0; }
-  .min-w-0 { min-width: 0; }
-  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-</style>
+<style src="./styles/UploadProgress.css"></style>

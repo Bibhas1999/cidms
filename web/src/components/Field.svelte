@@ -30,8 +30,4 @@
   {#if error}<p id="{id}-error" class="field-error"><Icon name="alert" size="sm" />{error}</p>{/if}
 </div>
 
-<style>
-  .label-row { min-height: 20px; }
-  .label-row .label { margin: 0; }
-  .optional { margin-left: 4px; font-weight: 400; color: var(--muted-foreground); }
-</style>
+<style src="./styles/Field.css"></style>

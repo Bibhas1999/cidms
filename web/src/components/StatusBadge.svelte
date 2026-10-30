@@ -29,6 +29,4 @@
 
 <span class="badge {pair[0]} status-badge" use:tip={hint}>{pair[1]}</span>
 
-<style>
-  .status-badge { white-space: nowrap; }
-</style>
+<style src="./styles/StatusBadge.css"></style>

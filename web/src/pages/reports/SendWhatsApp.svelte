@@ -119,6 +119,4 @@
   {/snippet}
 </Dialog>
 
-<style>
-  .delivery { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-</style>
+<style src="./styles/SendWhatsApp.css"></style>

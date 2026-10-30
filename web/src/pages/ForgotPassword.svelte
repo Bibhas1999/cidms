@@ -52,8 +52,4 @@
   </form>
 </AuthLayout>
 
-<style>
-  .sent { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 10px; background: var(--success-tint); color: var(--text); }
-  .sent p { margin: 0; line-height: 1.5; }
-  .sent :global(svg.icon) { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-</style>
+<style src="./styles/ForgotPassword.css"></style>

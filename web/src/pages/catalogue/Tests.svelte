@@ -234,7 +234,4 @@
 
 <BulkAddDialog bind:open={bulkOpen} kind="tests" {departments} {types} onadded={() => reload++} />
 
-<style>
-  .type-badges { flex-wrap: wrap; }
-  @media (max-width: 640px) { .type-badges { justify-content: flex-end; } }
-</style>
+<style src="./styles/Tests.css"></style>

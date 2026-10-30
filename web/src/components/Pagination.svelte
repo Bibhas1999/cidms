@@ -48,6 +48,4 @@
   </div>
 </nav>
 
-<style>
-  :global(.flip) { transform: scaleX(-1); }
-</style>
+<style src="./styles/Pagination.css"></style>

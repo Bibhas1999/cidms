@@ -249,6 +249,4 @@
     </div>
 </FormDialog>
 
-<style>
-  .break { overflow-wrap: anywhere; }
-</style>
+<style src="./styles/PatientDetail.css"></style>

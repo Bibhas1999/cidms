@@ -101,12 +101,4 @@
   <a class="quick-action" href="/settings"><span class="qa-icon"><Icon name="settings" /></span><span>Settings<small>Your account and preferences</small></span></a>
 </div>
 
-<style>
-  .usage { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
-  .usage .progress { height: 5px; }
-  .progress-bar.is-high { background: var(--destructive); }
-  .renewals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-  .renewals li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
-  .renewals li:last-child { border-bottom: 0; }
-  @media (max-width: 760px) { .hide-sm { display: none; } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
-</style>
+<style src="./styles/PlatformHome.css"></style>

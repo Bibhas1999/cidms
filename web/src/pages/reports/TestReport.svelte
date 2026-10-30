@@ -494,14 +494,4 @@
   </Dialog>
 {/if}
 
-<style>
-  .study { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-  .drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px; border: 1.5px dashed var(--border);
-    border-radius: 10px; text-align: center; cursor: pointer; font-size: 14px; font-weight: 600; }
-  .drop:hover, .drop.is-over, .drop:focus-within { border-color: var(--primary); background: var(--muted); }
-  progress { width: 100%; }
-  .prev { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; color: inherit; text-decoration: none; }
-  .prev:hover .cell-title { text-decoration: underline; }
-  .report-text :global(p) { margin: 0 0 6px; }
-  .report-text :global(ul), .report-text :global(ol) { padding-left: 22px; }
-</style>
+<style src="./styles/TestReport.css"></style>

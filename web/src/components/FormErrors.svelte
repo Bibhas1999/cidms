@@ -34,7 +34,4 @@
   {/if}
 </div>
 
-<style>
-  .form-summary { outline: none; }
-  .form-summary:not(.is-shown) { display: contents; }
-</style>
+<style src="./styles/FormErrors.css"></style>

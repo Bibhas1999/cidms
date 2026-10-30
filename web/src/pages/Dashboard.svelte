@@ -312,15 +312,4 @@
   {/if}
 {/if}
 
-<style>
-  .bills-filters { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
-  .full-row { grid-column: 1 / -1; }
-  /* the cards: one line for the label, the figure, then the notes (the change on its own line when they don't fit) */
-  .kpis :global(.kpi-note) { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: center; }
-  .kpis :global(.stat-delta) { white-space: nowrap; }
-  @media (max-width: 760px) {
-    .bills-filters { grid-template-columns: 1fr; padding: 12px 16px; }
-    .hide-sm { display: none; }
-    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
-  }
-</style>
+<style src="./styles/Dashboard.css"></style>

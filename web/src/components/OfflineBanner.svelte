@@ -48,9 +48,4 @@
   <div class="offline-banner is-back" role="status" aria-live="polite">Back online.</div>
 {/if}
 
-<style>
-  .offline-banner a { color: inherit; text-decoration: underline; margin-left: 8px; }
-  .is-back { background: var(--success, #15803d); }
-  .is-sending { background: var(--brand-navy, #1e3a8a); }
-  .is-attention { background: #9a3412; }
-</style>
+<style src="./styles/OfflineBanner.css"></style>

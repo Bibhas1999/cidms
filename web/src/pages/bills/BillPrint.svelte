@@ -67,14 +67,4 @@
   <p class="screen-only" style="padding: 24px">Preparing the bill…</p>
 {/if}
 
-<style>
-  .bar { display: flex; gap: 10px; justify-content: center; padding: 16px; }
-  @media screen and (max-width: 800px) {
-    .bar { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 12px;
-      padding-top: max(10px, env(safe-area-inset-top)); }
-    .bar .btn { flex: 1 1 0; height: 44px; }
-  }
-  @media print {
-    .screen-only { display: none !important; }
-  }
-</style>
+<style src="./styles/BillPrint.css"></style>

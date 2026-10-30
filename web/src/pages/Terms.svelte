@@ -83,22 +83,4 @@
   <footer class="terms-foot"><Credit /></footer>
 </div>
 
-<style>
-  .terms-page { max-width: 1040px; margin: 0 auto; padding: 32px 20px 40px; padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
-  .terms-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 24px; }
-  .terms-head .btn { margin-left: -10px; margin-bottom: 8px; }
-  .terms-body { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; align-items: start; }
-  .toc { position: sticky; top: 20px; padding: 14px 10px; }
-  .toc ol { margin: 0; padding-left: 26px; display: grid; gap: 2px; font-size: 13.5px; }
-  .toc a { display: block; padding: 5px 6px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; }
-  .toc a:hover { color: var(--foreground); background: var(--accent); }
-  article section + section { margin-top: 26px; }
-  article h2 { margin: 0 0 8px; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; scroll-margin-top: 20px; }
-  article p { margin: 0 0 10px; line-height: 1.65; color: var(--foreground); }
-  .terms-foot { margin-top: 28px; text-align: center; }
-  @media (max-width: 760px) {
-    .terms-page { padding-top: 20px; }
-    .terms-body { grid-template-columns: 1fr; }
-    .toc { position: static; }
-  }
-</style>
+<style src="./styles/Terms.css"></style>

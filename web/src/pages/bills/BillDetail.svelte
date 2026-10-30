@@ -364,18 +364,4 @@
   </FormDialog>
 {/if}
 
-<style>
-  .totals { margin: 0 0 0 auto; max-width: 340px; display: grid; gap: 8px; }
-  .totals > div { display: flex; justify-content: space-between; gap: 24px; font-size: 14px; }
-  .totals dt { color: var(--muted-foreground); }
-  .totals dd { margin: 0; font-variant-numeric: tabular-nums; }
-  .totals .grand { border-top: 1px solid var(--border); padding-top: 8px; font-weight: 700; font-size: 16px; }
-  .totals .grand dt { color: var(--foreground); }
-  .totals .is-due dd, .totals .is-due dt { color: var(--destructive); font-weight: 700; }
-  .tests-actions { gap: 8px; justify-content: flex-end; }
-  .progress-select { width: 128px; height: 32px; font-size: 13px; font-weight: 500; }
-  .progress-select.is-billed, .progress-select.is-scanned { color: var(--warning-text, #b45309); }
-  .progress-select.is-reported { color: var(--primary-text); }
-  .progress-select.is-delivered { color: var(--success); }
-  .locked-note { display: flex; align-items: center; gap: 6px; margin: 0; }
-</style>
+<style src="./styles/BillDetail.css"></style>

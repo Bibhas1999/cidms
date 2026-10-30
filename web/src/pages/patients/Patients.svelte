@@ -64,7 +64,4 @@
              ]} />
 </section>
 
-<style>
-  .address { max-width: 280px; }
-  @media (max-width: 640px) { .address { max-width: none; } }
-</style>
+<style src="./styles/Patients.css"></style>

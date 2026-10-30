@@ -223,46 +223,4 @@
   <div class="card"><div class="empty"><Icon name="lock" />This report isn't available to you.</div></div>
 {/if}
 
-<style>
-  .bar { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 12px 16px; }
-  .bar > .select { width: 190px; flex: none; }
-  /* report tabs, like Bootstrap's nav-tabs: a line under the strip; the open tab is outlined on three sides and
-     sits on the line, so it opens onto the page below; the others are plain links that get a faint outline on hover */
-  .sheet-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; margin: 0 0 16px; padding: 0;
-    border-bottom: 1px solid var(--border); scrollbar-width: thin; }
-  .sheet-tab { flex: none; margin-bottom: -1px; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px 6px 0 0;
-    background: none; color: var(--primary-text); font-size: 14px; font-weight: 500; line-height: 1.5; text-decoration: none !important;
-    white-space: nowrap; transition: color .15s, border-color .15s; }
-  .sheet-tab:hover { border-color: var(--muted) var(--muted) var(--border); color: var(--primary); }
-  .sheet-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-  .sheet-tab.is-active { color: var(--foreground); background: var(--background); border-color: var(--border) var(--border) var(--background); }
-  .bar :global(.date-filter > .select) { width: 170px; min-width: 0; }
-  .segmented { display: inline-flex; align-items: center; height: 38px; padding: 3px; gap: 2px; border: 1px solid var(--input); border-radius: 9px; background: var(--background); }
-  .seg-label { padding: 0 8px 0 6px; font-size: 12.5px; color: var(--muted-foreground); white-space: nowrap; }
-  .segmented button { height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--foreground); font: 500 13px var(--font-sans); cursor: pointer; }
-  .segmented button:hover { background: var(--muted); }
-  .segmented button.is-on { background: var(--primary); color: #fff; }
-
-  .sheet-card { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .sheet-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
-  .sheet-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .title-row { display: inline-flex; align-items: center; gap: 6px; }
-  .figures { display: flex; gap: 6px 24px; flex-wrap: wrap; margin: 0; }
-  .figures div { display: flex; flex-direction: column; }
-  .figures dt { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted-foreground); }
-  .figures dd { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .sheet-hint { margin: 0; font-size: 12px; color: var(--muted-foreground); }
-  .print-head { display: none; }
-
-  @media (max-width: 760px) {
-    .bar { display: grid; grid-template-columns: 1fr; }
-    .bar > .select, .bar :global(.date-filter > .select) { width: 100%; }
-    .segmented { width: 100%; }
-    .segmented button { flex: 1; padding: 0 6px; }
-    .seg-label { display: none; }
-  }
-  @media print {
-    .print-head { display: block; margin-bottom: 10px; font-size: 12px; }
-    .sheet-card { border: 0 !important; padding: 0; }
-  }
-</style>
+<style src="./styles/Reports.css"></style>

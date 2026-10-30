@@ -1,0 +1,2 @@
+  .address { max-width: 280px; }
+  @media (max-width: 640px) { .address { max-width: none; } }

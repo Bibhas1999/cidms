@@ -33,10 +33,4 @@
   {#if footer}<div class="card-footer">{@render footer()}</div>{/if}
 </svelte:element>
 
-<style>
-  .card-tip { margin-left: 4px; }
-  .card-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: none; }
-  @media (max-width: 640px) {
-    .card-actions { flex: 1 1 100%; }
-  }
-</style>
+<style src="./styles/Card.css"></style>

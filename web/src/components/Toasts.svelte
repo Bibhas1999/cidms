@@ -33,6 +33,4 @@
   <div class="toast-stack" role="status" aria-live="polite">{#each others as t (t.id)}{@render card(t)}{/each}</div>
 </div>
 
-<style>
-  .toast-action { margin-top: 8px; height: 30px; padding: 0 12px; font-weight: 600; }
-</style>
+<style src="./styles/Toasts.css"></style>

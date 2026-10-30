@@ -14,6 +14,4 @@
   </div>
 </div>
 
-<style>
-  .message-wrap { display: grid; place-items: center; min-height: 60vh; padding: 16px; }
-</style>
+<style src="./styles/Message.css"></style>

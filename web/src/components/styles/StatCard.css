@@ -1,0 +1,8 @@
+  .stat-card { display: flex; flex-direction: column; min-width: 0; padding-right: 54px; }
+  .stat-label { display: inline-flex; align-items: center; gap: 2px; }
+  .stat-value { overflow-wrap: anywhere; }
+  @media (max-width: 640px) {
+    .stat-card { padding: 12px 14px; }
+    .stat-card .stat-value { font-size: clamp(16px, 4.8vw, 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat-card .stat-icon { display: none; }
+  }

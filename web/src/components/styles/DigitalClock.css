@@ -1,0 +1,9 @@
+  .clock { display: inline-flex; flex-direction: column; justify-content: center; align-items: flex-end; height: 38px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--card); line-height: 1; white-space: nowrap; }
+  .clock-time { display: flex; align-items: baseline; font-size: 16px; font-weight: 650; letter-spacing: 0.02em; color: var(--foreground);
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .colon { padding: 0 1px; color: var(--muted-foreground); }
+  .secs { color: var(--primary-text); }
+  .ampm { margin-left: 5px; font-size: 10.5px; font-weight: 600; color: var(--muted-foreground); letter-spacing: 0.04em; }
+  .clock-day { margin-top: 3px; font-size: 10.5px; color: var(--muted-foreground); }
+  @media (max-width: 640px) { .clock { align-items: flex-start; } }

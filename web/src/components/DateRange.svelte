@@ -37,7 +37,4 @@
   {/if}
 </div>
 
-<style>
-  .date-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .date-filter > .select { width: auto; min-width: 170px; }
-</style>
+<style src="./styles/DateRange.css"></style>

@@ -178,11 +178,4 @@
   </div>
 </section>
 
-<style>
-  .mb { margin-bottom: 16px; }
-  .kept { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-  .card-footer { display: flex; gap: 8px; flex-wrap: wrap; }
-  .acts { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  .why { max-width: 320px; white-space: normal; color: var(--destructive); }
-  tr.is-new td { background: color-mix(in srgb, var(--primary) 7%, transparent); }
-</style>
+<style src="./styles/OfflineBills.css"></style>

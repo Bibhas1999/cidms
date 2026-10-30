@@ -202,6 +202,4 @@
 <Toasts />
 <ConfirmHost />
 
-<style>
-  .splash { min-height: 100vh; display: grid; place-items: center; }
-</style>
+<style src="./styles/App.css"></style>

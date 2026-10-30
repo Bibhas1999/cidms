@@ -11,8 +11,4 @@
   {#if url && !broken}<img class="avatar-img" src={url} alt="" onerror={() => (broken = true)} />{:else}{initials}{/if}
 </span>
 
-<style>
-  .avatar { position: relative; overflow: hidden; }
-  .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .avatar-lg { width: 88px; height: 88px; font-size: 28px; }
-</style>
+<style src="./styles/Avatar.css"></style>
