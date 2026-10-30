@@ -55,6 +55,8 @@
   });
 </script>
 
+<svelte:head><link rel="stylesheet" href="/bill-print.css" media="print" /></svelte:head>
+
 {#if failed}
   <p class="screen-only" style="padding: 24px">Couldn't load the bill: {failed}</p>
 {:else if bill && centre}

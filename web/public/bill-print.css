@@ -1,0 +1,26 @@
+/* The printed bill, loaded only while printing (see BillPrint.svelte / PublicBill.svelte), separate from
+   BillSheet.css's on-screen rules. Plain, unscoped CSS targeting BillSheet.svelte's class names directly -
+   no Svelte scoping, no CSS custom properties - so what's printed can't be pulled off course by anything
+   else on the page. Compact enough that a bill's receipt is about half an A4 page tall: print one, feed
+   the same sheet back, and the next bill prints on the other half. */
+
+.receipt { width: auto !important; margin: 0 !important; padding: 0 !important; font-size: 11px !important; }
+.head h1 { font-size: 20px !important; margin-bottom: 2px !important; }
+.head p { font-size: 12px !important; }
+.top th { padding: 3px 0 1px !important; font-size: 11px !important; }
+.top .c { font-size: 15px !important; }
+.top .r { font-size: 10px !important; }
+.provisional { margin-top: 2px !important; font-size: 9px !important; }
+.patient td { padding: 1px 0 !important; font-size: 11px !important; line-height: 1.25 !important; }
+.patient .k { width: 88px !important; }
+.items { margin-top: 3px !important; }
+.items th { font-size: 11px !important; padding: 1px !important; }
+.items td { font-size: 11px !important; padding: 3px 2px 2px !important; }
+.due { font-size: 13px !important; }
+.foot h6 { margin: 4px 0 1px !important; }
+.foot ol { font-size: 10px !important; }
+.sign { margin-top: 22px !important; font-size: 11px !important; }
+
+/* No forced page size here: an @page size locks the browser's own "Paper size" picker in the print
+   dialog, so paper choice stays with whoever's printing. */
+@page { margin: 6mm; }

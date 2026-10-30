@@ -45,25 +45,5 @@
     .due { font-size: 14px; padding-right: 8px !important; }
     :global(body.is-printout) { background: var(--muted) !important; }
   }
-  /* Compact enough that a bill's receipt fits comfortably in half an A4 page (tight spacing, smaller
-     type): print one, feed the same sheet back, and print the next bill on the other half. */
-  @media print {
-    .receipt { width: auto; margin: 0; padding: 0; font-size: 11px; }
-    .head h1 { font-size: 20px; margin-bottom: 2px; }
-    .head p { font-size: 12px; }
-    .top th { padding: 3px 0 1px; font-size: 11px; }
-    .top .c { font-size: 15px; } .top .r { font-size: 10px; }
-    .provisional { margin-top: 2px; font-size: 9px; }
-    .patient td { padding: 1px 0; font-size: 11px; line-height: 1.25; }
-    .patient .k { width: 88px; }
-    .items { margin-top: 3px; }
-    .items th { font-size: 11px; padding: 1px; }
-    .items td { font-size: 11px; padding: 3px 2px 2px; }
-    .due { font-size: 13px; }
-    .foot h6 { margin: 4px 0 1px; }
-    .foot ol { font-size: 10px; }
-    .sign { margin-top: 22px; font-size: 11px; }
-  }
-  /* No forced size/margin here: an @page size locks the browser's own "Paper size" and margin
-     controls in the print dialog, so paper choice is left to whoever prints. */
-  @page { margin: 6mm; }
+  /* Print rules live in /bill-print.css (a plain static file, loaded only while printing) instead of an
+     @media print block here - see BillPrint.svelte / PublicBill.svelte. */
