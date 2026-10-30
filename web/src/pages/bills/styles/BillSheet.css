@@ -62,7 +62,7 @@
     .due { font-size: 13px; }
     .foot h6 { margin: 4px 0 1px; }
     .foot ol { font-size: 10px; }
-    .sign { margin-top: 10px; font-size: 11px; }
+    .sign { margin-top: 22px; font-size: 11px; }
   }
   /* No forced size/margin here: an @page size locks the browser's own "Paper size" and margin
      controls in the print dialog, so paper choice is left to whoever prints. */
