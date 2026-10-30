@@ -21,7 +21,7 @@ from app.core.security import CurrentUser
 from app.models import TenantSettings
 from app.services.audit import AuditService
 from app.services.billing import BillFilters
-from app.services.exports import to_pdf, to_xlsx, to_xlsx_book
+from app.services.exports import to_csv, to_docx, to_pdf, to_xlsx, to_xlsx_book
 from app.services.reports import (
     CATALOGUE,
     Report,
@@ -38,6 +38,7 @@ from app.services.reports import (
 router = APIRouter(tags=["reports"])
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 def can_view_reports(current: CurrentUser = Depends(client_user)) -> CurrentUser:
@@ -50,6 +51,13 @@ def can_view_reports(current: CurrentUser = Depends(client_user)) -> CurrentUser
 def _file(db: Session, current: CurrentUser, report: Report, fmt: str, name: str) -> Response:
     if fmt == "xlsx":
         body, media = to_xlsx(report.title, report.subtitle, report.columns, report.rows, report.totals), XLSX
+    elif fmt == "csv":
+        body, media = to_csv(report.columns, report.rows, report.totals), "text/csv"
+    elif fmt == "docx":
+        centre = db.get(TenantSettings, current.user.tenant_id)
+        body = to_docx(centre, report.title, report.subtitle, report.columns, report.rows, report.totals,
+                       generated_by=current.user.full_name)
+        media = DOCX
     else:
         centre = db.get(TenantSettings, current.user.tenant_id)
         body = to_pdf(centre, report.title, report.subtitle, report.columns, report.rows, report.totals,
@@ -75,6 +83,16 @@ def bills_xlsx(f: BillFilters = Depends(bill_filters), db: Session = DB, current
 @router.get("/api/exports/bills.pdf")
 def bills_pdf(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
     return _bills_file("pdf", f, db, current)
+
+
+@router.get("/api/exports/bills.csv")
+def bills_csv(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
+    return _bills_file("csv", f, db, current)
+
+
+@router.get("/api/exports/bills.docx")
+def bills_docx(f: BillFilters = Depends(bill_filters), db: Session = DB, current: CurrentUser = Depends(client_user)):
+    return _bills_file("docx", f, db, current)
 
 
 @router.get("/api/exports/bills-by-doctor.xlsx")

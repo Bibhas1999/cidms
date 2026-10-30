@@ -1,9 +1,11 @@
-"""Turning a table (columns + rows + totals) into an Excel workbook or a printable PDF.
+"""Turning a table (columns + rows + totals) into a CSV file, an Excel workbook, a printable PDF or a Word
+document.
 
 Columns are (key, label, kind) with kind one of text | money | int | date | datetime | percent. Rows and totals
-are dicts keyed by column key. Money is Decimal; it's never turned into float on the way to the PDF.
+are dicts keyed by column key. Money is Decimal; it's never turned into float on the way to a file.
 """
 
+import csv as csv_module
 import io
 from collections.abc import Sequence
 from datetime import date, datetime
@@ -11,6 +13,10 @@ from decimal import Decimal
 from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Mm as DocxMm
+from docx.shared import Pt, RGBColor
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -74,6 +80,30 @@ def cell_text(value, kind: str) -> str:
 def pdf_safe(text: str) -> str:
     """The standard PDF fonts can't draw ₹ (DejaVu isn't bundled), so it's written Rs."""
     return text.replace("₹", "Rs. ")
+
+
+def _totals_row(columns: Sequence[Column], totals: dict) -> list[str]:
+    """The totals row's text, column by column - column 0 is a label ("Total") unless it holds its own value."""
+    line = []
+    for i, (key, _, kind) in enumerate(columns):
+        value = totals.get(key)
+        line.append(cell_text(value, kind) if i else (str(value) if value not in (None, "") else "Total"))
+    return line
+
+
+# ---------- CSV ----------
+
+def to_csv(columns: Sequence[Column], rows: Sequence[dict], totals: dict | None = None) -> bytes:
+    """One table as CSV, the same cell text as everywhere else (Indian digit grouping, etc.). utf-8-sig so
+    Excel opens it with the right encoding instead of guessing."""
+    out = io.StringIO()
+    writer = csv_module.writer(out)
+    writer.writerow([label for _, label, _ in columns])
+    for row in rows:
+        writer.writerow([cell_text(row.get(key), kind) for key, _, kind in columns])
+    if totals is not None:
+        writer.writerow(_totals_row(columns, totals))
+    return out.getvalue().encode("utf-8-sig")
 
 
 # ---------- Excel ----------
@@ -290,12 +320,9 @@ def to_pdf(centre: TenantSettings, title: str, subtitle: str, columns: Sequence[
         data.append([cell_text(row.get(key), kind) if kind in NUMERIC else p(cell_text(row.get(key), kind), cell)
                      for key, _, kind in columns])
     if totals is not None:
-        line = []
-        for i, (key, _, kind) in enumerate(columns):
-            value = totals.get(key)
-            text = cell_text(value, kind) if i else (str(value) if value not in (None, "") else "Total")
-            line.append(text if kind in NUMERIC and i else p(text, head))
-        data.append(line)
+        texts = _totals_row(columns, totals)
+        data.append([text if kind in NUMERIC and i else p(text, head)
+                     for i, (text, (_, _, kind)) in enumerate(zip(texts, columns, strict=True))])
 
     widths = _widths(columns, data, doc.width)
     table = Table(data, colWidths=widths, repeatRows=1)
@@ -327,6 +354,76 @@ def to_pdf(centre: TenantSettings, title: str, subtitle: str, columns: Sequence[
     stamp = local_now().strftime("%d %b %Y %I:%M %p IST")
     footer = f"Generated {stamp}" + (f" by {generated_by}" if generated_by else "") + " · CIDMS"
     doc.build(story, canvasmaker=_numbered_canvas(pdf_safe(footer)))
+    return out.getvalue()
+
+
+# ---------- Word ----------
+
+def to_docx(centre: TenantSettings | None, title: str, subtitle: str, columns: Sequence[Column], rows: Sequence[dict],
+            totals: dict | None = None, generated_by: str = "") -> bytes:
+    doc = Document()
+    for section in doc.sections:
+        section.left_margin = section.right_margin = section.top_margin = DocxMm(14)
+        section.bottom_margin = DocxMm(16)
+
+    if centre:
+        name = doc.add_paragraph()
+        run = name.add_run(centre.legal_name)
+        run.bold = True
+        run.font.size = Pt(15)
+        contact = [x for x in (centre.address.strip(), centre.phones.strip() and f"Phone: {centre.phones.strip()}") if x]
+        if contact:
+            cp = doc.add_paragraph()
+            for i, line in enumerate(contact):
+                if i:
+                    cp.add_run().add_break()
+                r = cp.add_run(line)
+                r.font.size = Pt(9)
+                r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+
+    doc.add_heading(title, level=1)
+    if subtitle:
+        sp = doc.add_paragraph(subtitle)
+        sp.runs[0].italic = True
+
+    table = doc.add_table(rows=1, cols=max(len(columns), 1))
+    table.style = "Light Grid Accent 1"
+
+    def put(cell, text: str, kind: str, bold: bool = False):
+        cell.text = text
+        for para in cell.paragraphs:
+            if kind in NUMERIC:
+                para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            for r in para.runs:
+                r.bold = bold
+                r.font.size = Pt(9)
+
+    head = table.rows[0].cells
+    for c, (_, label, kind) in enumerate(columns):
+        put(head[c], label, kind, bold=True)
+
+    for row in rows:
+        cells = table.add_row().cells
+        for c, (key, _, kind) in enumerate(columns):
+            put(cells[c], cell_text(row.get(key), kind), kind)
+
+    if totals is not None:
+        cells = table.add_row().cells
+        for c, (text, (_, _, kind)) in enumerate(zip(_totals_row(columns, totals), columns, strict=True)):
+            put(cells[c], text, kind, bold=True)
+
+    if not rows:
+        doc.add_paragraph("Nothing to show for these filters.")
+
+    stamp = local_now().strftime("%d %b %Y %I:%M %p IST")
+    footer = f"Generated {stamp}" + (f" by {generated_by}" if generated_by else "") + " · CIDMS"
+    doc.add_paragraph()
+    fp = doc.add_paragraph(footer)
+    fp.runs[0].font.size = Pt(8)
+    fp.runs[0].font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
+    out = io.BytesIO()
+    doc.save(out)
     return out.getvalue()
 
 
