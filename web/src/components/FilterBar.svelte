@@ -46,11 +46,19 @@
   const flat = (keys: (string | string[])[]) => keys.flatMap((k) => (Array.isArray(k) ? k : [k]));
   const tidy = (k: string) => { const t = k.replace(/_id$/, "").replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); };
   const filterKeys = $derived([...inlineKeys, ...moreKeys].filter((k) => !flat([k]).some((x) => notFilters.includes(x))));
-  /** The filters in effect, by name: a group (["from","to"]) counts once. */
-  const applied = $derived([
-    ...alsoApplied,
-    ...filterKeys.filter((k) => flat([k]).some((x) => q.get(x))).map((k) => { const first = flat([k])[0]; return labels[first] ?? tidy(first); }),
-  ].filter((v, i, all) => all.indexOf(v) === i));
+  /** The filters in effect: a group (["from","to"]) counts once. `keys` is missing for an alsoApplied entry
+      (e.g. the default "This month"), which isn't a specific address key to clear, so its chip has no ×. */
+  const appliedFilters = $derived<{ label: string; keys?: string[] }[]>([
+    ...alsoApplied.map((label) => ({ label })),
+    ...filterKeys.filter((k) => flat([k]).some((x) => q.get(x)))
+      .map((k) => { const keys = flat([k]); return { label: labels[keys[0]] ?? tidy(keys[0]), keys }; }),
+  ].filter((v, i, all) => all.findIndex((o) => o.label === v.label) === i));
+  /** Just the names, for the "Search all X, or only…" dialog below. */
+  const applied = $derived(appliedFilters.map((f) => f.label));
+
+  function removeFilter(f: { keys?: string[] }) {
+    if (f.keys) setQuery({ ...Object.fromEntries(f.keys.map((k) => [k, null])), page: null });
+  }
 
   let timer: ReturnType<typeof setTimeout>;
   let asked = false; // once per search; emptying the box resets it
@@ -146,6 +154,18 @@
       {#if actions}<div class="fb-actions">{@render actions()}</div>{/if}
     </div>
   </div>
+  {#if appliedFilters.length}
+    <div class="fb-chips" role="list" aria-label="Filters applied">
+      {#each appliedFilters as f (f.label)}
+        <span class="fb-chip" role="listitem">
+          {f.label}
+          {#if f.keys}
+            <button type="button" class="fb-chip-x" aria-label="Remove the {f.label} filter" onclick={() => removeFilter(f)}><Icon name="x" size="sm" /></button>
+          {/if}
+        </span>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style src="./styles/FilterBar.css"></style>
