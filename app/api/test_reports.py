@@ -167,6 +167,14 @@ def save_report(item_id: uuid.UUID, data: ReportSaveIn, db: Session = DB, curren
     return _workspace(svc, item_id)
 
 
+@reports.delete("/for-item/{item_id}", response_model=ReportWorkspaceOut)
+def delete_report(item_id: uuid.UUID, version: int, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """A draft, removed outright - no trace. The test goes back to waiting for a report."""
+    svc = TestReportService(db, current)
+    svc.delete(item_id, version)
+    return _workspace(svc, item_id)
+
+
 @reports.post("/for-item/{item_id}/finalise", response_model=ReportWorkspaceOut)
 def finalise_report(item_id: uuid.UUID, data: ReportActionIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
     svc = TestReportService(db, current)

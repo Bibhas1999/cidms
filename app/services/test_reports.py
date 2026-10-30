@@ -213,6 +213,18 @@ class TestReportService:
         self._audit("report.finalised", report, item, invoice)
         return report
 
+    def delete(self, item_id: uuid.UUID, version: int) -> None:
+        """Remove a draft outright - no trace, the test goes back to waiting for a report. A final, signed or
+        amended report can't be deleted this way (amend or keep it instead)."""
+        self._need(WRITE)
+        report, item, invoice = self._existing(item_id)
+        self._check_version(report, version)
+        if report.status != "draft":
+            raise Conflict(f"This report is {report.status}; only a draft can be deleted.")
+        self._audit("report.deleted", report, item, invoice)
+        self.db.delete(report)
+        self.db.flush()
+
     @staticmethod
     def _has_words(report: TestReport) -> None:
         if not report.findings and not report.impression and not report.attachment_name:

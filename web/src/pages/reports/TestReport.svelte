@@ -1,12 +1,13 @@
 <script lang="ts">
   import { z } from "zod";
   import Dialog from "../../components/Dialog.svelte";
+  import FileDrop from "../../components/FileDrop.svelte";
   import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
   import RichTextEditor from "../../components/RichTextEditor.svelte";
-  import { ApiError, get, post, put } from "../../lib/api";
+  import { api, ApiError, get, post, put } from "../../lib/api";
   import { date, dateTime } from "../../lib/format";
   import { Form } from "../../lib/form.svelte";
   import {
@@ -14,6 +15,7 @@
     type ReportVersionFull, type ReportWorkspace, type Template, type UploadResult,
   } from "../../lib/report-types";
   import { confirmDialog } from "../../lib/confirm.svelte";
+  import { FEATURES } from "../../lib/features";
   import { confirmLeave } from "../../lib/leave";
   import { setBeforeLeave } from "../../lib/router.svelte";
   import { session } from "../../lib/session.svelte";
@@ -37,7 +39,7 @@
   let conflict = $state("");
   let amending = $state(false);
   let lastSaved = $state<string | null>(null);
-  let busy = $state<"" | "save" | "finalise" | "sign" | "create">("");
+  let busy = $state<"" | "save" | "finalise" | "sign" | "create" | "delete">("");
 
   const schema = z.object({
     title: z.string().trim().max(200, "Keep the title under 200 characters."),
@@ -184,6 +186,23 @@
     }
   }
 
+  async function deleteDraft() {
+    if (!report || !(await confirmDialog({
+      title: "Delete this draft?", tone: "danger", confirmLabel: "Delete draft",
+      message: "It's removed outright, no trace kept. The test goes back to waiting for a report.",
+    }))) return;
+    busy = "delete";
+    try {
+      take(await api<ReportWorkspace>("DELETE", `/api/test-reports/for-item/${params.itemId}?version=${report.version}`));
+      notify("The draft is deleted.");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) conflict = e.message;
+      else notifyError(e, { title: "Couldn't delete the draft" });
+    } finally {
+      busy = "";
+    }
+  }
+
   // ---------- amending a signed report ----------
   let amendOpen = $state(false);
   const amendForm = new Form({
@@ -226,7 +245,6 @@
 
   // ---------- images ----------
   let progress = $state<number | null>(null);
-  let dragging = $state(false);
   async function uploadFiles(files: FileList | File[] | null | undefined) {
     const list = [...(files ?? [])];
     if (!list.length || !ws) return;
@@ -290,23 +308,25 @@
   <div class="grid-3 items-start">
     <div class="span-2 stack">
       {#if !report}
-        <section class="card" aria-labelledby="start-title">
-          <div class="card-header"><div><h2 class="card-title" id="start-title">No report yet</h2>
-            <p class="card-description">{canWrite ? "Start from a template or a blank page." : "The report hasn't been signed yet."}</p></div></div>
-          {#if canWrite}
-            <div class="card-content row-wrap" style="align-items: flex-end">
-              <Field id="start-template" label="Template" optional tip="Ready-made wording for this test. You can change everything afterwards.">
-                {#snippet children({ describedby })}
-                  <select id="start-template" class="select" bind:value={templateId} aria-describedby={describedby}>
-                    <option value="">Blank report</option>
-                    {#each templates as t (t.id)}<option value={t.id}>{t.name}{t.test_id ? "" : " (any test)"}</option>{/each}
-                  </select>
-                {/snippet}
-              </Field>
-              <button class="btn btn-primary" disabled={busy === "create"} onclick={create}><Icon name="edit" /> {busy === "create" ? "Starting…" : "Write report"}</button>
-            </div>
-          {/if}
-        </section>
+        {#if FEATURES.typedReports}
+          <section class="card" aria-labelledby="start-title">
+            <div class="card-header"><div><h2 class="card-title" id="start-title">No report yet</h2>
+              <p class="card-description">{canWrite ? "Start from a template or a blank page." : "The report hasn't been signed yet."}</p></div></div>
+            {#if canWrite}
+              <div class="card-content row-wrap" style="align-items: flex-end">
+                <Field id="start-template" label="Template" optional tip="Ready-made wording for this test. You can change everything afterwards.">
+                  {#snippet children({ describedby })}
+                    <select id="start-template" class="select" bind:value={templateId} aria-describedby={describedby}>
+                      <option value="">Blank report</option>
+                      {#each templates as t (t.id)}<option value={t.id}>{t.name}{t.test_id ? "" : " (any test)"}</option>{/each}
+                    </select>
+                  {/snippet}
+                </Field>
+                <button class="btn btn-primary" disabled={busy === "create"} onclick={create}><Icon name="edit" /> {busy === "create" ? "Starting…" : "Write report"}</button>
+              </div>
+            {/if}
+          </section>
+        {/if}
         <ReportPdf itemId={params.itemId} report={null} {canWrite} {canSign} onchanged={(next) => take(next)} onconflict={(m) => (conflict = m)} />
       {:else}
         <form class="card" onsubmit={form.submit} novalidate aria-labelledby="report-title">
@@ -366,6 +386,9 @@
                 <span use:tooltip={"Tells the doctor it's ready for signing. Editing it again makes it a draft."}>
                   <button type="button" class="btn btn-outline" disabled={!!busy} onclick={() => act("finalise")}>Mark ready to sign</button>
                 </span>
+                <button type="button" class="btn btn-ghost-destructive" disabled={!!busy} onclick={deleteDraft}>
+                  <Icon name="trash" /> {busy === "delete" ? "Deleting…" : "Delete draft"}
+                </button>
               {/if}
               {#if canSign}
                 <span use:tooltip={signBlocked || "Sign as yourself; the test is marked reported"}>
@@ -434,15 +457,11 @@
               <p class="text-sm text-muted">No images yet.</p>
             {/each}
             {#if canUpload && ws.image_server}
-              <label class="drop" class:is-over={dragging}
-                     ondragover={(e) => { e.preventDefault(); dragging = true; }} ondragleave={() => (dragging = false)}
-                     ondrop={(e) => { e.preventDefault(); dragging = false; uploadFiles(e.dataTransfer?.files); }}>
+              <FileDrop multiple accept=".dcm,.zip,application/dicom,application/zip" disabled={progress !== null} onfiles={uploadFiles}>
                 <Icon name="download" />
                 <span>{progress !== null ? `Uploading… ${Math.round(progress * 100)}%` : "Add DICOM files (.dcm) or a .zip"}</span>
                 <span class="hint">Drop them here or choose. Up to 500 MB at a time.</span>
-                <input type="file" class="sr-only" multiple accept=".dcm,.zip,application/dicom,application/zip" disabled={progress !== null}
-                       onchange={(e) => { uploadFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-              </label>
+              </FileDrop>
               {#if progress !== null}<progress max="1" value={progress} aria-label="Upload progress"></progress>{/if}
             {/if}
           </div>
