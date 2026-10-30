@@ -67,8 +67,6 @@
   }
 </script>
 
-<svelte:head><link rel="stylesheet" href="/bill-print.css" media="print" /></svelte:head>
-
 {#if bill && centre}
   <div class="screen-only bar">
     <button class="btn btn-primary" onclick={() => window.print()}><Icon name="printer" /> Print</button>
