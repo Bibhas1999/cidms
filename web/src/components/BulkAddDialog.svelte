@@ -5,6 +5,7 @@
   import { ResumableUpload } from "../lib/upload.svelte";
   import Button from "./Button.svelte";
   import Dialog from "./Dialog.svelte";
+  import FileDrop from "./FileDrop.svelte";
   import Icon from "./Icon.svelte";
   import UploadProgress from "./UploadProgress.svelte";
 
@@ -41,7 +42,6 @@
   let upload = $state<ResumableUpload | null>(null);
   let uploadName = $state("");
   let reading = $state(false);
-  let fileInput: HTMLInputElement;
 
   const count = $derived(rows.filter(filled).length);
   const problems = $derived(rows.filter((r) => filled(r) && Object.keys(r.errors).length).length);
@@ -70,10 +70,7 @@
   }
 
   // ---------- Excel upload ----------
-  async function chosen(e: Event) {
-    const file = (e.currentTarget as HTMLInputElement).files?.[0];
-    (e.currentTarget as HTMLInputElement).value = "";
-    if (!file) return;
+  async function chosen(file: File) {
     upload = new ResumableUpload(file, "catalogue");
     uploadName = file.name;
     await send();
@@ -148,8 +145,9 @@
         description="Type them below, paste rows copied from Excel, or upload an Excel sheet. Nothing is added until every row is right.">
   <div class="stack">
     <div class="row gap-sm wrap">
-      <input bind:this={fileInput} type="file" accept=".xlsx,.csv" class="sr-only" id="{uid}-file" onchange={chosen} />
-      <Button icon="upload" disabled={!!upload || reading} loading={reading} loadingText="Reading the sheet…" onclick={() => fileInput.click()}>Upload Excel sheet</Button>
+      <FileDrop variant="button" accept=".xlsx,.csv" disabled={!!upload || reading} onfiles={(files) => chosen(files[0])}>
+        <Button icon="upload" disabled={!!upload || reading} loading={reading} loadingText="Reading the sheet…">Upload Excel sheet</Button>
+      </FileDrop>
       <Button variant="ghost" icon="download" onclick={template}>Download template</Button>
       <span class="text-sm text-muted">.xlsx or .csv, up to 10 MB and {1000} rows. The first sheet is read.</span>
     </div>

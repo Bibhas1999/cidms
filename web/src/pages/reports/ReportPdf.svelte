@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from "../../components/Button.svelte";
+  import FileDrop from "../../components/FileDrop.svelte";
   import FormDialog from "../../components/FormDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
@@ -26,16 +27,11 @@
   let uploadName = $state("");
   let attaching = $state(false);
   let file: File | null = null;
-  let fileInput = $state<HTMLInputElement>();
   let reasonOpen = $state(false);
   let reason = $state("");
   let reasonError = $state("");
 
-  function choose(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const chosen = input.files?.[0];
-    input.value = "";
-    if (!chosen) return;
+  function choose(chosen: File) {
     if (!chosen.name.toLowerCase().endsWith(".pdf")) { notify("Choose a PDF file.", { kind: "error" }); return; }
     file = chosen;
     if (signed) { reason = ""; reasonError = ""; reasonOpen = true; return; }
@@ -100,7 +96,6 @@
           : "Upload a finished report (e.g. from an outside lab or a machine) instead of typing it."}
       </p></div></div>
     <div class="card-content stack">
-      <input bind:this={fileInput} type="file" accept="application/pdf,.pdf" class="sr-only" id="report-pdf-file" onchange={choose} />
       {#if report?.attachment_name}
         <div class="row gap-sm attached">
           <Icon name="fileText" />
@@ -115,9 +110,11 @@
         <UploadProgress {upload} filename={uploadName} onresume={send} oncancel={cancel} />
       {:else if mayChange}
         <div class="row-wrap">
-          <Button icon="upload" loading={attaching} loadingText="Attaching…" onclick={() => fileInput?.click()}>
-            {report?.attachment_name ? "Replace PDF" : "Upload PDF report"}
-          </Button>
+          <FileDrop variant="button" accept="application/pdf,.pdf" disabled={attaching} onfiles={(files) => choose(files[0])}>
+            <Button icon="upload" loading={attaching} loadingText="Attaching…">
+              {report?.attachment_name ? "Replace PDF" : "Upload PDF report"}
+            </Button>
+          </FileDrop>
           {#if report?.attachment_name && !signed}<Button variant="ghost-destructive" icon="trash" onclick={remove}>Remove</Button>{/if}
           <span class="text-sm text-muted">PDF, up to 20 MB.{signed ? " Replacing it amends the signed report." : ""}</span>
         </div>

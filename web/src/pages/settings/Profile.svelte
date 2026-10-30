@@ -3,6 +3,7 @@
   import { z } from "zod";
   import Avatar from "../../components/Avatar.svelte";
   import Field from "../../components/Field.svelte";
+  import FileDrop from "../../components/FileDrop.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
   import { ApiError, api, put } from "../../lib/api";
@@ -50,10 +51,7 @@
     }
   }
 
-  async function upload(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
+  async function upload(file: File) {
     uploading = true;
     const body = new FormData();
     body.append("avatar", file);
@@ -67,7 +65,6 @@
       notifyError(err, { title: "Couldn't upload the picture" });
     } finally {
       uploading = false;
-      input.value = "";
     }
   }
 
@@ -89,10 +86,11 @@
       <Avatar name={session.me?.full_name ?? ""} url={session.me?.avatar_url} size="lg" />
       <div class="stack-sm">
         <div class="row-wrap">
-          <label class="btn btn-outline" style="cursor: pointer">
-            <Icon name="user" size="sm" /> {uploading ? "Uploading…" : session.me?.avatar_url ? "Change picture" : "Add a picture"}
-            <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" onchange={upload} disabled={uploading} />
-          </label>
+          <FileDrop variant="button" accept="image/png,image/jpeg,image/webp" disabled={uploading} onfiles={(files) => upload(files[0])}>
+            <span class="btn btn-outline">
+              <Icon name="user" size="sm" /> {uploading ? "Uploading…" : session.me?.avatar_url ? "Change picture" : "Add a picture"}
+            </span>
+          </FileDrop>
           {#if session.me?.avatar_url}<button type="button" class="btn btn-ghost-destructive" onclick={removePicture}>Remove</button>{/if}
         </div>
         <span class="hint">A square photo works best. PNG, JPG or WebP, up to 2 MB.</span>

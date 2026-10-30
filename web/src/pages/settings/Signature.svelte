@@ -1,6 +1,7 @@
 <script lang="ts">
   import { z } from "zod";
   import Field from "../../components/Field.svelte";
+  import FileDrop from "../../components/FileDrop.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import Icon from "../../components/Icon.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
@@ -46,10 +47,7 @@
     }
   }
 
-  async function upload(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
+  async function upload(file: File) {
     uploading = true;
     const body = new FormData();
     body.append("signature", file);
@@ -64,7 +62,6 @@
       notifyError(err, { title: "Couldn't upload the picture" });
     } finally {
       uploading = false;
-      input.value = "";
     }
   }
 
@@ -109,10 +106,11 @@
         <div class="row" style="gap: 16px; align-items: center">
           <div class="sig-box">{#if sig.signature}<img src={sig.signature} alt="Your signature" />{:else}<span class="text-sm text-muted">None yet</span>{/if}</div>
           <div class="row-wrap">
-            <label class="btn btn-outline" style="cursor: pointer" aria-disabled={!sig.exists}>
-              <Icon name="edit" size="sm" /> {uploading ? "Uploading…" : sig.signature ? "Change picture" : "Add a picture"}
-              <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" onchange={upload} disabled={uploading || !sig.exists} />
-            </label>
+            <FileDrop variant="button" accept="image/png,image/jpeg,image/webp" disabled={uploading || !sig.exists} onfiles={(files) => upload(files[0])}>
+              <span class="btn btn-outline" aria-disabled={!sig.exists}>
+                <Icon name="edit" size="sm" /> {uploading ? "Uploading…" : sig.signature ? "Change picture" : "Add a picture"}
+              </span>
+            </FileDrop>
             {#if sig.signature}<button type="button" class="btn btn-ghost-destructive" onclick={removeImage}>Remove</button>{/if}
           </div>
         </div>

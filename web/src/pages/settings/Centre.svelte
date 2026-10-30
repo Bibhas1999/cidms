@@ -1,5 +1,6 @@
 <script lang="ts">
   import Field from "../../components/Field.svelte";
+  import FileDrop from "../../components/FileDrop.svelte";
   import Icon from "../../components/Icon.svelte";
   import InfoTip from "../../components/InfoTip.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
@@ -62,10 +63,7 @@
   let wmUploading = $state(false);
   let wmVersion = $state(Date.now());
 
-  async function uploadWordmark(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
+  async function uploadWordmark(file: File) {
     wmUploading = true;
     const body = new FormData();
     body.append("wordmark", file);
@@ -82,7 +80,6 @@
       notifyError(err, { title: "Couldn't upload the logo" });
     } finally {
       wmUploading = false;
-      input.value = "";
     }
   }
 
@@ -103,9 +100,7 @@
     }
   }
 
-  async function uploadLogo(e: Event) {
-    const file = (e.currentTarget as HTMLInputElement).files?.[0];
-    if (!file) return;
+  async function uploadLogo(file: File) {
     uploading = true;
     const body = new FormData();
     body.append("logo", file);
@@ -122,7 +117,6 @@
       notifyError(err, { title: "Couldn't upload the logo" });
     } finally {
       uploading = false;
-      (e.currentTarget as HTMLInputElement).value = "";
     }
   }
 </script>
@@ -146,10 +140,11 @@
               <span class="centre-mark" style="width:72px;height:72px;border-radius:12px;display:grid;place-items:center;background:var(--muted);color:var(--muted-foreground)"><Icon name="building" /></span>
             {/if}
             <div class="stack-sm">
-              <label class="btn btn-outline" style="cursor: pointer; align-self: flex-start">
-                <Icon name="download" size="sm" class="flip-v" /> {uploading ? "Uploading…" : saved.logo_file ? "Change logo" : "Upload logo"}
-                <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" onchange={uploadLogo} disabled={uploading} />
-              </label>
+              <FileDrop variant="button" accept="image/png,image/jpeg,image/webp" disabled={uploading} onfiles={(files) => uploadLogo(files[0])}>
+                <span class="btn btn-outline" style="align-self: flex-start">
+                  <Icon name="download" size="sm" class="flip-v" /> {uploading ? "Uploading…" : saved.logo_file ? "Change logo" : "Upload logo"}
+                </span>
+              </FileDrop>
               <span class="hint">Square, PNG, JPG or WebP, up to 2 MB. Used where space is small, and as the app icon.</span>
             </div>
           </div>
@@ -162,10 +157,11 @@
               <div class="label-row"><span class="label">Logo with name and slogan</span>
                 <InfoTip about="Logo with name and slogan" text="The wide version of your logo, with the centre's name and slogan in it. When set, it replaces the square logo and name at the top of the menu, on the sign-in page, on printed bills and on PDF downloads. A transparent PNG about 4 times wider than tall looks best." /></div>
               <div class="row" style="gap: 8px">
-                <label class="btn btn-outline" style="cursor: pointer">
-                  <Icon name="download" size="sm" class="flip-v" /> {wmUploading ? "Uploading…" : saved.wordmark_file ? "Change" : "Upload"}
-                  <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" onchange={uploadWordmark} disabled={wmUploading} />
-                </label>
+                <FileDrop variant="button" accept="image/png,image/jpeg,image/webp" disabled={wmUploading} onfiles={(files) => uploadWordmark(files[0])}>
+                  <span class="btn btn-outline">
+                    <Icon name="download" size="sm" class="flip-v" /> {wmUploading ? "Uploading…" : saved.wordmark_file ? "Change" : "Upload"}
+                  </span>
+                </FileDrop>
                 {#if saved.wordmark_file}<button class="btn btn-ghost" type="button" disabled={wmUploading} onclick={removeWordmark}>Remove</button>{/if}
               </div>
               <span class="hint">Wide, PNG, JPG or WebP, up to 2 MB. Stored in the database.</span>
