@@ -11,7 +11,7 @@
   .patient td { padding: 3px 0; font-size: 13px; line-height: 1.5; vertical-align: top; overflow-wrap: break-word; }
   /* Fixed width + right-aligned, so "Name :", "ID :", "Mobile :" and "Address :" all line up on their
      colon regardless of the label's own length - no per-label padding to keep in sync. */
-  .patient .k { display: inline-block; width: 100px; font-weight: bold; text-align: right; white-space: nowrap; }
+  .patient .k { display: inline-block; width: 108px; margin-right: 5px; font-weight: bold; text-align: right; white-space: nowrap; }
   .patient .k2 { font-weight: bold; }
   .up { text-transform: uppercase; }
   .gap { display: inline-block; width: 40px; }
@@ -41,7 +41,7 @@
     .top .c { font-size: 15px; } .top .l, .top .r { font-size: 11px; }
     .patient td, .items td, .items th { font-size: 12px; }
     .gap { width: 12px; } .gap2 { width: 8px; }
-    .patient .k { width: 86px; }
+    .patient .k { width: 92px; }
     .due { font-size: 14px; padding-right: 8px !important; }
     :global(body.is-printout) { background: var(--muted) !important; }
   }
@@ -55,7 +55,7 @@
     .top .c { font-size: 15px; } .top .r { font-size: 10px; }
     .provisional { margin-top: 2px; font-size: 9px; }
     .patient td { padding: 1px 0; font-size: 11px; line-height: 1.25; }
-    .patient .k { width: 80px; }
+    .patient .k { width: 88px; }
     .items { margin-top: 3px; }
     .items th { font-size: 11px; padding: 1px; }
     .items td { font-size: 11px; padding: 3px 2px 2px; }
