@@ -9,9 +9,9 @@
   hr { margin: 0; border: 0; border-top: 1px solid #000; }
   .provisional { margin: 4px 0 0; font-size: 11px; font-style: italic; text-align: center; }
   .patient td { padding: 3px 0; font-size: 13px; line-height: 1.5; vertical-align: top; overflow-wrap: break-word; }
-  /* Fixed width + right-aligned, so "Name :", "ID :", "Mobile :" and "Address :" all line up on their
-     colon regardless of the label's own length - no per-label padding to keep in sync. */
-  .patient .k { display: inline-block; width: 108px; margin-right: 5px; font-weight: bold; text-align: right; white-space: nowrap; }
+  /* Fixed width, left-aligned, with the colon outside the box: every label starts at the same x, and
+     the colon (right after the fixed-width box) lands at the same x too, regardless of label length. */
+  .patient .k { display: inline-block; width: 108px; margin-right: 5px; font-weight: bold; text-align: left; white-space: nowrap; }
   .patient .k2 { font-weight: bold; }
   .up { text-transform: uppercase; }
   .gap { display: inline-block; width: 40px; }

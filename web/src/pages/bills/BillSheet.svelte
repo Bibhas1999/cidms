@@ -38,14 +38,14 @@
   <table class="patient">
     <tbody>
       <tr>
-        <td><span class="k">Patient Name :</span> <strong class="up">{title(bill.patient_gender)}{bill.patient_name}</strong>
+        <td><span class="k">Patient Name</span>: <strong class="up">{title(bill.patient_gender)}{bill.patient_name}</strong>
           <span class="gap"></span><span class="up">{ageText}/{bill.patient_gender}</span></td>
         <td rowspan="4" class="qr">{#if qr}<img src={qr} alt="" width="70" height="70" />{/if}</td>
       </tr>
-      <tr><td><span class="k">Patient ID :</span> {patientNo}</td></tr>
-      <tr><td><span class="k">Mobile :</span> {bill.patient_mobile ? `+91${bill.patient_mobile.replace(/\D/g, "").slice(-10)}` : ""}
+      <tr><td><span class="k">Patient ID</span>: {patientNo}</td></tr>
+      <tr><td><span class="k">Mobile</span>: {bill.patient_mobile ? `+91${bill.patient_mobile.replace(/\D/g, "").slice(-10)}` : ""}
         <span class="gap2"></span><span class="k2">Consultant :</span> {bill.referring_doctor_name || "SELF"}</td></tr>
-      <tr><td><span class="k">Address :</span> {bill.patient_address}</td></tr>
+      <tr><td><span class="k">Address</span>: {bill.patient_address}</td></tr>
     </tbody>
   </table>
 
