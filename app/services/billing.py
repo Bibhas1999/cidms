@@ -376,6 +376,8 @@ class BillingService:
         if invoice.status != "on_hold":
             invoice.status = "on_hold"
             self.audit.record(self.tenant_id, self.current.id, "bill.held", "invoice", invoice.id, {"reason": reason})
+            if self._fully_paid(invoice):
+                events.bill_held_for_review(self.db, invoice, self.current, reason)
         return invoice
 
     def confirm(self, invoice_id: uuid.UUID) -> Invoice:

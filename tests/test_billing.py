@@ -173,12 +173,20 @@ def test_editing_a_bill_adds_and_removes_tests_with_a_reason(centre):
     assert r.status_code == 422 and "scanned" in r.json()["message"]
 
 
-def test_a_fully_paid_bill_cannot_be_held_or_changed(centre):
+def test_a_fully_paid_bill_can_be_put_on_hold_for_owner_review(centre):
     t, owner = centre["tests"], centre["owner"]
+    make_user(centre["tenant"], "admin@alpha.in", ["admin"])
+    admin = browser("alpha.localhost")
+    admin.login("admin@alpha.in")
     b = bill(centre["front"], t, ["CBC"], payments=[{"mode": "cash", "amount": "250.50"}]).json()
     url = f"/api/bills/{b['id']}"
-    held = owner.post(f"{url}/hold", json={"reason": "Change tests"})
-    assert held.status_code == 409 and "fully paid" in held.json()["message"]
+    held = owner.post(f"{url}/hold", json={"reason": "Review required"})
+    assert held.status_code == 200, held.text
+    assert held.json()["status"] == "on_hold"
+    kinds = {n["kind"] for n in owner.get("/api/notifications").json()["items"]}
+    assert "bill.held_for_review" in kinds
+    admin_kinds = {n["kind"] for n in admin.get("/api/notifications").json()["items"]}
+    assert "bill.held_for_review" in admin_kinds
     changed = owner.put(url, json={"lines": [{"test_id": t["Lipid profile"]}], "reason": "Change"})
     assert changed.status_code == 409 and "fully paid" in changed.json()["message"]
 

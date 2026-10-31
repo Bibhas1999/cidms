@@ -27,6 +27,8 @@ OWNERS = ("owner", "admin")
 FRONT_DESK = ("receptionist",)
 
 register_kind("bill.cancelled", "Bill cancelled", "A bill is cancelled, with the reason given.", "Owners and centre admins")
+register_kind("bill.held_for_review", "Bill on hold for review", "A fully paid bill is put on hold for owners/admin review.",
+              "Owners and centre admins")
 register_kind("refund.recorded", "Refund recorded", "Money is given back on a bill.", "Owners and centre admins")
 register_kind("discount.over_limit", "Discount over the limit", "A bill gets a discount above the centre's discount limit.",
               "Owners and centre admins")
@@ -71,6 +73,16 @@ def bill_cancelled(db: Session, invoice: Any, actor: Any, reason: str = "") -> l
     return notify(db, invoice.tenant_id, kind="bill.cancelled", severity="warning", roles=OWNERS, exclude=[actor_id],
                   title=f"Bill {invoice.invoice_no} cancelled",
                   body=f"{name} cancelled {invoice.patient_name}'s bill of {rupees(invoice.total)}." + (f" Reason: {reason}" if reason else ""),
+                  link=f"/bills/{invoice.id}")
+
+
+@_safe
+def bill_held_for_review(db: Session, invoice: Any, actor: Any, reason: str = "") -> list[uuid.UUID]:
+    actor_id, name = _who(actor)
+    return notify(db, invoice.tenant_id, kind="bill.held_for_review", severity="warning", roles=OWNERS, exclude=[actor_id],
+                  title=f"Bill {invoice.invoice_no} is on hold for review",
+                  body=f"{name} put {invoice.patient_name}'s fully paid bill on hold. Review it to decide whether to keep or cancel it."
+                       + (f" Reason: {reason}" if reason else ""),
                   link=f"/bills/{invoice.id}")
 
 
