@@ -20,6 +20,7 @@
   import Combobox from "../../components/Combobox.svelte";
   import FormErrors from "../../components/FormErrors.svelte";
   import { todayISO } from "../../lib/dates";
+  import RowMenu, { type RowAction } from "../../components/RowMenu.svelte";
 
   let { params }: { params: Record<string, string> } = $props();
 
@@ -138,6 +139,19 @@
   const fullyPaid = $derived(!!bill && Number(bill.total) > 0 && due <= 0);
   const editable = $derived(live && bill?.status === "on_hold" && !fullyPaid);
   const pay = $derived(bill ? paymentState(bill) : null);
+  const billActions = $derived<RowAction[]>(
+    bill && session.can("billing.edit") && bill.status !== "cancelled"
+      ? [
+          { label: bill.status === "on_hold" ? "Already on hold" : "Put on hold", icon: "clock",
+            disabled: bill.status === "on_hold", hint: bill.status === "on_hold" ? "This bill is already on hold" : "Needed before changing the tests or discount",
+            onclick: bill.status === "on_hold" ? undefined : () => { reason = ""; errors = {}; reasonOpen = "hold"; }
+          },
+          { label: "Cancel bill", icon: "x", tone: "danger", hint: paid > 0 ? `${rupees(paid)} has been paid, so refund it first` : "Mark the bill cancelled with your reason",
+            disabled: paid > 0, onclick: () => { reason = ""; errors = {}; reasonOpen = "cancel"; } },
+          ...(paid > 0 && session.can("payments.collect") ? [{ label: "Refund all", icon: "wallet", hint: `Refund ${rupees(paid)} back to the patient`, onclick: () => { amount = paid.toFixed(2); note = "Refund full amount"; errors = {}; requestKey = newRequestKey(); refundOpen = true; } }] : []),
+        ]
+      : []
+  );
 
   // ---------- collect a payment / refund ----------
   let payOpen = $state(false);
@@ -263,13 +277,13 @@
       <a class="link-button" href="/bills"><Icon name="chevronRight" size="sm" class="flip" /> All bills</a>
       <div class="meta-row" style="margin-top: 8px">
         <span class="eyebrow">Bill</span>
-        {#if pay}<span class="badge {pay[0]}">{pay[1]}</span>{/if}
-        {#if bill.status !== "confirmed"}<span class="badge {BILL_STATUS[bill.status][0]}">{BILL_STATUS[bill.status][1]}</span>{/if}
       </div>
       <h1 class="page-title mono" style="font-family: var(--font-heading)">{bill.invoice_no}</h1>
-      <p class="page-description">{bill.patient_name} · {date(bill.bill_date)} · billed by {bill.created_by_name || "—"}{#if bill.legacy_no} · old bill #{bill.legacy_no}{/if}</p>
+      <p class="page-description">{bill.patient_name} · {date(bill.bill_date)} · billed by {bill.created_by_name || "—"}{#if bill.legacy_no} · old bill #{bill.legacy_no}{/if}{#if pay}<span class="badge {pay[0]}" style="margin-left: 8px">{pay[1]}</span>{/if}</p>
     </div>
     <div class="row-wrap">
+      {#if billActions.length}<RowMenu actions={billActions} label="Bill actions" />{/if}
+      {#if paid > 0 && session.can("payments.collect")}<button class="btn btn-ghost-destructive btn-sm" onclick={() => { amount = paid.toFixed(2); note = "Refund full amount"; errors = {}; requestKey = newRequestKey(); refundOpen = true; }}><Icon name="wallet" /> Refund all</button>{/if}
       <a class="btn btn-outline" href="/bills/{bill.id}/print" target="_blank" rel="noopener"><Icon name="printer" /> Print</a>
       {#if live && due > 0 && session.can("payments.collect")}<button class="btn btn-primary" onclick={openPay}><Icon name="wallet" /> Collect {rupees(due)}</button>{/if}
     </div>
@@ -406,13 +420,10 @@
           <div class="card-footer card-footer-stack">
             {#if bill.status === "on_hold"}
               <button class="btn btn-outline btn-block" disabled={busy} onclick={() => setStatus("confirm")}><Icon name="check" /> Confirm bill</button>
-            {:else if fullyPaid}
-              <p class="text-sm text-muted locked-note"><Icon name="lock" size="sm" /> Fully paid: this bill can't be put on hold or changed.</p>
-            {:else}
-              <button class="btn btn-outline btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "hold"; }}
-                      use:tooltip={"Needed before changing the tests or the discount"}><Icon name="clock" /> Put on hold</button>
             {/if}
-            <button class="btn btn-ghost-destructive btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "cancel"; }}><Icon name="x" /> Cancel bill</button>
+            {#if fullyPaid && bill.status !== "on_hold"}
+              <p class="text-sm text-muted locked-note"><Icon name="lock" size="sm" /> Fully paid: it can be kept on hold, but the tests and discount stay locked.</p>
+            {/if}
           </div>
         {/if}
       </section>

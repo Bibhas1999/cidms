@@ -6,7 +6,7 @@ from datetime import date
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import NotFound
+from app.core.errors import Invalid, NotFound
 from app.core.money import local_today
 from app.core.security import CurrentUser
 from app.models import Invoice, Patient
@@ -79,6 +79,18 @@ class PatientService:
             AuditService(self.db).record(self.tenant_id, self.current.id, "patient.updated", "patient", row.id, changes)
             self.db.flush()
         return row
+
+    def delete(self, patient_id: uuid.UUID) -> None:
+        row = self.get(patient_id)
+        has_bills = self.db.scalar(
+            select(func.count()).select_from(Invoice).where(Invoice.tenant_id == self.tenant_id, Invoice.patient_id == patient_id)
+        ) or 0
+        if has_bills:
+            raise Invalid("This patient has bills in the system, so their record can't be deleted.")
+        AuditService(self.db).record(self.tenant_id, self.current.id, "patient.deleted", "patient", row.id,
+                                    {"patient_no": row.patient_no, "name": row.name})
+        self.db.delete(row)
+        self.db.flush()
 
     def bills(self, patient_id: uuid.UUID, limit: int = 100) -> list[Invoice]:
         self.get(patient_id)

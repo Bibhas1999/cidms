@@ -162,6 +162,16 @@ def edit_patient(patient_id: uuid.UUID, data: PatientIn, db: Session = DB, curre
     return PatientService(db, current).update(patient_id, data)
 
 
+@router.delete("/patients/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_patient(patient_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    """Delete a patient record only for the most trusted roles: owner, admin, and developer."""
+    roles = {r.lower() for r in current.roles}
+    if not roles & {"owner", "admin", "developer"}:
+        raise Forbidden("Only the owner, centre admin and developer can delete patient records.")
+    PatientService(db, current).delete(patient_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ---------- bills ----------
 
 def bill_filters(search: str = Query("", max_length=100), date_from: date | None = Query(None, alias="from"),

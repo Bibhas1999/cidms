@@ -370,11 +370,9 @@ class BillingService:
         return invoice
 
     def hold(self, invoice_id: uuid.UUID, reason: str) -> Invoice:
-        """Put a bill on hold (so it can be changed). Only bills with money still due: a paid bill stays as it is."""
+        """Put a bill on hold (so it can be changed). Fully paid bills may still be held, but they stay locked for edits."""
         invoice = self.get(invoice_id, lock=True)
         self._not_cancelled(invoice)
-        if self._fully_paid(invoice):
-            raise Conflict("This bill is fully paid, so it can't be put on hold or changed.")
         if invoice.status != "on_hold":
             invoice.status = "on_hold"
             self.audit.record(self.tenant_id, self.current.id, "bill.held", "invoice", invoice.id, {"reason": reason})

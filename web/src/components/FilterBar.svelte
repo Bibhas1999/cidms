@@ -48,11 +48,30 @@
   const filterKeys = $derived([...inlineKeys, ...moreKeys].filter((k) => !flat([k]).some((x) => notFilters.includes(x))));
   /** The filters in effect: a group (["from","to"]) counts once. `keys` is missing for an alsoApplied entry
       (e.g. the default "This month"), which isn't a specific address key to clear, so its chip has no ×. */
-  const appliedFilters = $derived<{ label: string; keys?: string[] }[]>([
-    ...alsoApplied.map((label) => ({ label })),
+  const formatValue = (key: string, value: string) => {
+    const v = value.trim();
+    if (!v) return "";
+    if (v === "true") return "Yes";
+    if (v === "false") return "No";
+    if (key === "from" || key === "to") {
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? v.replace(/_/g, " ") : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
+    if (["min_total", "max_total"].includes(key)) return v;
+    return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+  const appliedFilters = $derived<{ label: string; value?: string; keys?: string[] }[]>([
+    ...alsoApplied.map((label): { label: string; value?: string; keys?: string[] } => ({ label })),
     ...filterKeys.filter((k) => flat([k]).some((x) => q.get(x)))
-      .map((k) => { const keys = flat([k]); return { label: labels[keys[0]] ?? tidy(keys[0]), keys }; }),
-  ].filter((v, i, all) => all.findIndex((o) => o.label === v.label) === i));
+      .map((k) => {
+        const keys = flat([k]);
+        const label = labels[keys[0]] ?? tidy(keys[0]);
+        const values = keys.map((key) => q.get(key)).filter((v): v is string => Boolean(v));
+        const value = values.length === 1 ? formatValue(keys[0], values[0])
+          : values.length > 1 ? `${formatValue(keys[0], values[0])} to ${formatValue(keys[1], values[1])}` : undefined;
+        return { label, value, keys };
+      }),
+  ].filter((v, i, all) => all.findIndex((o) => o.label === v.label && (o as { value?: string }).value === (v as { value?: string }).value) === i));
   /** Just the names, for the "Search all X, or only…" dialog below. */
   const applied = $derived(appliedFilters.map((f) => f.label));
 
@@ -156,9 +175,9 @@
   </div>
   {#if appliedFilters.length}
     <div class="fb-chips" role="list" aria-label="Filters applied">
-      {#each appliedFilters as f (f.label)}
+      {#each appliedFilters as f (f.label + (f.value ?? "") + (f.keys ?? []).join("-"))}
         <span class="fb-chip" role="listitem">
-          {f.label}
+          {f.label}{#if f.value}: {f.value}{/if}
           {#if f.keys}
             <button type="button" class="fb-chip-x" aria-label="Remove the {f.label} filter" onclick={() => removeFilter(f)}><Icon name="x" size="sm" /></button>
           {/if}
