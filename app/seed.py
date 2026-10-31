@@ -79,6 +79,7 @@ def seed_supreme(db: Session, email: str, password: str) -> None:
         email="supremehealthcaresolution@gmail.com", invoice_prefix="SHC", brand_color="#004aad", tagline="Improving Lives Together",
         bill_footer="No refund once a test is done. Reports are delivered 4 pm to 8 pm, Monday to Saturday. "
                     "Reports not collected within 30 days are not kept.",
+        max_discount_percent=Decimal("100"),
     ))
     owner = User(tenant_id=tenant.id, email=email.strip().lower(), full_name="Supreme owner",
                  password_hash=hash_password(password), must_change_password=True)
