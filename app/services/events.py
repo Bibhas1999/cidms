@@ -78,7 +78,7 @@ def bill_cancelled(db: Session, invoice: Any, actor: Any, reason: str = "") -> l
 
 @_safe
 def bill_held_for_review(db: Session, invoice: Any, actor: Any, reason: str = "") -> list[uuid.UUID]:
-    actor_id, name = _who(actor)
+    _actor_id, name = _who(actor)
     return notify(db, invoice.tenant_id, kind="bill.held_for_review", severity="warning", roles=OWNERS,
                   title=f"Bill {invoice.invoice_no} is on hold for review",
                   body=f"{name} put {invoice.patient_name}'s fully paid bill on hold. Review it to decide whether to keep or cancel it."
