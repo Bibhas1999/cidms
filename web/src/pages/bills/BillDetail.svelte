@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { z } from "zod";
   import { connection } from "../../lib/connection.svelte";
   import { outbox } from "../../lib/outbox.svelte";
   import { FEATURES } from "../../lib/features";
@@ -6,17 +7,109 @@
   import EditTestsDialog from "../../components/EditTestsDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
-  import { ApiError, get, newRequestKey, post } from "../../lib/api";
+  import { ApiError, get, newRequestKey, post, put } from "../../lib/api";
   import { BILL_STATUS, LINE_STATUS, PAYMENT_MODES, modeLabel, paymentState, type Bill, type PaymentMode } from "../../lib/bill-types";
   import { date, dateTime, rupees } from "../../lib/format";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
   import { tooltip } from "../../lib/tooltip";
+  import { Form } from "../../lib/form.svelte";
+  import { optionalEmail, optionalPersonName, optionalText, personName, phone, wholeNumber } from "../../lib/schemas";
+  import { GENDER_LABELS, type Doctor, type Page, type Patient } from "../../lib/types";
+  import { formatPhone } from "../../lib/phone";
+  import Combobox from "../../components/Combobox.svelte";
+  import FormErrors from "../../components/FormErrors.svelte";
+  import { todayISO } from "../../lib/dates";
 
   let { params }: { params: Record<string, string> } = $props();
 
   let bill = $state<Bill | null>(null);
   let loadError = $state("");
+  let metaEditOpen = $state(false);
+  let metaBusy = $state(false);
+  let patientForm = new Form({
+    schema: z.object({
+      name: personName("Enter the patient's name."),
+      guardian_name: optionalPersonName(200, "The guardian's name"),
+      age_years: wholeNumber({ min: 0, max: 130, label: "the age in years" }),
+      date_of_birth: z.string().refine((v) => !v || v <= todayISO(), "The date of birth can't be in the future."),
+      gender: z.string().refine((v) => v in GENDER_LABELS, "Choose the gender."),
+      mobile: phone(false),
+      email: optionalEmail,
+      address: optionalText(500),
+    }),
+    initial: { name: "", guardian_name: "", age_years: null as number | null, date_of_birth: "", gender: "", mobile: "", email: "", address: "" },
+    rules: (v, add) => { if ((v.age_years === null || v.age_years === "" || v.age_years === undefined) && !v.date_of_birth) add("age_years", "Give the age in years, or the date of birth."); },
+    onSubmit: async () => {},
+    serverFields: { __all__: "age_years" },
+  });
+  let doctorText = $state("");
+  let doctor = $state<Doctor | null>(null);
+
+  const searchDoctors = (q: string, page: number, size: number, signal: AbortSignal) =>
+    get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal);
+
+  async function openBillMetaEdit() {
+    if (!bill) return;
+    try {
+      const patient = await get<Patient>(`/api/patients/${bill.patient_id}`);
+      patientForm.reset({
+        name: patient.name,
+        guardian_name: patient.guardian_name,
+        age_years: patient.age_years,
+        date_of_birth: patient.date_of_birth ?? "",
+        gender: patient.gender || "",
+        mobile: patient.mobile,
+        email: patient.email,
+        address: patient.address,
+      });
+      doctor = bill.referring_doctor_id ? { id: bill.referring_doctor_id, name: bill.referring_doctor_name || "", qualification: "", phone: "", is_active: true } : null;
+      doctorText = bill.referring_doctor_name || "";
+      metaEditOpen = true;
+    } catch (e) {
+      notifyError(e, { title: "Couldn't load the patient details" });
+    }
+  }
+
+  async function saveBillMetaEdit() {
+    if (!bill) return;
+    patientForm.submitted = true;
+    patientForm.validate();
+    if (Object.keys(patientForm.errors).length) return;
+
+    metaBusy = true;
+    try {
+      await put<Patient>(`/api/patients/${bill.patient_id}`, {
+        name: patientForm.values.name,
+        guardian_name: patientForm.values.guardian_name,
+        gender: patientForm.values.gender,
+        age_years: patientForm.values.age_years === null || patientForm.values.age_years === "" ? null : Number(patientForm.values.age_years),
+        date_of_birth: patientForm.values.date_of_birth || null,
+        mobile: patientForm.values.mobile,
+        email: patientForm.values.email,
+        address: patientForm.values.address,
+      });
+
+      const doctorId = doctor && doctor.name === doctorText ? doctor.id : null;
+      const doctorName = doctorId ? "" : doctorText.trim();
+      await put<Bill>(`/api/bills/${bill.id}`, {
+        referring_doctor_id: doctorId, referring_doctor_name: doctorName,
+        lines: bill.items.filter((line) => line.status !== "cancelled").map((line) => ({ id: line.id, quantity: line.quantity })),
+        discount_type: bill.discount_type,
+        discount_value: bill.discount_value,
+        notes: bill.notes,
+        reason: "Updated patient and referrer details.",
+      });
+
+      bill = await get<Bill>(`/api/bills/${bill.id}`);
+      metaEditOpen = false;
+      notify("Patient and referral details saved.");
+    } catch (e) {
+      notifyError(e, { title: "Couldn't save the patient and referrer" });
+    } finally {
+      metaBusy = false;
+    }
+  }
 
   async function load() {
     try {
@@ -279,7 +372,13 @@
     <div class="stack">
       <section class="card" aria-labelledby="patient-title">
         <div class="card-header"><h2 class="card-title" id="patient-title">Patient</h2>
-          <a class="btn btn-ghost btn-sm" href="/patients/{bill.patient_id}">Open</a></div>
+          <div class="row-wrap">
+            <a class="btn btn-ghost btn-sm" href="/patients/{bill.patient_id}">Open</a>
+            {#if live && session.can("patients.manage")}
+              <button class="btn btn-ghost btn-sm" onclick={openBillMetaEdit} aria-label="Edit patient details on this bill"><Icon name="edit" size="sm" /></button>
+            {/if}
+          </div>
+        </div>
         <div class="card-content">
           <dl class="dl" style="grid-template-columns: 1fr">
             <div><dt>Name</dt><dd class="font-semibold">{bill.patient_name}</dd></div>
@@ -291,7 +390,11 @@
         </div>
       </section>
       <section class="card" aria-labelledby="bill-title">
-        <div class="card-header"><h2 class="card-title" id="bill-title">Bill</h2></div>
+        <div class="card-header"><h2 class="card-title" id="bill-title">Bill</h2>
+          {#if live && session.can("billing.edit")}
+            <button class="btn btn-ghost btn-sm" onclick={openBillMetaEdit} aria-label="Edit referrer on this bill"><Icon name="edit" size="sm" /></button>
+          {/if}
+        </div>
         <div class="card-content">
           <dl class="dl" style="grid-template-columns: 1fr">
             <div><dt>Referred by</dt><dd>{bill.referring_doctor_name || "Self"}</dd></div>
@@ -317,6 +420,99 @@
   </div>
 
   <EditTestsDialog bind:open={editOpen} {bill} onsaved={(b) => (bill = b)} />
+
+  <FormDialog bind:open={metaEditOpen} title="Edit patient and referral" icon="edit" tone="info" wide description="Change the patient record and the doctor linked to this bill. Old bills keep their printed details, while the live link is updated here."
+              submitLabel="Save changes" busy={metaBusy} onsubmit={saveBillMetaEdit}>
+      <div class="stack">
+        <div class="card" style="border: 1px solid var(--line); background: var(--panel-alt);">
+          <div class="card-header"><div><h3 class="card-title">Patient details</h3></div></div>
+          <div class="card-content">
+            <FormErrors form={patientForm} labels={{ name: "Name", guardian_name: "Guardian", age_years: "Age", date_of_birth: "Date of birth", gender: "Gender", mobile: "Mobile", email: "Email", address: "Address", __all__: "Age or date of birth" }} idPrefix="bill_meta_patient_" />
+            <div class="form-grid">
+              <Field id="bill_meta_patient_name" label="Name" required error={patientForm.error("name")}>
+                {#snippet children({ invalid, describedby })}
+                  <input id="bill_meta_patient_name" class="input" autocomplete="off" bind:value={patientForm.values.name} {...patientForm.field("name")} aria-invalid={invalid} aria-describedby={describedby} />
+                {/snippet}
+              </Field>
+              <Field id="bill_meta_patient_guardian_name" label="Guardian (C/O)" optional error={patientForm.error("guardian_name")}
+                     tip="Father, husband or whoever the patient comes with.">
+                {#snippet children({ invalid, describedby })}
+                  <input id="bill_meta_patient_guardian_name" class="input" bind:value={patientForm.values.guardian_name} {...patientForm.field("guardian_name")} aria-invalid={invalid} aria-describedby={describedby} />
+                {/snippet}
+              </Field>
+              <Field id="bill_meta_patient_age_years" label="Age in years" error={patientForm.error("age_years")}
+                     tip="Give the age, or the date of birth. One of the two is needed.">
+                {#snippet children({ invalid, describedby })}
+                  <input id="bill_meta_patient_age_years" class="input tabular" type="number" min="0" max="130" step="1" inputmode="numeric"
+                         bind:value={patientForm.values.age_years} {...patientForm.field("age_years")} aria-invalid={invalid} aria-describedby={describedby} />
+                {/snippet}
+              </Field>
+              <Field id="bill_meta_patient_date_of_birth" label="Date of birth" optional error={patientForm.error("date_of_birth")}>
+                {#snippet children({ invalid, describedby })}
+                  <input id="bill_meta_patient_date_of_birth" class="input" type="date" max={todayISO()} bind:value={patientForm.values.date_of_birth} {...patientForm.field("date_of_birth")}
+                         aria-invalid={invalid} aria-describedby={describedby} />
+                {/snippet}
+              </Field>
+              <Field id="bill_meta_patient_gender" label="Gender" required error={patientForm.error("gender")}>
+                {#snippet children({ invalid, describedby })}
+                  <select id="bill_meta_patient_gender" class="select" bind:value={patientForm.values.gender} {...patientForm.field("gender")} aria-invalid={invalid} aria-describedby={describedby}>
+                    <option value="" disabled>Choose…</option>
+                    {#each Object.entries(GENDER_LABELS) as [value, label] (value)}<option {value}>{label}</option>{/each}
+                  </select>
+                {/snippet}
+              </Field>
+              <Field id="bill_meta_patient_mobile" label="Mobile" optional error={patientForm.error("mobile")}
+                     tip="Choose the country code, then type the number.">
+                {#snippet children({ invalid, describedby })}
+                  <input id="bill_meta_patient_mobile" class="input" bind:value={patientForm.values.mobile} {...patientForm.field("mobile")} aria-invalid={invalid} aria-describedby={describedby} />
+                {/snippet}
+              </Field>
+              <div class="full">
+                <Field id="bill_meta_patient_email" label="Email" optional error={patientForm.error("email")}>
+                  {#snippet children({ invalid, describedby })}
+                    <input id="bill_meta_patient_email" class="input" type="email" autocomplete="off" bind:value={patientForm.values.email} {...patientForm.field("email")} aria-invalid={invalid} aria-describedby={describedby} />
+                  {/snippet}
+                </Field>
+              </div>
+              <div class="full">
+                <Field id="bill_meta_patient_address" label="Address" optional error={patientForm.error("address")}>
+                  {#snippet children({ invalid, describedby })}
+                    <textarea id="bill_meta_patient_address" class="textarea" rows="3" bind:value={patientForm.values.address} {...patientForm.field("address")} aria-invalid={invalid} aria-describedby={describedby}></textarea>
+                  {/snippet}
+                </Field>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="border: 1px solid var(--line); background: var(--panel-alt);">
+          <div class="card-header"><div><h3 class="card-title">Referred by</h3></div></div>
+          <div class="card-content">
+            <Combobox id="bill_meta_doctor" label="Find a doctor or hospital" placeholder="Name, degree or phone… (leave empty for Self)" icon="stethoscope" searchPage={searchDoctors}
+                      bind:value={doctorText} onpick={(d) => { doctor = d; doctorText = d.name; }} emptyText="Not in your list yet.">
+              {#snippet option(d)}
+                <div class="row-between"><span class="font-semibold">{d.name}</span>
+                  <span class="text-sm text-muted tabular">{formatPhone(d.phone) || "—"}</span></div>
+                {#if d.qualification}<div class="text-xs text-muted">{d.qualification}</div>{/if}
+              {/snippet}
+            </Combobox>
+            <div class="row-wrap" style="margin-top: 12px">
+              {#if doctorText}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctor = null; doctorText = ""; }} use:tooltip={"No referring doctor or hospital: the patient came on their own"}>Self</button>{/if}
+            </div>
+            {#if doctor && doctor.name === doctorText}
+              <div class="picked" style="margin-top: 12px">
+                <span class="avatar" aria-hidden="true"><Icon name="stethoscope" size="sm" /></span>
+                <div class="grow">
+                  <div class="font-semibold">{doctor.name}</div>
+                  <div class="text-sm text-muted">{[doctor.qualification, formatPhone(doctor.phone)].filter(Boolean).join(" · ") || "Referred by"}</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctor = null; doctorText = ""; }}>Change</button>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+  </FormDialog>
 
   <FormDialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}."
               submitLabel={`Receive ${rupees(amount || 0)}`} submitIcon="check" {busy} disabled={!Number(amount) || !!payProblem}
