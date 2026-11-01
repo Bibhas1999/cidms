@@ -141,6 +141,8 @@ def test_discount_limit_is_editable_by_owner_admin_and_developer(alpha):
     owner = browser("alpha.localhost")
     owner.login("owner@alpha.in")
     assert owner.put("/api/settings/discount-limit", json={"max_discount_percent": "100"}).json()["max_discount_percent"] == "100.00"
+    audit = owner.get("/api/activity", params={"action": "settings.discount_limit_updated"}).json()
+    assert audit["items"][0]["details"]["max_discount_percent"] == ["20.00", "100"]
 
     admin = browser("alpha.localhost")
     admin.login("admin@alpha.in")

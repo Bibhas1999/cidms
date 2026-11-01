@@ -27,7 +27,9 @@ class SettingsService:
         changes = {}
         for field, value in data.model_dump().items():
             if getattr(row, field) != value:
-                changes[field] = [getattr(row, field), value]
+                old = getattr(row, field)
+                changes[field] = [str(old) if isinstance(old, Decimal) else old,
+                                  str(value) if isinstance(value, Decimal) else value]
                 setattr(row, field, value)
         if changes:
             AuditService(self.db).record(row.tenant_id, self.current.id, "settings.updated", "tenant", row.tenant_id, changes)
@@ -41,7 +43,7 @@ class SettingsService:
         if old != percent:
             row.max_discount_percent = percent
             AuditService(self.db).record(row.tenant_id, self.current.id, "settings.discount_limit_updated", "tenant", row.tenant_id,
-                                         {"max_discount_percent": [old, percent]})
+                                         {"max_discount_percent": [str(old), str(percent)]})
             self.db.flush()
             self.db.refresh(row)
         return row
