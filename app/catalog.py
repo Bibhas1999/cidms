@@ -18,6 +18,7 @@ CLIENT_PERMISSIONS = {
     "billing.create": "Create bills and take payments",
     "billing.edit": "Edit, hold or cancel bills",
     "billing.discount_over_limit": "Give discounts above the centre's limit",
+    "billing.discount_limit.manage": "Change the centre's maximum discount limit",
     "payments.collect": "Collect dues and record refunds",
     "catalogue.manage": "Change departments, tests, prices and doctors",
     "worklist.update": "Mark scans done and upload images",
@@ -50,8 +51,8 @@ ROLES: dict[str, tuple[str, str, str, set[str]]] = {
     "doctor": ("Doctor / radiologist", "client", "Reports and consultations",
                {"reports.write", "reports.sign", "consultations.write", "worklist.update", "reports.deliver"}),
     "accounts": ("Accounts", "client", "Business reports and dues", {"business_reports.view", "payments.collect"}),
-    "developer": ("Developer", "client", "API keys and integrations, and the activity log; no billing or money",
-                  {"integrations.manage", "activity.view"}),
+    "developer": ("Developer", "client", "API keys and integrations, the activity log, and the discount limit",
+                  {"integrations.manage", "activity.view", "billing.discount_limit.manage"}),
 }
 
 # Only an owner can make someone an owner.

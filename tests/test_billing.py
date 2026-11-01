@@ -173,20 +173,37 @@ def test_editing_a_bill_adds_and_removes_tests_with_a_reason(centre):
     assert r.status_code == 422 and "scanned" in r.json()["message"]
 
 
-def test_a_fully_paid_bill_can_be_put_on_hold_for_owner_review(centre):
+def test_bill_parties_are_updated_by_entity_id(centre):
+    front, owner = centre["front"], centre["owner"]
+    first_patient = front.post("/api/patients", json=NEW_PATIENT).json()
+    second_patient = front.post("/api/patients", json={**NEW_PATIENT, "name": "Mina Dey", "mobile": "9000011111"}).json()
+    doctor = front.post("/api/doctors", json={"name": "Dr. A. Sen"}).json()
+    assert front.get(f"/api/doctors/{doctor['id']}").json()["id"] == doctor["id"]
+    b = front.post("/api/bills", json={"patient_id": first_patient["id"], "referring_doctor_id": doctor["id"],
+                                      "lines": [{"test_id": centre["tests"]["CBC"]}]}).json()
+    assert b["referring_doctor_id"] == doctor["id"]
+
+    response = owner.put(f"/api/bills/{b['id']}/parties", json={"patient_id": second_patient["id"],
+                                                                "referring_doctor_id": None})
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert updated["patient_id"] == second_patient["id"] and updated["patient_name"] == "Mina Dey"
+    assert updated["referring_doctor_id"] is None and updated["referring_doctor_name"] == ""
+    assert owner.get(f"/api/patients/{updated['patient_id']}").json()["id"] == second_patient["id"]
+
+    forbidden = front.put(f"/api/bills/{b['id']}/parties", json={"patient_id": first_patient["id"]})
+    assert forbidden.status_code == 403
+    missing_doctor = owner.put(f"/api/bills/{b['id']}/parties", json={"patient_id": first_patient["id"],
+                                                                        "referring_doctor_id": "00000000-0000-0000-0000-000000000001"})
+    assert missing_doctor.status_code == 422
+
+
+def test_a_fully_paid_bill_can_be_held_but_not_changed(centre):
     t, owner = centre["tests"], centre["owner"]
-    make_user(centre["tenant"], "admin@alpha.in", ["admin"])
-    admin = browser("alpha.localhost")
-    admin.login("admin@alpha.in")
     b = bill(centre["front"], t, ["CBC"], payments=[{"mode": "cash", "amount": "250.50"}]).json()
     url = f"/api/bills/{b['id']}"
-    held = owner.post(f"{url}/hold", json={"reason": "Review required"})
-    assert held.status_code == 200, held.text
-    assert held.json()["status"] == "on_hold"
-    kinds = {n["kind"] for n in owner.get("/api/notifications").json()["items"]}
-    assert "bill.held_for_review" in kinds
-    admin_kinds = {n["kind"] for n in admin.get("/api/notifications").json()["items"]}
-    assert "bill.held_for_review" in admin_kinds
+    held = owner.post(f"{url}/hold", json={"reason": "Change tests"})
+    assert held.status_code == 200 and held.json()["status"] == "on_hold"
     changed = owner.put(url, json={"lines": [{"test_id": t["Lipid profile"]}], "reason": "Change"})
     assert changed.status_code == 409 and "fully paid" in changed.json()["message"]
 

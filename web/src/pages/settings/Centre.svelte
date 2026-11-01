@@ -49,8 +49,11 @@
     saving = true;
     errors = {};
     try {
-      take(await put<CentreSettings>("/api/settings", { ...form, gst_number: form.gst_number.trim().toUpperCase(),
-                                                         invoice_prefix: form.invoice_prefix.trim().toUpperCase() }));
+      const updated = session.can("settings.manage")
+        ? await put<CentreSettings>("/api/settings", { ...form, gst_number: form.gst_number.trim().toUpperCase(),
+                                                       invoice_prefix: form.invoice_prefix.trim().toUpperCase() })
+        : await put<CentreSettings>("/api/settings/discount-limit", { max_discount_percent: form.max_discount_percent });
+      take(updated);
       notify("Centre settings saved.");
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fieldErrors).length) errors = err.fieldErrors;
@@ -121,7 +124,8 @@
   }
 </script>
 
-<PageHeader compact eyebrow="Settings" title="Centre details" description="What your bills, reports and sign-in page show.">
+<PageHeader compact eyebrow="Settings" title={session.can("settings.manage") ? "Centre details" : "Discount limit"}
+            description={session.can("settings.manage") ? "What your bills, reports and sign-in page show." : "Set the maximum discount front-desk staff can apply without approval."}>
   {#snippet actions()}{#if saved}<span class="text-sm text-muted">Last saved {dateTime(saved.updated_at)}</span>{/if}{/snippet}
 </PageHeader>
 
@@ -130,6 +134,7 @@
 {:else if form && saved}
   <form class="card" onsubmit={save} novalidate>
     <div class="card-content stack-lg">
+      {#if session.can("settings.manage")}
       <div class="form-section">
         <h2 class="form-section-title"><Icon name="building" /> Your centre</h2>
         <div class="stack">
@@ -200,10 +205,12 @@
           </div>
         </div>
       </div>
+      {/if}
 
       <div class="form-section">
-        <h2 class="form-section-title"><Icon name="receipt" /> Bills and reports</h2>
+        <h2 class="form-section-title"><Icon name="receipt" /> {session.can("settings.manage") ? "Bills and reports" : "Discount limit"}</h2>
         <div class="stack">
+          {#if session.can("settings.manage")}
           <div class="grid-2">
             <Field id="gst" label="GST number" optional tip="Your 15-character GSTIN, e.g. 19ABCDE1234F1Z5. When set, it is printed on every bill. Medical diagnostic services are usually GST-exempt; ask your accountant if unsure." error={errors.gst_number} hint="15 characters. Leave blank if you don't charge GST.">
               {#snippet children({ invalid, describedby })}<input id="gst" class="input mono" maxlength="15" bind:value={form!.gst_number} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
@@ -212,7 +219,8 @@
               {#snippet children({ invalid, describedby })}<input id="prefix" class="input mono" maxlength="10" bind:value={form!.invoice_prefix} aria-invalid={invalid} aria-describedby={describedby} />{/snippet}
             </Field>
           </div>
-          <Field id="max_discount" label="Maximum discount without approval" tip="The biggest discount (as a percent of the bill) front-desk staff can give on their own while making a bill. A bigger discount still works, but needs the owner or an admin to approve it first." error={errors.max_discount_percent} hint="0 to 100. Default is 20%.">
+          {/if}
+          <Field id="max_discount" label="Maximum discount without approval" tip="The biggest discount (as a percent of the bill) front-desk staff can give on their own while making a bill. A bigger discount still works, but needs approval from an owner or admin." error={errors.max_discount_percent} hint="0 to 100. Default is 20%.">
             {#snippet children({ invalid, describedby })}
               <div class="row" style="gap: 8px; max-width: 140px">
                 <input id="max_discount" class="input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
@@ -221,12 +229,14 @@
               </div>
             {/snippet}
           </Field>
+          {#if session.can("settings.manage")}
           <Field id="bill_footer" label="Notes at the foot of every bill" optional tip="Short notes printed at the bottom of each bill, e.g. report collection times or refund policy. One note per line." error={errors.bill_footer}>
             {#snippet children({ invalid, describedby })}<textarea id="bill_footer" class="textarea" bind:value={form!.bill_footer} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
           </Field>
           <Field id="report_footer" label="Notes at the foot of every report" optional tip="Printed at the bottom of each medical report, e.g. 'This report is not valid for medico-legal purposes'. One note per line." error={errors.report_footer}>
             {#snippet children({ invalid, describedby })}<textarea id="report_footer" class="textarea" bind:value={form!.report_footer} aria-invalid={invalid} aria-describedby={describedby}></textarea>{/snippet}
           </Field>
+          {/if}
         </div>
       </div>
     </div>

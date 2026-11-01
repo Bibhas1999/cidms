@@ -168,6 +168,10 @@ class SettingsIn(BaseModel):
     report_footer: str = Field(default="", max_length=2000)
 
 
+class DiscountLimitIn(BaseModel):
+    max_discount_percent: Decimal = Field(ge=0, le=100, decimal_places=2)
+
+
 class SettingsOut(Out, SettingsIn):
     email: str = ""
     logo_file: str = ""

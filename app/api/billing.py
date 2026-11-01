@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import Paging, client_user, paging
@@ -14,13 +15,14 @@ from app.core.idempotency import run_once
 from app.core.logging import client_ip
 from app.core.money import local_today
 from app.core.security import CurrentUser, require
-from app.models import Patient, TenantSettings
+from app.models import Patient, ReferringDoctor, TenantSettings
 from app.schemas import Page
 from app.schemas_billing import (
     BillIn,
     BillItemsStatusIn,
     BillOut,
     BillPage,
+    BillPartiesIn,
     BillShareOut,
     BillUpdateIn,
     DaySummaryOut,
@@ -130,6 +132,15 @@ def edit_doctor(doctor_id: uuid.UUID, data: DoctorIn, db: Session = DB, current:
     return CatalogueService(db, current).save_doctor(data, doctor_id)
 
 
+@router.get("/doctors/{doctor_id}", response_model=DoctorOut)
+def doctor(doctor_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
+    found = db.scalar(select(ReferringDoctor).where(ReferringDoctor.tenant_id == current.user.tenant_id,
+                                                   ReferringDoctor.id == doctor_id))
+    if found is None:
+        raise NotFound("That doctor or hospital isn't in this centre's list.")
+    return found
+
+
 # ---------- patients ----------
 
 @router.get("/patients", response_model=Page[PatientOut])
@@ -217,6 +228,12 @@ def bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends
     invoice = BillingService(db, current).get(invoice_id)
     AuditService(db).viewed(current.user.tenant_id, current.id, "invoice", invoice.id, {"invoice_no": invoice.invoice_no})
     return invoice
+
+
+@router.put("/bills/{invoice_id}/parties", response_model=BillOut)
+def update_bill_parties(invoice_id: uuid.UUID, data: BillPartiesIn, db: Session = DB,
+                        current: CurrentUser = Depends(require("billing.edit"))):
+    return BillingService(db, current).update_parties(invoice_id, data)
 
 
 @router.put("/bills/{invoice_id}", response_model=BillOut)
