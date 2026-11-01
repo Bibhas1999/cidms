@@ -20,7 +20,16 @@ const FRESH = [/^\/api\/tests(\?|$)/, /^\/api\/departments(\?|$)/, /^\/api\/test
 
 interface Entry { box: Sealed; saved_at: number; user: string }
 
-let lastWrite = 0;   // when this tab last changed something: older copies aren't "fresh" any more
+// When anything last changed here: older copies aren't "fresh" any more. Kept in localStorage (not just this
+// tab's memory), so a reload right after saving doesn't bring back the copy from before the save.
+const LAST_WRITE_KEY = "response-cache:last-write";
+let lastWrite = (() => {
+  try {
+    return Number(localStorage.getItem(LAST_WRITE_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+})();
 
 class SavedCopies {
   /** Screens showing a saved copy right now: url -> when it was saved. */
@@ -71,6 +80,9 @@ export async function freshCopy<T>(user: string, url: string): Promise<T | null>
 /** Something was changed here: fresh copies must be asked for again. */
 export function changed(): void {
   lastWrite = Date.now();
+  try {
+    localStorage.setItem(LAST_WRITE_KEY, String(lastWrite));
+  } catch { /* storage full or blocked: this tab's memory still has it */ }
 }
 
 async function trim(): Promise<void> {
