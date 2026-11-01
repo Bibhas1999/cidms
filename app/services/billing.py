@@ -23,7 +23,7 @@ from app.core.security import CurrentUser
 from app.models import Counter, Invoice, InvoiceItem, LabTest, Patient, Payment, ReferringDoctor, Tenant, TenantSettings, utcnow
 from app.repositories.common import contains
 from app.repositories.counters import next_number
-from app.schemas_billing import BillIn, BillLineIn, BillUpdateIn, PaymentIn, RefundIn
+from app.schemas_billing import BillIn, BillLineIn, BillPartiesIn, BillUpdateIn, PaymentIn, RefundIn
 from app.services import events
 from app.services.audit import AuditService
 from app.services.catalogue import CatalogueService
@@ -369,12 +369,37 @@ class BillingService:
             events.discount_over_limit(self.db, invoice, self.current, self._over_limit)
         return invoice
 
-    def hold(self, invoice_id: uuid.UUID, reason: str) -> Invoice:
-        """Put a bill on hold (so it can be changed). Only bills with money still due: a paid bill stays as it is."""
+    def update_parties(self, invoice_id: uuid.UUID, data: BillPartiesIn) -> Invoice:
         invoice = self.get(invoice_id, lock=True)
         self._not_cancelled(invoice)
-        if self._fully_paid(invoice):
-            raise Conflict("This bill is fully paid, so it can't be put on hold or changed.")
+        patient = PatientService(self.db, self.current).get(data.patient_id)
+        doctor = None
+        if data.referring_doctor_id:
+            doctor = self.db.scalar(select(ReferringDoctor).where(ReferringDoctor.tenant_id == self.tenant_id,
+                                                                  ReferringDoctor.id == data.referring_doctor_id))
+            if doctor is None:
+                raise Invalid("Choose a doctor from the list.", "referring_doctor_id")
+
+        before = {"patient_id": str(invoice.patient_id), "referring_doctor_id": str(invoice.referring_doctor_id or "")}
+        invoice.patient_id = patient.id
+        invoice.patient_name = patient.name
+        invoice.patient_age = age_text(patient, invoice.bill_date)
+        invoice.patient_gender = patient.gender
+        invoice.patient_mobile = patient.mobile
+        invoice.patient_address = patient.address
+        invoice.guardian_name = patient.guardian_name
+        invoice.referring_doctor_id = doctor.id if doctor else None
+        invoice.referring_doctor_name = doctor.name if doctor else ""
+        self.db.flush()
+        self.audit.record(self.tenant_id, self.current.id, "bill.parties_updated", "invoice", invoice.id,
+                          {"before": before, "patient_id": str(patient.id),
+                           "referring_doctor_id": str(doctor.id if doctor else "")})
+        return invoice
+
+    def hold(self, invoice_id: uuid.UUID, reason: str) -> Invoice:
+        """Put a bill on hold, including a fully paid one."""
+        invoice = self.get(invoice_id, lock=True)
+        self._not_cancelled(invoice)
         if invoice.status != "on_hold":
             invoice.status = "on_hold"
             self.audit.record(self.tenant_id, self.current.id, "bill.held", "invoice", invoice.id, {"reason": reason})

@@ -12,7 +12,7 @@ from app.core.db import DB
 from app.core.security import CurrentUser, require
 from app.core.storage import MAX_LOGO_BYTES
 from app.models import ActivityLog
-from app.schemas import ActivityOut, Page, SettingsIn, SettingsOut
+from app.schemas import ActivityOut, DiscountLimitIn, Page, SettingsIn, SettingsOut
 from app.services.settings import SettingsService
 
 router = APIRouter(prefix="/api", tags=["centre"])
@@ -26,6 +26,12 @@ def get_settings(db: Session = DB, current: CurrentUser = Depends(client_user)):
 @router.put("/settings", response_model=SettingsOut)
 def update_settings(data: SettingsIn, db: Session = DB, current: CurrentUser = Depends(require("settings.manage"))):
     return SettingsService(db, client_user(current)).update(data)
+
+
+@router.put("/settings/discount-limit", response_model=SettingsOut)
+def update_discount_limit(data: DiscountLimitIn, db: Session = DB,
+                          current: CurrentUser = Depends(require("billing.discount_limit.manage"))):
+    return SettingsService(db, client_user(current)).update_discount_limit(data.max_discount_percent)
 
 
 @router.post("/settings/wordmark", response_model=SettingsOut)

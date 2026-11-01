@@ -2,25 +2,34 @@
   import { connection } from "../../lib/connection.svelte";
   import { outbox } from "../../lib/outbox.svelte";
   import { FEATURES } from "../../lib/features";
+  import Combobox from "../../components/Combobox.svelte";
   import FormDialog from "../../components/FormDialog.svelte";
   import EditTestsDialog from "../../components/EditTestsDialog.svelte";
   import Field from "../../components/Field.svelte";
   import Icon from "../../components/Icon.svelte";
-  import { ApiError, get, newRequestKey, post } from "../../lib/api";
-  import { BILL_STATUS, LINE_STATUS, PAYMENT_MODES, modeLabel, paymentState, type Bill, type PaymentMode } from "../../lib/bill-types";
+  import { ApiError, get, newRequestKey, post, put } from "../../lib/api";
+  import { BILL_STATUS, LINE_STATUS, PAYMENT_MODES, modeLabel, paymentState, type Bill, type Doctor, type Patient, type PaymentMode } from "../../lib/bill-types";
   import { date, dateTime, rupees } from "../../lib/format";
   import { session } from "../../lib/session.svelte";
   import { notify, notifyError } from "../../lib/toast.svelte";
   import { tooltip } from "../../lib/tooltip";
+  import type { Page } from "../../lib/types";
 
   let { params }: { params: Record<string, string> } = $props();
 
   let bill = $state<Bill | null>(null);
+  let linkedPatient = $state<Patient | null>(null);
+  let linkedDoctor = $state<Doctor | null>(null);
   let loadError = $state("");
 
   async function load() {
     try {
-      bill = await get<Bill>(`/api/bills/${params.id}`);
+      const loaded = await get<Bill>(`/api/bills/${params.id}`);
+      bill = loaded;
+      linkedPatient = await get<Patient>(`/api/patients/${loaded.patient_id}`).catch(() => null);
+      linkedDoctor = loaded.referring_doctor_id
+        ? await get<Doctor>(`/api/doctors/${loaded.referring_doctor_id}`).catch(() => null)
+        : null;
       loadError = "";
     } catch (e) {
       loadError = (e as Error).message;
@@ -45,6 +54,54 @@
   const fullyPaid = $derived(!!bill && Number(bill.total) > 0 && due <= 0);
   const editable = $derived(live && bill?.status === "on_hold" && !fullyPaid);
   const pay = $derived(bill ? paymentState(bill) : null);
+
+  const searchPatients = (q: string, page: number, size: number, signal: AbortSignal) =>
+    get<Page<Patient>>("/api/patients", { search: q, page, size }, signal);
+  const searchDoctors = (q: string, page: number, size: number, signal: AbortSignal) =>
+    get<Page<Doctor>>("/api/doctors", { search: q, active: true, page, size }, signal);
+
+  let patientEditOpen = $state(false);
+  let doctorEditOpen = $state(false);
+  let patientChoice = $state<Patient | null>(null);
+  let doctorChoice = $state<Doctor | null>(null);
+  let patientQuery = $state("");
+  let doctorQuery = $state("");
+  let partyBusy = $state(false);
+
+  function openPatientEdit() {
+    patientChoice = linkedPatient;
+    patientQuery = linkedPatient?.name ?? bill?.patient_name ?? "";
+    patientEditOpen = true;
+  }
+
+  function openDoctorEdit() {
+    doctorChoice = linkedDoctor;
+    doctorQuery = linkedDoctor?.name ?? "";
+    doctorEditOpen = true;
+  }
+
+  async function saveParties(editing: "patient" | "doctor") {
+    if (!bill) return;
+    const patient = editing === "patient" ? patientChoice : linkedPatient;
+    const patientId = patient?.id ?? bill.patient_id;
+    const doctor = editing === "doctor" ? doctorChoice : linkedDoctor;
+    if (editing === "patient" && !patient) return;
+    partyBusy = true;
+    try {
+      bill = await put<Bill>(`/api/bills/${bill.id}/parties`, {
+        patient_id: patientId,
+        referring_doctor_id: doctor?.id ?? null,
+      });
+      if (patient) linkedPatient = patient;
+      linkedDoctor = doctor;
+      patientEditOpen = doctorEditOpen = false;
+      notify("Bill links updated.");
+    } catch (e) {
+      notifyError(e, { title: "Couldn't update the bill links" });
+    } finally {
+      partyBusy = false;
+    }
+  }
 
   // ---------- collect a payment / refund ----------
   let payOpen = $state(false);
@@ -170,13 +227,22 @@
       <a class="link-button" href="/bills"><Icon name="chevronRight" size="sm" class="flip" /> All bills</a>
       <div class="meta-row" style="margin-top: 8px">
         <span class="eyebrow">Bill</span>
-        {#if pay}<span class="badge {pay[0]}">{pay[1]}</span>{/if}
         {#if bill.status !== "confirmed"}<span class="badge {BILL_STATUS[bill.status][0]}">{BILL_STATUS[bill.status][1]}</span>{/if}
       </div>
       <h1 class="page-title mono" style="font-family: var(--font-heading)">{bill.invoice_no}</h1>
-      <p class="page-description">{bill.patient_name} · {date(bill.bill_date)} · billed by {bill.created_by_name || "—"}{#if bill.legacy_no} · old bill #{bill.legacy_no}{/if}</p>
+      <p class="page-description">{linkedPatient?.name ?? bill.patient_name} · {date(bill.bill_date)} · billed by {bill.created_by_name || "—"}{#if bill.legacy_no} · old bill #{bill.legacy_no}{/if}
+        {#if pay}<span class="badge {pay[0]}">{pay[1]}</span>{/if}</p>
     </div>
     <div class="row-wrap">
+      {#if live && paid > 0 && session.can("payments.collect")}<button class="btn btn-outline" disabled={busy} onclick={openRefund}><Icon name="wallet" /> Refund</button>{/if}
+      {#if live && session.can("billing.edit")}
+        <button class="btn btn-ghost-destructive" disabled={busy} onclick={() => { reason = ""; errors = {}; reasonOpen = "cancel"; }}><Icon name="x" /> Cancel</button>
+        {#if bill.status === "on_hold"}
+          <button class="btn btn-outline" disabled={busy} onclick={() => setStatus("confirm")}><Icon name="check" /> Confirm</button>
+        {:else}
+          <button class="btn btn-outline" disabled={busy} onclick={() => { reason = ""; errors = {}; reasonOpen = "hold"; }}><Icon name="clock" /> Hold</button>
+        {/if}
+      {/if}
       <a class="btn btn-outline" href="/bills/{bill.id}/print" target="_blank" rel="noopener"><Icon name="printer" /> Print</a>
       {#if live && due > 0 && session.can("payments.collect")}<button class="btn btn-primary" onclick={openPay}><Icon name="wallet" /> Collect {rupees(due)}</button>{/if}
     </div>
@@ -250,9 +316,7 @@
 
       <section class="card" aria-labelledby="pay-title">
         <div class="card-header"><div><h2 class="card-title" id="pay-title">Payments</h2>
-          <p class="card-description">Every amount received or given back. Nothing here is ever changed or removed.</p></div>
-          {#if paid > 0 && session.can("payments.collect")}<button class="btn btn-ghost-destructive btn-sm" onclick={openRefund}>Refund</button>{/if}
-        </div>
+          <p class="card-description">Every amount received or given back. Nothing here is ever changed or removed.</p></div></div>
         <div class="card-flush">
           {#if bill.payments.length}
             <div class="table-wrap"><table class="table" style="min-width: 0">
@@ -279,44 +343,64 @@
     <div class="stack">
       <section class="card" aria-labelledby="patient-title">
         <div class="card-header"><h2 class="card-title" id="patient-title">Patient</h2>
-          <a class="btn btn-ghost btn-sm" href="/patients/{bill.patient_id}">Open</a></div>
+          <div class="row" style="gap: 4px">
+            {#if linkedPatient}<a class="btn btn-ghost btn-sm" href="/patients/{linkedPatient.id}">Open</a>{/if}
+            {#if live && session.can("billing.edit")}<button class="btn btn-ghost btn-icon btn-sm" aria-label="Change linked patient" use:tooltip={"Change linked patient"} onclick={openPatientEdit}><Icon name="edit" size="sm" /></button>{/if}
+          </div>
+        </div>
         <div class="card-content">
           <dl class="dl" style="grid-template-columns: 1fr">
-            <div><dt>Name</dt><dd class="font-semibold">{bill.patient_name}</dd></div>
-            <div><dt>Age and gender</dt><dd>{[bill.patient_age, bill.patient_gender].filter(Boolean).join(" · ") || "—"}</dd></div>
-            <div><dt>Mobile</dt><dd class="tabular">{bill.patient_mobile || "—"}</dd></div>
-            {#if bill.guardian_name}<div><dt>Guardian (C/O)</dt><dd>{bill.guardian_name}</dd></div>{/if}
-            {#if bill.patient_address}<div><dt>Address</dt><dd>{bill.patient_address}</dd></div>{/if}
+            <div><dt>Name</dt><dd class="font-semibold">{linkedPatient?.name ?? bill.patient_name}</dd></div>
+            <div><dt>Age and gender</dt><dd>{[linkedPatient?.age_years != null ? `${linkedPatient.age_years} Y` : bill.patient_age, linkedPatient?.gender ?? bill.patient_gender].filter(Boolean).join(" · ") || "—"}</dd></div>
+            <div><dt>Mobile</dt><dd class="tabular">{(linkedPatient?.mobile ?? bill.patient_mobile) || "—"}</dd></div>
+            {#if linkedPatient?.guardian_name || bill.guardian_name}<div><dt>Guardian (C/O)</dt><dd>{linkedPatient?.guardian_name ?? bill.guardian_name}</dd></div>{/if}
+            {#if linkedPatient?.address || bill.patient_address}<div><dt>Address</dt><dd>{linkedPatient?.address ?? bill.patient_address}</dd></div>{/if}
           </dl>
         </div>
       </section>
       <section class="card" aria-labelledby="bill-title">
-        <div class="card-header"><h2 class="card-title" id="bill-title">Bill</h2></div>
+        <div class="card-header"><h2 class="card-title" id="bill-title">Bill</h2>
+          {#if live && session.can("billing.edit")}<button class="btn btn-ghost btn-icon btn-sm" aria-label="Change referring doctor" use:tooltip={"Change referring doctor"} onclick={openDoctorEdit}><Icon name="edit" size="sm" /></button>{/if}
+        </div>
         <div class="card-content">
           <dl class="dl" style="grid-template-columns: 1fr">
-            <div><dt>Referred by</dt><dd>{bill.referring_doctor_name || "Self"}</dd></div>
+            <div><dt>Referred by</dt><dd>{linkedDoctor?.name ?? (bill.referring_doctor_id ? bill.referring_doctor_name : "Self")}</dd></div>
             <div><dt>Billed</dt><dd>{dateTime(bill.created_at)} by {bill.created_by_name || "—"}</dd></div>
             {#if bill.notes}<div><dt>Notes</dt><dd>{bill.notes}</dd></div>{/if}
           </dl>
         </div>
-        {#if live && session.can("billing.edit")}
-          <div class="card-footer card-footer-stack">
-            {#if bill.status === "on_hold"}
-              <button class="btn btn-outline btn-block" disabled={busy} onclick={() => setStatus("confirm")}><Icon name="check" /> Confirm bill</button>
-            {:else if fullyPaid}
-              <p class="text-sm text-muted locked-note"><Icon name="lock" size="sm" /> Fully paid: this bill can't be put on hold or changed.</p>
-            {:else}
-              <button class="btn btn-outline btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "hold"; }}
-                      use:tooltip={"Needed before changing the tests or the discount"}><Icon name="clock" /> Put on hold</button>
-            {/if}
-            <button class="btn btn-ghost-destructive btn-block" onclick={() => { reason = ""; errors = {}; reasonOpen = "cancel"; }}><Icon name="x" /> Cancel bill</button>
-          </div>
-        {/if}
       </section>
     </div>
   </div>
 
   <EditTestsDialog bind:open={editOpen} {bill} onsaved={(b) => (bill = b)} />
+
+  <FormDialog bind:open={patientEditOpen} title="Change linked patient" icon="edit" tone="info"
+              description="Choose the patient record associated with this bill." submitLabel="Save patient" submitIcon="check"
+              busy={partyBusy} disabled={!patientChoice} onsubmit={() => saveParties("patient")}>
+    <Combobox id="bill-patient-search" label="Patient record" placeholder="Name, mobile or patient number…"
+              searchPage={searchPatients} bind:value={patientQuery}
+              onpick={(p) => { patientChoice = p; patientQuery = p.name; }} emptyText="No patient found.">
+      {#snippet option(p)}
+        <div class="row-between"><span><span class="font-semibold">{p.name}</span> <span class="text-xs text-muted mono">{p.patient_no}</span></span>
+          <span class="text-sm text-muted tabular">{p.mobile || "—"}</span></div>
+      {/snippet}
+    </Combobox>
+  </FormDialog>
+
+  <FormDialog bind:open={doctorEditOpen} title="Change referring doctor" icon="edit" tone="info"
+              description="Choose a doctor or hospital, or set the bill to Self." submitLabel="Save referrer" submitIcon="check"
+              busy={partyBusy} onsubmit={() => saveParties("doctor")}>
+    <Combobox id="bill-doctor-search" label="Doctor or hospital" placeholder="Name, degree or phone…"
+              icon="stethoscope" searchPage={searchDoctors} bind:value={doctorQuery}
+              onpick={(d) => { doctorChoice = d; doctorQuery = d.name; }} emptyText="No doctor found.">
+      {#snippet option(d)}
+        <div class="row-between"><span class="font-semibold">{d.name}</span><span class="text-sm text-muted tabular">{d.phone || "—"}</span></div>
+        {#if d.qualification}<div class="text-xs text-muted">{d.qualification}</div>{/if}
+      {/snippet}
+    </Combobox>
+    <button class="btn btn-ghost btn-sm" type="button" onclick={() => { doctorChoice = null; doctorQuery = ""; }}>Set to Self</button>
+  </FormDialog>
 
   <FormDialog bind:open={payOpen} title="Collect a payment" icon="wallet" tone="info" description="{rupees(due)} is due on {bill.invoice_no}."
               submitLabel={`Receive ${rupees(amount || 0)}`} submitIcon="check" {busy} disabled={!Number(amount) || !!payProblem}

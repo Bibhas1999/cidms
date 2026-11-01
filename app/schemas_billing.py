@@ -258,6 +258,11 @@ class BillUpdateIn(Discount):
     reason: str = Field(min_length=3, max_length=300, description="Why the bill is being changed")
 
 
+class BillPartiesIn(BaseModel):
+    patient_id: uuid.UUID
+    referring_doctor_id: uuid.UUID | None = None
+
+
 class ReasonIn(BaseModel):
     reason: str = Field(min_length=3, max_length=300)
 

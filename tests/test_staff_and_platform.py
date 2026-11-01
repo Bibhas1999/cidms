@@ -132,6 +132,31 @@ def test_settings_are_saved_and_logged(alpha):
     assert log["total"] == 1 and log["items"][0]["details"]["invoice_prefix"] == ["TST", "ALP"]
 
 
+def test_discount_limit_is_editable_by_owner_admin_and_developer(alpha):
+    make_user(alpha, "owner@alpha.in", ["owner"])
+    make_user(alpha, "admin@alpha.in", ["admin"])
+    make_user(alpha, "dev@alpha.in", ["developer"])
+    make_user(alpha, "front@alpha.in", ["receptionist"])
+
+    owner = browser("alpha.localhost")
+    owner.login("owner@alpha.in")
+    assert owner.put("/api/settings/discount-limit", json={"max_discount_percent": "100"}).json()["max_discount_percent"] == "100.00"
+
+    admin = browser("alpha.localhost")
+    admin.login("admin@alpha.in")
+    assert admin.put("/api/settings/discount-limit", json={"max_discount_percent": "80"}).status_code == 200
+
+    developer = browser("alpha.localhost")
+    developer.login("dev@alpha.in")
+    assert developer.put("/api/settings/discount-limit", json={"max_discount_percent": "100"}).status_code == 200
+    assert developer.put("/api/settings", json={"legal_name": "Changed", "invoice_prefix": "CHG"}).status_code == 403
+    assert developer.put("/api/settings/discount-limit", json={"max_discount_percent": "101"}).status_code == 422
+
+    front = browser("alpha.localhost")
+    front.login("front@alpha.in")
+    assert front.put("/api/settings/discount-limit", json={"max_discount_percent": "50"}).status_code == 403
+
+
 def test_platform_owner_onboards_a_client_whose_owner_can_sign_in():
     make_user(None, "boss@platform.in", ["platform_owner"])
     p = browser("admin.localhost")

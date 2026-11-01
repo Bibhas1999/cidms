@@ -13,6 +13,7 @@ GROUPS: dict[str, tuple[str, str, dict[str, str]]] = {
         "billing.create": "Create bills",
         "billing.edit": "Edit, hold or cancel bills",
         "billing.discount_over_limit": "Discounts above the limit",
+        "billing.discount_limit.manage": "Maximum discount limit",
         "appointments.manage": "Appointments and OPD queue",
     }),
     "payments": ("Payments", "Money coming in and going back", {
