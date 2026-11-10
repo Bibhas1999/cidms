@@ -117,14 +117,14 @@
     const live = b.status !== "cancelled";
     // Dues: just the one thing this page is for, nothing else to choose from.
     if (dues) {
-      return live && Number(b.due) > 0 && session.can("payments.collect")
+      return live && Number(b.due) > 0
         ? [{ label: "Collect due", icon: "wallet", href: `/bills/${b.id}?collect=1`, hint: `${rupees(b.due)} still to pay` }] : [];
     }
     return [
       { label: "View bill", icon: "eye", href: `/bills/${b.id}` },
       { label: "Print", icon: "printer", href: `/bills/${b.id}/print`, newTab: true, hint: "Opens the printable bill in a new tab" },
-      ...(live && Number(b.due) > 0 && session.can("payments.collect") ? [{ label: "Collect due", icon: "wallet", href: `/bills/${b.id}?collect=1`, hint: `${rupees(b.due)} still to pay` }] : []),
-      ...(live && b.status === "on_hold" && Number(b.due) > 0 && session.can("billing.edit")
+      ...(live && Number(b.due) > 0 ? [{ label: "Collect due", icon: "wallet", href: `/bills/${b.id}?collect=1`, hint: `${rupees(b.due)} still to pay` }] : []),
+      ...(live && b.status === "on_hold" && Number(b.due) > 0
         ? [{ label: "Change tests", icon: "edit", href: `/bills/${b.id}?edit=1` }] : []),
       { label: "Patient's details", icon: "user", href: `/patients/${b.patient_id}` },
     ];
@@ -363,7 +363,7 @@
                 <td class="r">{@render dueCell(b)}</td>
                 <td>{@render payCell(b)}</td>
                 <td class="due-group-actions" onclick={(e) => e.stopPropagation()}>
-                  {#if b.status !== "cancelled" && Number(b.due) > 0 && session.can("payments.collect")}
+                  {#if b.status !== "cancelled" && Number(b.due) > 0}
                     <a class="btn btn-outline btn-sm" href="/bills/{b.id}?collect=1" use:tooltip={`${rupees(b.due)} still to pay`}>
                       <Icon name="wallet" size="sm" /> Collect
                     </a>

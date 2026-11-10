@@ -131,11 +131,11 @@ def test_refunds_need_a_reason_and_cannot_exceed_what_was_paid(centre):
 def test_cancelling_needs_the_money_refunded_first_and_freezes_the_bill(centre):
     b = bill(centre["front"], centre["tests"], ["CBC"], payments=[{"mode": "cash", "amount": "100"}]).json()
     owner = centre["owner"]
-    assert centre["front"].post(f"/api/bills/{b['id']}/cancel", json={"reason": "Patient left"}).status_code == 403  # no billing.edit
-    blocked = owner.post(f"/api/bills/{b['id']}/cancel", json={"reason": "Patient left"})
+    # Cancelling is open to any signed-in user, but still blocked until what's paid is refunded.
+    blocked = centre["front"].post(f"/api/bills/{b['id']}/cancel", json={"reason": "Patient left"})
     assert blocked.status_code == 409 and "Refund" in blocked.json()["message"]
     owner.post(f"/api/bills/{b['id']}/refunds", json={"mode": "cash", "amount": "100", "note": "Patient left"})
-    done = owner.post(f"/api/bills/{b['id']}/cancel", json={"reason": "Patient left"}).json()
+    done = centre["front"].post(f"/api/bills/{b['id']}/cancel", json={"reason": "Patient left"}).json()
     assert done["status"] == "cancelled" and all(i["status"] == "cancelled" for i in done["items"])
     assert owner.post(f"/api/bills/{b['id']}/payments", json={"mode": "cash", "amount": "1"}).status_code == 409
     assert owner.post(f"/api/bills/{b['id']}/hold", json={"reason": "x"}).status_code in (409, 422)
@@ -152,15 +152,20 @@ def test_editing_a_bill_adds_and_removes_tests_with_a_reason(centre):
     # A bill with money due is put on hold before any change.
     not_held = owner.put(url, json={"lines": [{"id": xray["id"]}, {"id": cbc["id"]}], "reason": "Fix"})
     assert not_held.status_code == 409 and "on hold" in not_held.json()["message"]
-    assert owner.post(f"{url}/hold", json={"reason": "Doctor is changing the tests"}).status_code == 200
+    held = owner.post(f"{url}/hold", json={"reason": "Doctor is changing the tests"})
+    assert held.status_code == 200
+    # Hold treats the bill like a fresh draft: what was paid before stops counting, so it's due again in full
+    # (the payment itself stays on record; it's just not counted toward this bill any more).
+    assert money(held.json()["paid"]) == Decimal("0") and money(held.json()["due"]) == Decimal("600.50")
 
     no_reason = owner.put(url, json={"lines": [{"id": xray["id"]}]})
     assert no_reason.status_code == 422
-    # Dropping the X-ray would leave less than was paid.
+    # A payment taken while on hold counts again, and the same floor still protects it from being edited below.
+    assert owner.post(f"{url}/payments", json={"mode": "cash", "amount": "300"}).status_code == 200
     too_low = owner.put(url, json={"lines": [{"id": cbc["id"]}], "reason": "Wrong test"})
     assert too_low.status_code == 422 and "Refund" in too_low.json()["message"]
     swapped = owner.put(url, json={"lines": [{"id": xray["id"]}, {"test_id": t["Lipid profile"]}], "reason": "Doctor changed CBC to lipid profile"}).json()
-    assert money(swapped["total"]) == Decimal("950.00") and money(swapped["due"]) == Decimal("450.00")
+    assert money(swapped["total"]) == Decimal("950.00") and money(swapped["paid"]) == Decimal("300.00") and money(swapped["due"]) == Decimal("650.00")
     assert {i["test_name"]: i["status"] for i in swapped["items"]} == {"Chest X-ray PA": "billed", "CBC": "cancelled", "Lipid profile": "billed"}
 
     # Once scanned, the X-ray can't be taken off.
@@ -198,14 +203,33 @@ def test_bill_parties_are_updated_by_entity_id(centre):
     assert missing_doctor.status_code == 422
 
 
-def test_a_fully_paid_bill_can_be_held_but_not_changed(centre):
+def test_a_fully_paid_bill_must_be_held_before_it_can_be_changed(centre):
     t, owner = centre["tests"], centre["owner"]
     b = bill(centre["front"], t, ["CBC"], payments=[{"mode": "cash", "amount": "250.50"}]).json()
     url = f"/api/bills/{b['id']}"
+    # Fully paid and not on hold: still protected from being changed.
+    still_paid = owner.put(url, json={"lines": [{"test_id": t["Lipid profile"]}], "reason": "Change"})
+    assert still_paid.status_code == 409 and "fully paid" in still_paid.json()["message"]
+
     held = owner.post(f"{url}/hold", json={"reason": "Change tests"})
     assert held.status_code == 200 and held.json()["status"] == "on_hold"
+    # Holding resets what's counted as paid, so even a fully paid bill becomes editable again.
+    assert money(held.json()["paid"]) == Decimal("0") and money(held.json()["due"]) == Decimal("250.50")
     changed = owner.put(url, json={"lines": [{"test_id": t["Lipid profile"]}], "reason": "Change"})
-    assert changed.status_code == 409 and "fully paid" in changed.json()["message"]
+    assert changed.status_code == 200
+    assert money(changed.json()["total"]) == Decimal("600.00") and money(changed.json()["due"]) == Decimal("600.00")
+
+
+def test_hold_change_tests_confirm_and_cancel_are_open_to_any_signed_in_user(centre):
+    """These used to need billing.edit; now every signed-in user can use them, whatever their role's permissions."""
+    front, t = centre["front"], centre["tests"]
+    b = bill(front, t, ["CBC"]).json()
+    url = f"/api/bills/{b['id']}"
+    assert front.post(f"{url}/hold", json={"reason": "Doctor wants to add a test"}).status_code == 200
+    changed = front.put(url, json={"lines": [{"test_id": t["Lipid profile"]}], "reason": "Add lipid profile"})
+    assert changed.status_code == 200
+    assert front.post(f"{url}/confirm", json={}).status_code == 200
+    assert front.post(f"{url}/cancel", json={"reason": "Patient changed their mind"}).status_code == 200
 
 
 def test_worklist_progress(centre):

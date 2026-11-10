@@ -237,7 +237,7 @@ def update_bill_parties(invoice_id: uuid.UUID, data: BillPartiesIn, db: Session 
 
 
 @router.put("/bills/{invoice_id}", response_model=BillOut)
-def edit_bill(invoice_id: uuid.UUID, data: BillUpdateIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
+def edit_bill(invoice_id: uuid.UUID, data: BillUpdateIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
     return BillingService(db, current).update(invoice_id, data)
 
 
@@ -274,30 +274,30 @@ def bill_share_revoke(invoice_id: uuid.UUID, request: Request, db: Session = DB,
 
 
 @router.post("/bills/{invoice_id}/hold", response_model=BillOut)
-def hold_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
+def hold_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
     return BillingService(db, current).hold(invoice_id, data.reason)
 
 
 @router.post("/bills/{invoice_id}/confirm", response_model=BillOut)
-def confirm_bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
+def confirm_bill(invoice_id: uuid.UUID, db: Session = DB, current: CurrentUser = Depends(client_user)):
     return BillingService(db, current).confirm(invoice_id)
 
 
 @router.post("/bills/{invoice_id}/cancel", response_model=BillOut)
-def cancel_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(require("billing.edit"))):
+def cancel_bill(invoice_id: uuid.UUID, data: ReasonIn, db: Session = DB, current: CurrentUser = Depends(client_user)):
     return BillingService(db, current).cancel(invoice_id, data.reason)
 
 
 @router.post("/bills/{invoice_id}/payments", response_model=BillOut)
 def take_payment(invoice_id: uuid.UUID, data: PaymentIn, request: Request, db: Session = DB,
-                 current: CurrentUser = Depends(require("payments.collect"))):
+                 current: CurrentUser = Depends(client_user)):
     svc = BillingService(db, current)
     return run_once(request, db, current, "payment.take", lambda: BillOut.model_validate(svc.pay(invoice_id, data)))
 
 
 @router.post("/bills/{invoice_id}/refunds", response_model=BillOut)
 def refund(invoice_id: uuid.UUID, data: RefundIn, request: Request, db: Session = DB,
-           current: CurrentUser = Depends(require("payments.collect"))):
+           current: CurrentUser = Depends(client_user)):
     svc = BillingService(db, current)
     return run_once(request, db, current, "payment.refund", lambda: BillOut.model_validate(svc.refund(invoice_id, data)))
 

@@ -43,8 +43,8 @@
     if (!bill || autoOpened) return;
     autoOpened = true;
     const q = new URLSearchParams(location.search);
-    if (q.get("collect") && Number(bill.due) > 0 && bill.status !== "cancelled" && session.can("payments.collect")) openPay();
-    else if (q.get("edit") && bill.status === "on_hold" && Number(bill.due) > 0 && session.can("billing.edit")) editOpen = true;
+    if (q.get("collect") && Number(bill.due) > 0 && bill.status !== "cancelled") openPay();
+    else if (q.get("edit") && bill.status === "on_hold" && Number(bill.due) > 0) editOpen = true;
   });
 
   const live = $derived(bill?.status !== "cancelled");
@@ -234,8 +234,8 @@
         {#if pay}<span class="badge {pay[0]}">{pay[1]}</span>{/if}</p>
     </div>
     <div class="row-wrap">
-      {#if live && paid > 0 && session.can("payments.collect")}<button class="btn btn-outline" disabled={busy} onclick={openRefund}><Icon name="wallet" /> Refund</button>{/if}
-      {#if live && session.can("billing.edit")}
+      {#if live && paid > 0}<button class="btn btn-outline" disabled={busy} onclick={openRefund}><Icon name="wallet" /> Refund</button>{/if}
+      {#if live}
         <button class="btn btn-ghost-destructive" disabled={busy} onclick={() => { reason = ""; errors = {}; reasonOpen = "cancel"; }}><Icon name="x" /> Cancel</button>
         {#if bill.status === "on_hold"}
           <button class="btn btn-outline" disabled={busy} onclick={() => setStatus("confirm")}><Icon name="check" /> Confirm</button>
@@ -244,7 +244,7 @@
         {/if}
       {/if}
       <a class="btn btn-outline" href="/bills/{bill.id}/print" target="_blank" rel="noopener"><Icon name="printer" /> Print</a>
-      {#if live && due > 0 && session.can("payments.collect")}<button class="btn btn-primary" onclick={openPay}><Icon name="wallet" /> Collect {rupees(due)}</button>{/if}
+      {#if live && due > 0}<button class="btn btn-primary" onclick={openPay}><Icon name="wallet" /> Collect {rupees(due)}</button>{/if}
     </div>
   </div>
 
@@ -264,7 +264,7 @@
               {#if notAll("reported") && notAll("delivered")}<button class="btn btn-outline btn-sm" disabled={progressBusy} onclick={() => setAll("reported")}><Icon name="check" size="sm" /> All ready</button>{/if}
               {#if notAll("delivered")}<button class="btn btn-outline btn-sm" disabled={progressBusy} onclick={() => setAll("delivered")}><Icon name="inbox" size="sm" /> All delivered</button>{/if}
             {/if}
-            {#if live && session.can("billing.edit")}
+            {#if live}
               <span use:tooltip={editable ? "" : fullyPaid ? "A fully paid bill can't be changed" : "Put the bill on hold first, then change it"}>
                 <button class="btn btn-outline btn-sm" disabled={!editable} onclick={() => (editOpen = true)}><Icon name="plus" size="sm" /> Change tests</button>
               </span>

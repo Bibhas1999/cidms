@@ -223,7 +223,10 @@ class BillingService:
         self._settle(invoice)
 
     def _settle(self, invoice: Invoice) -> None:
-        paid = sum((p.amount if p.kind == "payment" else -p.amount for p in invoice.payments), ZERO)
+        """Paid/due, from the payments taken since the bill was last put on hold (earlier ones still happened,
+        but stop counting once the bill goes on hold: see hold())."""
+        counted = (p for p in invoice.payments if invoice.held_at is None or p.received_at > invoice.held_at)
+        paid = sum((p.amount if p.kind == "payment" else -p.amount for p in counted), ZERO)
         invoice.paid = q2(paid)
         invoice.due = invoice.total - invoice.paid
 
@@ -397,11 +400,14 @@ class BillingService:
         return invoice
 
     def hold(self, invoice_id: uuid.UUID, reason: str) -> Invoice:
-        """Put a bill on hold, including a fully paid one."""
+        """Put a bill on hold, including a fully paid one. Treated like a fresh draft from here: what's been
+        paid so far stops counting (though it stays on record), so the bill is due again until it's repaid."""
         invoice = self.get(invoice_id, lock=True)
         self._not_cancelled(invoice)
         if invoice.status != "on_hold":
             invoice.status = "on_hold"
+            invoice.held_at = utcnow()
+            self._settle(invoice)
             self.audit.record(self.tenant_id, self.current.id, "bill.held", "invoice", invoice.id, {"reason": reason})
         return invoice
 
