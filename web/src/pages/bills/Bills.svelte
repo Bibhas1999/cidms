@@ -25,8 +25,8 @@
   const dues = $derived(router.path === "/dues");
 
   const q = $derived(router.query);
-  // Dues isn't paginated (see dueGroups below) - every due bill is fetched (100 at a time, the server's own
-  // cap), not just the first page, so a doctor's bills are never silently cut off.
+  // Dues isn't paginated (see below) - every due bill is fetched (100 at a time, the server's own cap), not
+  // just the first page, and revealed a batch at a time as the page scrolls.
   const PAGE_SIZE = 100;
   const SIZE = $derived(dues ? PAGE_SIZE : Math.min(100, Number(q.get("size")) || 25));
   const page = $derived(Number(q.get("page") ?? 1) || 1);
@@ -137,32 +137,14 @@
   // The table's own filters (the dates at the top are the page's period, not a table filter).
   const filtered = $derived(moreKeys.flat().some((k) => q.get(k)) || !!(q.get("search") || (!dues && payment)));
 
-  // Dues, grouped by referring doctor and sorted by who owes the most, so whoever's chasing dues can work
-  // through doctors most worth calling first (bills without a doctor fall under "Self"). Not paginated like
-  // the rest of the list - dues lists are small enough to show in one go, and a doctor's bills shouldn't
-  // split across pages.
-  interface DoctorDues { name: string; bills: BillSummary[]; total: number }
-  const dueGroups = $derived<DoctorDues[]>(
-    !dues ? [] : Object.values(
-      (data?.items ?? []).reduce<Record<string, DoctorDues>>((acc, b) => {
-        const name = b.referring_doctor_name ? nice(b.referring_doctor_name) : "Self";
-        (acc[name] ??= { name, bills: [], total: 0 }).bills.push(b);
-        acc[name].total += Number(b.due);
-        return acc;
-      }, {}),
-    ).sort((a, b) => b.total - a.total),
-  );
-  // One doctor at a time, picked from the tab strip - the default is whoever owes the most.
-  const activeDoctor = $derived(q.get("doctor_tab") || dueGroups[0]?.name || "");
-  const activeGroup = $derived(dueGroups.find((g) => g.name === activeDoctor) ?? dueGroups[0]);
-
-  // The active doctor's bills, revealed a batch at a time as the page scrolls, rather than every row of a
-  // long list rendered (and painted) at once. Resets to one batch whenever the doctor tab changes.
+  // Dues, oldest first (see `sort` above): revealed a batch at a time as the page scrolls, rather than every
+  // row of a long list rendered (and painted) at once. Resets to one batch whenever the list is refetched
+  // (the date range or a filter changed). Referred-by is one of the filters above, same as the rest of Bills.
   const DUE_BATCH = 50;
   let shown = $state(DUE_BATCH);
-  $effect(() => { activeGroup; shown = DUE_BATCH; });
-  const visibleBills = $derived(activeGroup?.bills.slice(0, shown) ?? []);
-  const hasMore = $derived(shown < (activeGroup?.bills.length ?? 0));
+  $effect(() => { data; shown = DUE_BATCH; });
+  const visibleBills = $derived((data?.items ?? []).slice(0, shown));
+  const hasMore = $derived(shown < (data?.items.length ?? 0));
   function moreSentinel(node: HTMLElement) {
     const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) shown += DUE_BATCH; }, { rootMargin: "400px" });
     io.observe(node);
@@ -335,46 +317,36 @@
       <div class="empty" aria-busy="true">Loading…</div>
     {:else if loadError}
       <div class="alert alert-destructive" role="alert"><Icon name="alert" /><div>{loadError} <button class="link-button" onclick={() => reload++}>Try again</button></div></div>
-    {:else if !dueGroups.length}
+    {:else if !data?.items.length}
       <div class="empty"><Icon name="wallet" />
         <p>{filtered ? "No bills match these filters." : "No dues. Everything is paid."}</p>
         {#if filtered}<p class="text-sm text-muted">Try a longer date range, or clear the filters.</p>{/if}
       </div>
     {:else}
-      <!-- One doctor's bills on screen at a time, picked from the tabs; most owed first. -->
-      <div class="tabs due-tabs" role="tablist" aria-label="Which doctor">
-        {#each dueGroups as g (g.name)}
-          <button class="tab" role="tab" aria-selected={g.name === activeGroup?.name}
-                  onclick={() => set({ doctor_tab: g.name === dueGroups[0].name ? null : g.name })}>
-            {g.name}
-          </button>
-        {/each}
-      </div>
-      {#if activeGroup}
-        <table class="table due-group-table">
-          <thead><tr><th>Bill</th><th>Patient</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Due</th><th>Payment</th><th class="due-group-actions"></th></tr></thead>
-          <tbody>
-            {#each visibleBills as b (b.id)}
-              <tr class="is-clickable" onclick={() => navigate(`/bills/${b.id}`)}>
-                <td>{@render billCell(b)}</td>
-                <td>{@render patientCell(b)}</td>
-                <td class="r">{@render totalCell(b)}</td>
-                <td class="r">{@render paidCell(b)}</td>
-                <td class="r">{@render dueCell(b)}</td>
-                <td>{@render payCell(b)}</td>
-                <td class="due-group-actions" onclick={(e) => e.stopPropagation()}>
-                  {#if b.status !== "cancelled" && Number(b.due) > 0}
-                    <a class="btn btn-outline btn-sm" href="/bills/{b.id}?collect=1" use:tooltip={`${rupees(b.due)} still to pay`}>
-                      <Icon name="wallet" size="sm" /> Collect
-                    </a>
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-        {#if hasMore}<div class="due-more" use:moreSentinel aria-hidden="true">Loading more…</div>{/if}
-      {/if}
+      <table class="table due-table">
+        <thead><tr><th>Bill</th><th>Patient</th><th>Referred by</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Due</th><th>Payment</th><th class="due-table-actions"></th></tr></thead>
+        <tbody>
+          {#each visibleBills as b (b.id)}
+            <tr class="is-clickable" onclick={() => navigate(`/bills/${b.id}`)}>
+              <td>{@render billCell(b)}</td>
+              <td>{@render patientCell(b)}</td>
+              <td>{@render doctorCell(b)}</td>
+              <td class="r">{@render totalCell(b)}</td>
+              <td class="r">{@render paidCell(b)}</td>
+              <td class="r">{@render dueCell(b)}</td>
+              <td>{@render payCell(b)}</td>
+              <td class="due-table-actions" onclick={(e) => e.stopPropagation()}>
+                {#if b.status !== "cancelled" && Number(b.due) > 0}
+                  <a class="btn btn-outline btn-sm" href="/bills/{b.id}?collect=1" use:tooltip={`${rupees(b.due)} still to pay`}>
+                    <Icon name="wallet" size="sm" /> Collect
+                  </a>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      {#if hasMore}<div class="due-more" use:moreSentinel aria-hidden="true">Loading more…</div>{/if}
     {/if}
   {:else}
     <DataTable label="Bills" rows={data?.items ?? []} loading={loading} error={loadError} onretry={() => reload++}
