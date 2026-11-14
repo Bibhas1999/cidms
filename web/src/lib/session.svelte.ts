@@ -78,7 +78,7 @@ class Session {
 
   async login(email: string, password: string, remember = false): Promise<Me> {
     this.me = await post<Me>("/api/auth/login", { email, password, remember });
-    rememberAccount({ email: this.me.email, name: this.me.full_name });
+    rememberAccount({ email: this.me.email, name: this.me.full_name, centreName: this.workspace?.name });
     this.#keep();
     this.#signedIn.forEach((fn) => fn());
     return this.me;
@@ -98,7 +98,7 @@ class Session {
   setMe(me: Me): void {
     this.me = me;
     this.#keep();
-    rememberAccount({ email: me.email, name: me.full_name });
+    rememberAccount({ email: me.email, name: me.full_name, centreName: this.workspace?.name });
   }
 }
 

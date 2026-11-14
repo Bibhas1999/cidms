@@ -16,13 +16,25 @@
   let busy = $state(false);
   let failed = $state(false);
 
-  // Accounts used on this computer before (names and emails only): pick one and type its password.
+  // Accounts used on this computer before, any centre's address (names and emails only): pick one and type
+  // its password. One from another centre takes you to that centre's own sign-in page first.
+  const queryEmail = router.query.get("email");
+  const initialChosen: RecentAccount | null = queryEmail
+    ? { email: queryEmail, name: router.query.get("name") || queryEmail, host: location.host }
+    : null;
+
   let accounts = $state<RecentAccount[]>(recentAccounts());
-  let chosen = $state<RecentAccount | null>(null);
-  let useOther = $state(recentAccounts().length === 0);
+  let chosen = $state<RecentAccount | null>(initialChosen);
+  let useOther = $state(recentAccounts().length === 0 && !initialChosen);
   let passwordInput = $state<HTMLInputElement>();
 
+  if (initialChosen) email = initialChosen.email;
+
   function choose(a: RecentAccount) {
+    if (a.host !== location.host) {
+      location.href = `${location.protocol}//${a.host}/login?email=${encodeURIComponent(a.email)}&name=${encodeURIComponent(a.name)}`;
+      return;
+    }
     chosen = a;
     email = a.email;
     password = "";
@@ -37,7 +49,7 @@
   }
 
   function forget(a: RecentAccount) {
-    forgetAccount(a.email);
+    forgetAccount(a.email, a.host);
     accounts = recentAccounts();
     if (!accounts.length) useOther = true;
   }
@@ -77,11 +89,12 @@
 
       {#if !useOther && !chosen}
         <div class="accounts" role="list" aria-label="Accounts used on this computer">
-          {#each accounts as a (a.email)}
+          {#each accounts as a (`${a.email}|${a.host}`)}
             <div class="account" role="listitem">
               <button type="button" class="account-pick" onclick={() => choose(a)}>
                 <span class="account-avatar" aria-hidden="true">{initials(a.name)}</span>
-                <span class="account-text"><span class="account-name">{a.name}</span><span class="account-email">{a.email}</span></span>
+                <span class="account-text"><span class="account-name">{a.name}</span>
+                  <span class="account-email">{a.email}{#if a.host !== location.host} · {a.centreName || a.host}{/if}</span></span>
               </button>
               <button type="button" class="account-forget" aria-label="Remove {a.name} from this computer" use:tooltip={"Remove from this computer"} onclick={() => forget(a)}>
                 <Icon name="x" />
