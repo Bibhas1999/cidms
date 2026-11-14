@@ -394,10 +394,9 @@ def public_bill_open(token: str, data: PublicBillCheckIn, request: Request, resp
     tenant_id = _public_tenant(request)
     _share, invoice = bill_links.check(db, tenant_id, token, data.check, client_ip(request) or "")
     patient = db.get(Patient, invoice.patient_id)
-    settings = db.get(TenantSettings, tenant_id)
-    centre = PublicBillCentreOut(legal_name=(settings.legal_name if settings else "") or request.state.tenant.name,
-                                 address=settings.address if settings else "", phones=settings.phones if settings else "",
-                                 bill_footer=settings.bill_footer if settings else "")
+    # The centre's letterhead as it was when this bill was made, not whatever it says today.
+    centre = PublicBillCentreOut(legal_name=invoice.centre_name, address=invoice.centre_address,
+                                 phones=invoice.centre_phones, bill_footer=invoice.centre_bill_footer)
     return PublicBillOut(bill=BillOut.model_validate(invoice), patient_no=patient.patient_no if patient else "", centre=centre)
 
 

@@ -3,8 +3,10 @@
   import BillSheet from "./BillSheet.svelte";
   import { get, post } from "../../lib/api";
   import type { Bill, Patient } from "../../lib/bill-types";
-  import { cachedSettings, getOfflineBill } from "../../lib/offline.svelte";
-  import type { CentreSettings } from "../../lib/types";
+  import { getOfflineBill } from "../../lib/offline.svelte";
+
+  // The centre's letterhead exactly as it was when the bill was made (Bill.centre_*), not whatever it says now.
+  const letterhead = (b: Bill) => ({ legal_name: b.centre_name, address: b.centre_address, phones: b.centre_phones, bill_footer: b.centre_bill_footer });
 
   // The printed bill (BillSheet.svelte has the layout). Opens the print dialog by itself.
   // /bills/offline/<id>/print: a bill made offline, from this computer (provisional number, no QR yet).
@@ -12,7 +14,7 @@
   const offlineId = $derived(params.offlineId ?? "");
 
   let bill = $state<Bill | null>(null);
-  let centre = $state<CentreSettings | null>(null);
+  let centre = $derived(bill ? letterhead(bill) : null);
   let patientNo = $state("");
   let qr = $state("");
   let failed = $state("");
@@ -24,11 +26,10 @@
 
   $effect(() => {
     if (!offlineId) return;
-    Promise.all([getOfflineBill(offlineId), get<CentreSettings>("/api/settings").catch(() => cachedSettings())])
-      .then(([o, c]) => {
-        if (!o || !c) { failed = "This offline bill isn't on this computer."; return; }
+    getOfflineBill(offlineId)
+      .then((o) => {
+        if (!o) { failed = "This offline bill isn't on this computer."; return; }
         bill = o.bill;
-        centre = c;
         patientNo = o.patient_no;
         document.title = `${o.offline_no} · ${o.bill.patient_name}`;
         setTimeout(() => window.print(), 500);
@@ -38,10 +39,9 @@
 
   $effect(() => {
     if (offlineId) return;
-    Promise.all([get<Bill>(`/api/bills/${params.id}`), get<CentreSettings>("/api/settings")])
-      .then(async ([b, c]) => {
+    get<Bill>(`/api/bills/${params.id}`)
+      .then(async (b) => {
         bill = b;
-        centre = c;
         document.title = `${b.invoice_no} · ${b.patient_name}`;
         get<Patient>(`/api/patients/${b.patient_id}`).then((p) => (patientNo = p.patient_no)).catch(() => {});
         // The patient's own public page (a check first: mobile/birth year/bill number), not the staff one.

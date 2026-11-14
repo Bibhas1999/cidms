@@ -341,6 +341,10 @@ class BillOut(BillSummaryOut):
     notes: str
     cancel_reason: str
     updated_at: datetime
+    centre_name: str
+    centre_address: str
+    centre_phones: str
+    centre_bill_footer: str
     items: list[BillLineOut]
     payments: list[PaymentOut]
 

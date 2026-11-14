@@ -143,9 +143,11 @@
   let notes = $state("");
   let hold = $state(false);
   let maxDiscount = $state<number | null>(null);
+  // Kept for an offline save too: the centre's letterhead as it is right now, to freeze onto the bill (see saveOffline).
+  let centreSettings = $state<(CentreSettings & { max_discount_percent?: string }) | null>(null);
   $effect(() => {
     get<CentreSettings & { max_discount_percent?: string }>("/api/settings").catch(() => cachedSettings())
-      .then((s) => { if (s?.max_discount_percent !== undefined) maxDiscount = Number(s.max_discount_percent); }).catch(() => {});
+      .then((s) => { centreSettings = s ?? null; if (s?.max_discount_percent !== undefined) maxDiscount = Number(s.max_discount_percent); }).catch(() => {});
   });
   const overLimitOk = $derived(session.can("billing.discount_over_limit"));
 
@@ -315,6 +317,8 @@
         status: hold ? "on_hold" : "confirmed", subtotal: subtotal.toFixed(2), discount_type: discountType,
         discount_value: discountType === "none" ? "0" : String(Number(discountValue) || 0), discount_amount: discount.toFixed(2),
         total: total.toFixed(2), paid: paying.toFixed(2), due: dueAfter.toFixed(2), notes, cancel_reason: "", created_by_name: who,
+        centre_name: centreSettings?.legal_name ?? "", centre_address: centreSettings?.address ?? "",
+        centre_phones: centreSettings?.phones ?? "", centre_bill_footer: centreSettings?.bill_footer ?? "",
         items: lines.map((l, i) => ({
           id: `line-${i + 1}`, position: i + 1, test_id: l.test.id, test_name: l.test.name, department_name: l.test.department.name,
           is_imaging: !!l.test.test_type?.is_imaging, unit_price: Number(l.test.price).toFixed(2), quantity: l.quantity,

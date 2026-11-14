@@ -298,6 +298,8 @@ class BillingService:
             created_by=self.current.id, created_by_name=self.current.user.full_name,
             subtotal=ZERO, total=ZERO, due=ZERO, items=[], payments=[],
             offline_no=data.offline.offline_no if data.offline else "", made_offline_at=made_offline,
+            centre_name=settings.legal_name or self.db.get(Tenant, self.tenant_id).name, centre_address=settings.address,
+            centre_phones=settings.phones, centre_bill_footer=settings.bill_footer,
         )
         for position, line in enumerate(data.lines, start=1):
             self._new_line(invoice, position, tests[line.test_id], line.quantity)

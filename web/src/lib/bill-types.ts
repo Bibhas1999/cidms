@@ -45,6 +45,11 @@ export interface Bill extends BillSummary {
   notes: string;
   cancel_reason: string;
   updated_at: string;
+  /** The centre's letterhead as it was when this bill was made (see BillSheet.svelte), not whatever it says today. */
+  centre_name: string;
+  centre_address: string;
+  centre_phones: string;
+  centre_bill_footer: string;
   items: BillLine[];
   payments: PaymentRow[];
 }

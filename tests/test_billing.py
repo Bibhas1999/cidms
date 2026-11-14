@@ -220,6 +220,25 @@ def test_a_fully_paid_bill_must_be_held_before_it_can_be_changed(centre):
     assert money(changed.json()["total"]) == Decimal("600.00") and money(changed.json()["due"]) == Decimal("600.00")
 
 
+def test_a_bill_keeps_the_centres_letterhead_as_it_was_when_it_was_made(centre):
+    """The centre's name, address, phones and bill footer are copied onto the bill when it's made. Changing
+    the centre's settings afterwards doesn't touch bills already made - only new ones get the new letterhead."""
+    owner, front, t = centre["owner"], centre["front"], centre["tests"]
+    before = bill(front, t, ["CBC"]).json()
+    assert before["centre_name"] == "Alpha Diagnostics" and before["centre_address"] == "" and before["centre_phones"] == ""
+
+    r = owner.put("/api/settings", json={"legal_name": "Alpha Diagnostics (New Wing)", "invoice_prefix": "TST",
+                                         "address": "12 MG Road", "phones": "9876543210", "bill_footer": "Thank you."})
+    assert r.status_code == 200
+
+    after = bill(front, t, ["CBC"]).json()
+    assert after["centre_name"] == "Alpha Diagnostics (New Wing)" and after["centre_address"] == "12 MG Road"
+    assert after["centre_phones"] == "9876543210" and after["centre_bill_footer"] == "Thank you."
+
+    refetched = front.get(f"/api/bills/{before['id']}").json()
+    assert refetched["centre_name"] == "Alpha Diagnostics" and refetched["centre_address"] == ""
+
+
 def test_hold_change_tests_confirm_and_cancel_are_open_to_any_signed_in_user(centre):
     """These used to need billing.edit; now every signed-in user can use them, whatever their role's permissions."""
     front, t = centre["front"], centre["tests"]

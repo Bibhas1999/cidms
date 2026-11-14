@@ -345,6 +345,12 @@ class Invoice(Base):
     # The last time this bill was put on hold. Payments received at or before this no longer count toward
     # paid/due (they stay in the payments table; see BillingService._settle).
     held_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    # The centre's letterhead as it was when this bill was made, so a reprint years later still looks like
+    # what the patient was handed, even if the centre's name, address, phone or footer change later.
+    centre_name: Mapped[str] = mapped_column(String(200), default="")
+    centre_address: Mapped[str] = mapped_column(Text, default="")
+    centre_phones: Mapped[str] = mapped_column(String(200), default="")
+    centre_bill_footer: Mapped[str] = mapped_column(Text, default="")
 
     items: Mapped[list["InvoiceItem"]] = relationship(back_populates="invoice", order_by="InvoiceItem.position", lazy="selectin")
     payments: Mapped[list["Payment"]] = relationship(back_populates="invoice", order_by="Payment.received_at", lazy="selectin")
