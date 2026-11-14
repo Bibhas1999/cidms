@@ -42,6 +42,12 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
         const files = performance.getEntriesByType("resource").map((e) => e.name)
           .filter((u) => u.startsWith(location.origin) && /\/(assets|icons)\//.test(u));
         reg.active?.postMessage({ type: "keep", files });
+
+        // A desk tab is often left open all day with no full page navigation, so the browser's own update
+        // check (tied to navigation) may never run. Ask for one hourly, and whenever the tab regains focus.
+        const checkForUpdate = () => reg.update().catch(() => {});
+        setInterval(checkForUpdate, 60 * 60 * 1000);
+        document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
       })
       .catch((e) => console.warn("Service worker not registered", e));
 
