@@ -10,38 +10,15 @@
   import { navigate, router, withNext } from "./lib/router.svelte";
   import { FEATURES } from "./lib/features";
   import { session } from "./lib/session.svelte";
-  import BillDetail from "./pages/bills/BillDetail.svelte";
-  import BillPrint from "./pages/bills/BillPrint.svelte";
-  import Bills from "./pages/bills/Bills.svelte";
-  import NewBill from "./pages/bills/NewBill.svelte";
-  import Doctors from "./pages/catalogue/Doctors.svelte";
-  import Tests from "./pages/catalogue/Tests.svelte";
-  import PatientDetail from "./pages/patients/PatientDetail.svelte";
-  import Patients from "./pages/patients/Patients.svelte";
-  import Worklist from "./pages/Worklist.svelte";
-  import TestReport from "./pages/reports/TestReport.svelte";
-  import Reports from "./pages/reports/Reports.svelte";
-  import ChangePassword from "./pages/ChangePassword.svelte";
-  import Analytics from "./pages/Analytics.svelte";
-  import DevMonitor from "./pages/DevMonitor.svelte";
-  import ReportQueue from "./pages/reports/ReportQueue.svelte";
-  import ReportsDashboard from "./pages/reports/ReportsDashboard.svelte";
-  import Dashboard from "./pages/Dashboard.svelte";
-  import ForgotPassword from "./pages/ForgotPassword.svelte";
-  import Login from "./pages/Login.svelte";
-  import ResetPassword from "./pages/ResetPassword.svelte";
   import Landing from "./pages/Landing.svelte";
-  import OfflineBills from "./pages/bills/OfflineBills.svelte";
   import Message from "./pages/Message.svelte";
-  import Notifications from "./pages/Notifications.svelte";
-  import PublicBill from "./pages/bills/PublicBill.svelte";
-  import Terms from "./pages/Terms.svelte";
-  import Clients from "./pages/platform/Clients.svelte";
-  import SettingsHub from "./pages/settings/SettingsHub.svelte";
+
+  /** What a page loads with (its own chunk, fetched the first time its route is opened). */
+  type Loader = () => Promise<{ default: Component<any> }>;
 
   interface Route {
     path: string;              // "/bills/:id" captures id
-    component: Component<any>;
+    component: Loader;
     title: string;
     /** Permission needed in a client workspace / in the platform workspace. undefined = everyone; null = not here. */
     client?: string | null;
@@ -52,37 +29,44 @@
 
   const CLIENT_ONLY = { platform: null };
   const routes: Route[] = [
-    { path: "/", component: Dashboard, title: "Dashboard" },
-    { path: "/analytics", component: Analytics, title: "Analytics", client: "analytics.view", platform: null },
-    { path: "/bills", component: Bills, title: "Bills", ...CLIENT_ONLY },
-    { path: "/bills/new", component: NewBill, title: "New Bill", client: "billing.create", platform: null },
-    { path: "/bills/offline", component: OfflineBills, title: "Offline", client: "billing.create", platform: null },
-    { path: "/bills/offline/:offlineId/print", component: BillPrint, title: "Print bill", bare: true, client: "billing.create", platform: null },
-    { path: "/bills/:id", component: BillDetail, title: "Bill", ...CLIENT_ONLY },
-    { path: "/bills/:id/print", component: BillPrint, title: "Print bill", bare: true, ...CLIENT_ONLY },
-    { path: "/dues", component: Bills, title: "Dues", client: "payments.collect", platform: null },
-    { path: "/patients", component: Patients, title: "Patients", ...CLIENT_ONLY },
-    { path: "/patients/:id", component: PatientDetail, title: "Patient", ...CLIENT_ONLY },
-    ...(FEATURES.worklist ? [{ path: "/worklist", component: Worklist, title: "Investigation Report", ...CLIENT_ONLY }] : []),
+    { path: "/", component: () => import("./pages/Dashboard.svelte"), title: "Dashboard" },
+    { path: "/analytics", component: () => import("./pages/Analytics.svelte"), title: "Analytics", client: "analytics.view", platform: null },
+    { path: "/bills", component: () => import("./pages/bills/Bills.svelte"), title: "Bills", ...CLIENT_ONLY },
+    { path: "/bills/new", component: () => import("./pages/bills/NewBill.svelte"), title: "New Bill", client: "billing.create", platform: null },
+    { path: "/bills/offline", component: () => import("./pages/bills/OfflineBills.svelte"), title: "Offline", client: "billing.create", platform: null },
+    { path: "/bills/offline/:offlineId/print", component: () => import("./pages/bills/BillPrint.svelte"), title: "Print bill", bare: true, client: "billing.create", platform: null },
+    { path: "/bills/:id", component: () => import("./pages/bills/BillDetail.svelte"), title: "Bill", ...CLIENT_ONLY },
+    { path: "/bills/:id/print", component: () => import("./pages/bills/BillPrint.svelte"), title: "Print bill", bare: true, ...CLIENT_ONLY },
+    { path: "/dues", component: () => import("./pages/bills/Bills.svelte"), title: "Dues", client: "payments.collect", platform: null },
+    { path: "/patients", component: () => import("./pages/patients/Patients.svelte"), title: "Patients", ...CLIENT_ONLY },
+    { path: "/patients/:id", component: () => import("./pages/patients/PatientDetail.svelte"), title: "Patient", ...CLIENT_ONLY },
+    ...(FEATURES.worklist ? [{ path: "/worklist", component: () => import("./pages/Worklist.svelte"), title: "Investigation Report", ...CLIENT_ONLY }] : []),
     ...(FEATURES.testReports ? [
-      { path: "/test-reports", component: ReportsDashboard, title: "Reporting", ...CLIENT_ONLY },
-      { path: "/test-reports/queue", component: ReportQueue, title: "Test Reports", ...CLIENT_ONLY },
-      { path: "/test-reports/:itemId", component: TestReport, title: "Report", ...CLIENT_ONLY },
+      { path: "/test-reports", component: () => import("./pages/reports/ReportsDashboard.svelte"), title: "Reporting", ...CLIENT_ONLY },
+      { path: "/test-reports/queue", component: () => import("./pages/reports/ReportQueue.svelte"), title: "Test Reports", ...CLIENT_ONLY },
+      { path: "/test-reports/:itemId", component: () => import("./pages/reports/TestReport.svelte"), title: "Report", ...CLIENT_ONLY },
     ] : []),
-    { path: "/reports", component: Reports, title: "Financial Reports", client: "business_reports.view", platform: null },
-    { path: "/reports/:name", component: Reports, title: "Financial Reports", client: "business_reports.view", platform: null },
-    { path: "/tests", component: Tests, title: "Tests & Prices", ...CLIENT_ONLY },
-    { path: "/doctors", component: Doctors, title: "Doctors & Hospitals", ...CLIENT_ONLY },
-    { path: "/settings", component: SettingsHub, title: "Settings" },
-    { path: "/settings/:section", component: SettingsHub, title: "Settings" },
-    { path: "/staff", component: SettingsHub, title: "Settings" },
-    { path: "/activity", component: SettingsHub, title: "Settings" },
-    { path: "/clients", component: Clients, title: "Clients", client: null, platform: "platform.clients.view" },
-    { path: "/change-password", component: ChangePassword, title: "Change password" },
-    { path: "/notifications", component: Notifications, title: "Notifications" },
+    { path: "/reports", component: () => import("./pages/reports/Reports.svelte"), title: "Financial Reports", client: "business_reports.view", platform: null },
+    { path: "/reports/:name", component: () => import("./pages/reports/Reports.svelte"), title: "Financial Reports", client: "business_reports.view", platform: null },
+    { path: "/tests", component: () => import("./pages/catalogue/Tests.svelte"), title: "Tests & Prices", ...CLIENT_ONLY },
+    { path: "/doctors", component: () => import("./pages/catalogue/Doctors.svelte"), title: "Doctors & Hospitals", ...CLIENT_ONLY },
+    { path: "/settings", component: () => import("./pages/settings/SettingsHub.svelte"), title: "Settings" },
+    { path: "/settings/:section", component: () => import("./pages/settings/SettingsHub.svelte"), title: "Settings" },
+    { path: "/staff", component: () => import("./pages/settings/SettingsHub.svelte"), title: "Settings" },
+    { path: "/activity", component: () => import("./pages/settings/SettingsHub.svelte"), title: "Settings" },
+    { path: "/clients", component: () => import("./pages/platform/Clients.svelte"), title: "Clients", client: null, platform: "platform.clients.view" },
+    { path: "/change-password", component: () => import("./pages/ChangePassword.svelte"), title: "Change password" },
+    { path: "/notifications", component: () => import("./pages/Notifications.svelte"), title: "Notifications" },
     // Development only (npm run dev): the live server monitor. Not in production builds.
-    ...(import.meta.env.DEV ? [{ path: "/dev/monitor", component: DevMonitor, title: "Dev Monitor" }] : []),
+    ...(import.meta.env.DEV ? [{ path: "/dev/monitor", component: () => import("./pages/DevMonitor.svelte"), title: "Dev Monitor" }] : []),
   ];
+
+  const loginPage: Loader = () => import("./pages/Login.svelte");
+  const forgotPasswordPage: Loader = () => import("./pages/ForgotPassword.svelte");
+  const resetPasswordPage: Loader = () => import("./pages/ResetPassword.svelte");
+  const changePasswordPage: Loader = () => import("./pages/ChangePassword.svelte");
+  const termsPage: Loader = () => import("./pages/Terms.svelte");
+  const publicBillPage: Loader = () => import("./pages/bills/PublicBill.svelte");
 
   function match(path: string): { route: Route; params: Record<string, string> } | null {
     const parts = path.split("/").filter(Boolean);
@@ -156,11 +140,17 @@
   });
 </script>
 
-{#snippet guarded(Page: Component<any>, pageParams: Record<string, string> = {})}
-  <!-- A crash while drawing one screen shows a fallback for that screen only; the menu and top bar keep working. -->
+{#snippet guarded(load: Loader, pageParams: Record<string, string> = {})}
+  <!-- A crash while drawing one screen shows a fallback for that screen only; the menu and top bar keep working.
+       Each page is its own chunk (import()), fetched the first time its route opens. -->
   {#key router.path}
     <svelte:boundary onerror={(error) => reportError("boundary", error)}>
-      <Page params={pageParams} />
+      {#await load()}
+        <div class="splash" aria-busy="true"><span class="text-muted">Loading…</span></div>
+      {:then mod}
+        {@const Page = mod.default}
+        <Page params={pageParams} />
+      {/await}
       {#snippet failed(error, reset)}<ErrorFallback {error} {reset} />{/snippet}
     </svelte:boundary>
   {/key}
@@ -175,15 +165,15 @@
 {:else if session.workspace?.kind === "none"}
   <Landing ws={session.workspace} />
 {:else if OPEN.includes(router.path)}
-  {@render guarded(Terms)}
+  {@render guarded(termsPage)}
 {:else if publicBillToken}
-  {@render guarded(PublicBill, { token: publicBillToken })}
+  {@render guarded(publicBillPage, { token: publicBillToken })}
 {:else if !session.me}
-  {#if router.path === "/login"}{@render guarded(Login)}
-  {:else if router.path === "/forgot-password"}{@render guarded(ForgotPassword)}
-  {:else if router.path === "/reset-password"}{@render guarded(ResetPassword)}{/if}
+  {#if router.path === "/login"}{@render guarded(loginPage)}
+  {:else if router.path === "/forgot-password"}{@render guarded(forgotPasswordPage)}
+  {:else if router.path === "/reset-password"}{@render guarded(resetPasswordPage)}{/if}
 {:else if session.me.must_change_password}
-  {#if router.path === "/change-password"}{@render guarded(ChangePassword)}{/if}
+  {#if router.path === "/change-password"}{@render guarded(changePasswordPage)}{/if}
 {:else if route?.bare && allowed}
   {@render guarded(route.component, params)}
 {:else}
