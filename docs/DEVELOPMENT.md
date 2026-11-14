@@ -284,7 +284,7 @@ app/
   main.py         the app: middleware, routes, error handlers, serving web/dist
   models.py       tables              catalog.py   permissions and roles
   seed.py  manage.py  worker.py  legacy_import.py
-migrations/       Alembic: tables and row-level security policies (0001_foundation … 0019_rate_limits)
+migrations/       Alembic: tables and row-level security policies (0001_foundation … 0024_invoice_centre_snapshot)
 web/
   src/lib/        api client, session, router, forms, payload encryption, offline store, outbox, uploads, drafts
   src/components/ shared parts: DataTable, FilterBar, Dialog, Field, charts, Workbook, Spreadsheet, …
