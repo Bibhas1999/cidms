@@ -69,7 +69,8 @@ jobs:
       - name: Tests
         run: python -m pytest -p no:warnings -q --ignore=tests/test_browser.py
       - name: Known vulnerabilities in the Python packages
-        run: pip install pip-audit && pip-audit -r requirements.txt --disable-pip --no-deps --progress-spinner off
+        run: pip install pip-audit && pip-audit -r requirements.txt --disable-pip --no-deps --progress-spinner off &&
+             pip-audit -r requirements-dev.txt --disable-pip --no-deps --progress-spinner off
 
   browser:
     name: Browser checks (Chromium)
