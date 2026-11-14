@@ -1,10 +1,12 @@
 """Reports and exports: the numbers add up, files open, permissions hold and centres stay apart."""
 
+import csv
 import io
 from datetime import timedelta
 from decimal import Decimal
 
 import pytest
+from docx import Document
 from openpyxl import load_workbook
 from sqlalchemy import select, text
 
@@ -234,6 +236,50 @@ def test_bills_export_matches_the_list_and_is_logged(centre, books):
     with scoped_session(centre["tenant"].id) as db:
         logs = db.scalars(select(ActivityLog).where(ActivityLog.action == "export.bills").order_by(ActivityLog.id)).all()
     assert len(logs) == 4 and logs[0].details["rows"] == 4 and logs[1].details["filters"] == {"payment": "due"}
+
+
+def test_bills_csv_export_matches_the_list_and_is_logged(centre, books):
+    owner = centre["owner"]
+    r = owner.get("/api/exports/bills.csv", params=WIDE)
+    assert r.status_code == 200
+    assert f'bills-{WIDE["from"]}-to-{WIDE["to"]}.csv' in r.headers["content-disposition"]
+    assert r.headers["content-type"].startswith("text/csv")
+    rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
+    assert rows[0][:6] == ["Bill no", "Date", "Patient", "Mobile", "Referred by", "Tests"]
+    body = rows[1:-1]
+    assert len(body) == 4
+    c_row = next(row for row in body if row[0] == books["c"]["invoice_no"])
+    assert c_row[4] == "Dr. Halder" and c_row[5] == "Chest X-ray PA, CBC"
+    d_row = next(row for row in body if row[0] == books["d"]["invoice_no"])
+    assert d_row[10] == "Cancelled" and not d_row[5]
+    totals = rows[-1]
+    assert totals[0] == "Total" and money(totals[6].replace(",", "")) == Decimal("1351.00")  # cancelled left out
+
+    with scoped_session(centre["tenant"].id) as db:
+        logs = db.scalars(select(ActivityLog).where(ActivityLog.action == "export.bills")).all()
+    assert len(logs) == 1 and logs[0].details["format"] == "csv" and logs[0].details["rows"] == 4
+
+
+def test_bills_docx_export_matches_the_list_and_is_logged(centre, books):
+    owner = centre["owner"]
+    r = owner.get("/api/exports/bills.docx", params=WIDE)
+    assert r.status_code == 200
+    assert f'bills-{WIDE["from"]}-to-{WIDE["to"]}.docx' in r.headers["content-disposition"]
+    assert r.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    doc = Document(io.BytesIO(r.content))
+    table = doc.tables[0]
+    header = [c.text for c in table.rows[0].cells]
+    assert header[:6] == ["Bill no", "Date", "Patient", "Mobile", "Referred by", "Tests"]
+    body = [[c.text for c in row.cells] for row in table.rows[1:-1]]
+    assert len(body) == 4
+    c_row = next(row for row in body if row[0] == books["c"]["invoice_no"])
+    assert c_row[4] == "Dr. Halder" and c_row[5] == "Chest X-ray PA, CBC"
+    totals = [c.text for c in table.rows[-1].cells]
+    assert totals[0] == "Total" and money(totals[6].replace(",", "")) == Decimal("1351.00")  # cancelled left out
+
+    with scoped_session(centre["tenant"].id) as db:
+        logs = db.scalars(select(ActivityLog).where(ActivityLog.action == "export.bills")).all()
+    assert len(logs) == 1 and logs[0].details["format"] == "docx" and logs[0].details["rows"] == 4
 
 
 def test_receptionists_cannot_see_reports_but_can_export_bills(centre, books):
