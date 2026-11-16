@@ -10,9 +10,10 @@ The images themselves live in Orthanc, not here.
 A copy is a gzip'd JSON file in the app's storage (one folder per client), each table's rows exactly as Postgres
 gives them (json_agg), with the database's schema version: it can be restored only into the same version.
 
-Restoring, in one transaction: the client's rows in those tables are deleted and the copy's put back (Postgres
-turns the JSON back into rows itself: json_populate_recordset), then the client's staff are signed out. A fresh
-copy of the data as it was is made first, so a restore can be undone.
+Restoring, in one transaction: the copy's rows are merged into the client's tables (Postgres turns the JSON back
+into rows itself: json_populate_recordset, then an upsert) - a row the copy also has overwrites the current one,
+but a row made since the copy was taken is left alone, never removed. The client's staff are then signed out.
+A fresh copy of the data as it was is made first, so a restore can itself be undone.
 """
 
 from __future__ import annotations
@@ -251,16 +252,17 @@ def _user_refs() -> dict[str, list[tuple[str, bool]]]:
 
 
 def restore_copy(db: Session, tenant_id: uuid.UUID, data: dict) -> dict[str, int]:
-    """Replace the client's rows in TABLES with the copy's, in the caller's transaction. Staff who no longer exist
-    are left out of the copy's records ("made by" goes empty; a signature of someone removed is dropped)."""
+    """Bring the copy's rows into the client's tables, in the caller's transaction: a row from the copy overwrites
+    a current row with the same id (undoing an edit or putting back something removed), but a row made since the
+    copy was taken, and not in it, is left exactly as it is - restoring never removes anything. Staff who no
+    longer exist are left out of the copy's records ("made by" goes empty; a signature of someone removed is
+    dropped)."""
     meta = data["meta"]
     if meta.get("schema") != schema_version(db):
         raise Invalid("This copy is from an earlier version of CIDMS and can't be restored.")
     users = {str(u) for u in db.scalars(select(User.id))}
     refs = _user_refs()
     tables = data["tables"]
-    # The app can't delete these rows itself; this database function can, only while this client's restore runs.
-    db.execute(text("SELECT client_restore_clear(:t)"), {"t": tenant_id})
     put: dict[str, int] = {}
     for t in TABLES:
         rows = []
@@ -276,8 +278,13 @@ def restore_copy(db: Session, tenant_id: uuid.UUID, data: dict) -> dict[str, int
                         keep = False
             if keep:
                 rows.append(r)
+        table = Base.metadata.tables[t]
+        pk = [c.name for c in table.primary_key.columns]
+        others = [c.name for c in table.columns if c.name not in pk]
+        on_conflict = (f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {', '.join(f'{c} = EXCLUDED.{c}' for c in others)}"
+                       if others else f"ON CONFLICT ({', '.join(pk)}) DO NOTHING")
         for i in range(0, len(rows), CHUNK):
-            db.execute(text(f"INSERT INTO {t} SELECT * FROM json_populate_recordset(NULL::{t}, CAST(:rows AS json))"),  # noqa: S608
+            db.execute(text(f"INSERT INTO {t} SELECT * FROM json_populate_recordset(NULL::{t}, CAST(:rows AS json)) {on_conflict}"),  # noqa: S608
                        {"rows": json.dumps(rows[i:i + CHUNK])})
         put[t] = len(rows)
     db.execute(delete(UserSession).where(UserSession.tenant_id == tenant_id))   # everyone signs in again

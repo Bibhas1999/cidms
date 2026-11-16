@@ -106,7 +106,7 @@
       { label: "Download SQL", icon: "download", href: link("sql"), disabled: !r.available, hint: r.available ? "The records as SQL INSERT statements" : gone },
       { label: "Download backup file", icon: "download", href: link("copy"), disabled: !r.available, hint: r.available ? "The copy itself, as CIDMS restores it" : gone },
       { label: "Restore…", icon: "refresh", tone: "danger", disabled: !r.restorable || !!data?.busy,
-        hint: !r.available ? gone : !r.restorable ? "Made by an earlier version of CIDMS: download only" : data?.busy ? "A backup or restore is running" : "Put every record back to this copy",
+        hint: !r.available ? gone : !r.restorable ? "Made by an earlier version of CIDMS: download only" : data?.busy ? "A backup or restore is running" : "Bring this copy's records back, without removing anything made since",
         onclick: () => { restoring = r; typed = ""; password = ""; passwordError = ""; restoreOpen = true; } },
     ];
   }
@@ -204,7 +204,7 @@
             submitLabel="Restore" submitVariant="destructive" busy={sending} busyLabel="Starting…" disabled={typed.trim() !== "RESTORE" || !password}
             onsubmit={askRestore}>
     <ul class="restore-list text-sm">
-      <li>Every record of {who} goes back to this moment: bills, payments, patients, reports, tests, doctors and settings made or changed since are gone.</li>
+      <li>{who}'s bills, payments, patients, reports, tests, doctors and settings go back to how this copy had them. Anything made or changed since stays exactly as it is now - restoring never removes a record.</li>
       <li>A fresh copy of the records as they are now is made first, so this can be undone by restoring that copy.</li>
       <li>Staff accounts and roles stay as they are. Everyone signs in again afterwards.</li>
     </ul>

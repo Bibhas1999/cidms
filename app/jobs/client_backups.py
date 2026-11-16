@@ -20,7 +20,8 @@ def client_backup(ctx: JobContext) -> dict:
 
 @job("client_restore", max_attempts=1, timeout_s=1800)
 def client_restore(ctx: JobContext) -> dict:
-    """Put a copy back: a fresh copy first, then the copy's rows in place of the client's, in this job's transaction."""
+    """Put a copy back: a fresh copy of today's data first, then the copy's rows merged into the client's (a
+    matching row is overwritten, nothing current is removed), in this job's transaction."""
     restore_id = uuid.UUID(ctx.payload["restore_id"])
     r = ctx.db.get(ClientBackup, restore_id)
     if r is None or r.status != "running":

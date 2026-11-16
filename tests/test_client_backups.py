@@ -53,7 +53,8 @@ def test_a_copy_is_made_downloaded_and_restored(centre):  # noqa: F811
     raw = json.loads(gzip.decompress(owner.get(f"/api/backups/{copy['id']}/download?format=copy").content))
     assert raw["meta"]["format"] == "cidms-client-backup" and "password_hash" not in json.dumps(raw)
 
-    # After the copy: another bill, and a test renamed. Restoring takes both back.
+    # After the copy: another bill, and a test renamed. Restoring undoes the rename, but the new bill -
+    # made after the copy, and not in it - stays: a restore only puts things back, never removes anything.
     assert bill(owner, centre["tests"], ["Lipid profile"]).status_code == 201
     test_id = centre["tests"]["CBC"]
     owner.patch(f"/api/tests/{test_id}", json={"name": "CBC (renamed)"})
@@ -66,7 +67,9 @@ def test_a_copy_is_made_downloaded_and_restored(centre):  # noqa: F811
     run_jobs()
     assert owner.get("/api/bills").status_code == 401, [r["message"] for r in owner.get("/api/backups").json()["runs"][:2]]  # everyone signs in again
     owner.login("owner@alpha.in")
-    assert owner.get("/api/bills").json()["total"] == 1
+    assert owner.get("/api/bills").json()["total"] == 2  # the Lipid profile bill, made after the copy, is still there
+    tests = {t["id"]: t["name"] for t in owner.get("/api/tests").json()["items"]}
+    assert tests[test_id] == "CBC"  # the rename is undone
     runs = owner.get("/api/backups").json()["runs"]
     assert runs[0]["trigger"] == "restore" and runs[0]["status"] == "ok", runs[0]
     assert runs[1]["message"].startswith("The data just before restoring")   # the copy made first
