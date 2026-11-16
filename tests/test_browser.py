@@ -62,6 +62,7 @@ def test_first_sign_in_forces_a_new_password_then_opens_the_dashboard(page, alph
     make_user(alpha, "owner@alpha.in", ["owner"], must_change=True)
     page.goto(f"http://alpha.{live_server}/staff")
     page.wait_for_url("**/login?next=%2Fstaff")
+    page.get_by_role("heading", name="Welcome back").wait_for()  # Login.svelte: its own chunk, fetched on first visit
     assert page.get_by_role("heading", name="Welcome back").is_visible()
     assert page.get_by_text("Sign in to Alpha Diagnostics").is_visible()
 
@@ -80,6 +81,7 @@ def test_first_sign_in_forces_a_new_password_then_opens_the_dashboard(page, alph
     page.locator("#confirm").fill("My-own-pass-2026")
     page.get_by_role("button", name="Save password").click()
     page.wait_for_url(f"http://alpha.{live_server}/")
+    page.get_by_role("heading", name="Good", exact=False).wait_for()  # Dashboard.svelte: its own chunk, fetched on first visit
     assert page.get_by_role("heading", name="Good", exact=False).is_visible()
     assert page.errors == []
 
